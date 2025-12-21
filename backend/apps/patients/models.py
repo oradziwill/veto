@@ -5,11 +5,19 @@ from apps.accounts.models import User
 
 
 class Patient(models.Model):
-    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, related_name="patients")
-    owner = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="patients")
+    """
+    Animal (pet). Belongs to exactly one clinic.
+    Owner is a global Client.
+    """
+    clinic = models.ForeignKey(
+        Clinic, on_delete=models.PROTECT, related_name="patients"
+    )
+    owner = models.ForeignKey(
+        Client, on_delete=models.PROTECT, related_name="patients"
+    )
 
     name = models.CharField(max_length=120)
-    species = models.CharField(max_length=80)  # e.g. Dog, Cat (MVP)
+    species = models.CharField(max_length=80)
     breed = models.CharField(max_length=120, blank=True)
     sex = models.CharField(max_length=16, blank=True)
     birth_date = models.DateField(null=True, blank=True)

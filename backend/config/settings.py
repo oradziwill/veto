@@ -30,7 +30,6 @@ ALLOWED_HOSTS = []
 
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -43,14 +42,12 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
 
-    # Local apps (będziesz dodawał kolejne)
+    # Local apps
     "apps.tenancy.apps.TenancyConfig",
-    'apps.accounts',
-    'apps.clients',
-    'apps.patients',
-    'apps.scheduling',
-    'apps.medical',
-    'apps.inventory',
+    "apps.accounts.apps.AccountsConfig",
+    "apps.clients.apps.ClientsConfig",
+    "apps.patients.apps.PatientsConfig",
+    "apps.scheduling.apps.SchedulingConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
