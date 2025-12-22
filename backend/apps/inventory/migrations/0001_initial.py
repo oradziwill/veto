@@ -9,27 +9,59 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('tenancy', '0001_initial'),
+        ("tenancy", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='InventoryItem',
+            name="InventoryItem",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=255)),
-                ('category', models.CharField(choices=[('medication', 'Medication'), ('supplies', 'Supplies'), ('equipment', 'Equipment'), ('other', 'Other')], default='other', max_length=20)),
-                ('description', models.TextField(blank=True)),
-                ('stock_quantity', models.IntegerField(default=0)),
-                ('unit', models.CharField(default='units', max_length=50)),
-                ('min_stock_level', models.IntegerField(default=0)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('clinic', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='inventory_items', to='tenancy.clinic')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=255)),
+                (
+                    "category",
+                    models.CharField(
+                        choices=[
+                            ("medication", "Medication"),
+                            ("supplies", "Supplies"),
+                            ("equipment", "Equipment"),
+                            ("other", "Other"),
+                        ],
+                        default="other",
+                        max_length=20,
+                    ),
+                ),
+                ("description", models.TextField(blank=True)),
+                ("stock_quantity", models.IntegerField(default=0)),
+                ("unit", models.CharField(default="units", max_length=50)),
+                ("min_stock_level", models.IntegerField(default=0)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "clinic",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="inventory_items",
+                        to="tenancy.clinic",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['name'],
-                'indexes': [models.Index(fields=['clinic', 'category'], name='inventory_i_clinic__93101f_idx')],
+                "ordering": ["name"],
+                "indexes": [
+                    models.Index(
+                        fields=["clinic", "category"],
+                        name="inventory_i_clinic__93101f_idx",
+                    )
+                ],
             },
         ),
     ]

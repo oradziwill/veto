@@ -1,5 +1,6 @@
 from rest_framework.routers import DefaultRouter
-from .views import ClientViewSet, ClientClinicViewSet
+
+from .views import ClientClinicViewSet, ClientViewSet
 
 router = DefaultRouter()
 router.register(r"clients", ClientViewSet, basename="clients")

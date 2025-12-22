@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
 from apps.tenancy.models import Clinic
+
 
 class User(AbstractUser):
     clinic = models.ForeignKey(

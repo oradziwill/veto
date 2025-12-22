@@ -6,7 +6,7 @@ const CalendarTab = () => {
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
-  
+
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const hours = Array.from({ length: 12 }, (_, i) => i + 8) // 8 AM to 7 PM
 
@@ -32,7 +32,7 @@ const CalendarTab = () => {
       const weekStart = getWeekStart(currentDate)
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekEnd.getDate() + 7)
-      
+
       const params = {
         from: weekStart.toISOString(),
         to: weekEnd.toISOString(),
@@ -86,7 +86,7 @@ const CalendarTab = () => {
           <button className="btn-secondary" onClick={() => navigateWeek(1)}>Next →</button>
         </div>
       </div>
-      
+
       <div className="tab-content-wrapper">
         {loading && <div className="loading-message">Loading calendar...</div>}
         <div className="calendar-view">
@@ -131,4 +131,3 @@ const CalendarTab = () => {
 }
 
 export default CalendarTab
-

@@ -1,8 +1,9 @@
 from rest_framework import permissions, viewsets
 from rest_framework.exceptions import ValidationError
 
-from apps.patients.models import Patient
 from apps.clients.models import ClientClinic
+from apps.patients.models import Patient
+
 from .serializers import PatientReadSerializer, PatientWriteSerializer
 
 
@@ -57,7 +58,11 @@ class PatientViewSet(viewsets.ModelViewSet):
         user = self.request.user
         instance = self.get_object()
 
-        if instance.clinic_id and getattr(user, "clinic_id", None) != instance.clinic_id and not user.is_superuser:
+        if (
+            instance.clinic_id
+            and getattr(user, "clinic_id", None) != instance.clinic_id
+            and not user.is_superuser
+        ):
             raise ValidationError("You cannot modify patients outside your clinic.")
 
         patient = serializer.save()

@@ -3,8 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from apps.tenancy.models import Clinic
 from apps.patients.models import Patient
+from apps.tenancy.models import Clinic
 
 
 class Appointment(models.Model):
@@ -52,7 +52,11 @@ class Appointment(models.Model):
         if self.patient_id and self.clinic_id and self.patient.clinic_id != self.clinic_id:
             raise ValidationError({"patient": "Patient clinic must match appointment clinic."})
 
-        if self.vet_id and self.clinic_id and getattr(self.vet, "clinic_id", None) != self.clinic_id:
+        if (
+            self.vet_id
+            and self.clinic_id
+            and getattr(self.vet, "clinic_id", None) != self.clinic_id
+        ):
             raise ValidationError({"vet": "Vet clinic must match appointment clinic."})
 
         # Overlap prevention (MVP): no overlapping appointments for the same vet in the same clinic,
@@ -70,7 +74,9 @@ class Appointment(models.Model):
             qs = qs.filter(starts_at__lt=self.ends_at, ends_at__gt=self.starts_at)
 
             if qs.exists():
-                raise ValidationError("This vet already has an overlapping appointment in this time range.")
+                raise ValidationError(
+                    "This vet already has an overlapping appointment in this time range."
+                )
 
     def save(self, *args, **kwargs):
         # Ensure model validation runs on save (Admin + API)

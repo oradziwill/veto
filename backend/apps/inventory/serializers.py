@@ -1,11 +1,12 @@
 from rest_framework import serializers
+
 from .models import InventoryItem
 
 
 class InventoryItemSerializer(serializers.ModelSerializer):
     is_low_stock = serializers.BooleanField(read_only=True)
     is_out_of_stock = serializers.BooleanField(read_only=True)
-    
+
     class Meta:
         model = InventoryItem
         fields = [
@@ -23,4 +24,3 @@ class InventoryItemSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["clinic", "created_at", "updated_at"]
-

@@ -122,4 +122,3 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 }
 
 export default AddClientModal
-

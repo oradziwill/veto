@@ -10,28 +10,57 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('scheduling', '0001_initial'),
+        ("scheduling", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='MedicalRecord',
+            name="MedicalRecord",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('subjective', models.TextField(blank=True)),
-                ('objective', models.TextField(blank=True)),
-                ('assessment', models.TextField(blank=True)),
-                ('plan', models.TextField(blank=True)),
-                ('weight_kg', models.DecimalField(blank=True, decimal_places=2, max_digits=6, null=True)),
-                ('temperature_c', models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('appointment', models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='medical_record', to='scheduling.appointment')),
-                ('created_by', models.ForeignKey(limit_choices_to={'is_vet': True}, on_delete=django.db.models.deletion.PROTECT, related_name='created_medical_records', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("subjective", models.TextField(blank=True)),
+                ("objective", models.TextField(blank=True)),
+                ("assessment", models.TextField(blank=True)),
+                ("plan", models.TextField(blank=True)),
+                (
+                    "weight_kg",
+                    models.DecimalField(blank=True, decimal_places=2, max_digits=6, null=True),
+                ),
+                (
+                    "temperature_c",
+                    models.DecimalField(blank=True, decimal_places=1, max_digits=4, null=True),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "appointment",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="medical_record",
+                        to="scheduling.appointment",
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        limit_choices_to={"is_vet": True},
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="created_medical_records",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
     ]

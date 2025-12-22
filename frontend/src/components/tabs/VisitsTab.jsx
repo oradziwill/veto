@@ -39,7 +39,7 @@ const VisitsTab = () => {
   const getDateRange = (filterType) => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    
+
     switch (filterType) {
       case 'today':
         return {
@@ -120,28 +120,28 @@ const VisitsTab = () => {
           + New Visit
         </button>
       </div>
-      
+
       <div className="tab-content-wrapper">
         <div className="visits-filters">
-          <button 
+          <button
             className={`filter-btn ${filter === 'today' ? 'active' : ''}`}
             onClick={() => setFilter('today')}
           >
             Today
           </button>
-          <button 
+          <button
             className={`filter-btn ${filter === 'week' ? 'active' : ''}`}
             onClick={() => setFilter('week')}
           >
             This Week
           </button>
-          <button 
+          <button
             className={`filter-btn ${filter === 'month' ? 'active' : ''}`}
             onClick={() => setFilter('month')}
           >
             This Month
           </button>
-          <button 
+          <button
             className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
@@ -168,7 +168,7 @@ const VisitsTab = () => {
                         {appointment.patient?.name || 'Unknown'} - {appointment.reason || 'Visit'}
                       </h3>
                       <p className="visit-owner">
-                        Owner: {appointment.patient?.owner 
+                        Owner: {appointment.patient?.owner
                           ? `${appointment.patient.owner.first_name} ${appointment.patient.owner.last_name}`
                           : 'Unknown'}
                       </p>
@@ -199,4 +199,3 @@ const VisitsTab = () => {
 }
 
 export default VisitsTab
-
