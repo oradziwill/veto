@@ -1,14 +1,28 @@
-# Databases
-db.sqlite3
-*.sqlite3
+# Ignore all files/directories starting with . (except .gitignore itself)
+.*
+!.gitignore
 
 # Python
 __pycache__/
 *.pyc
-db.sqlite3
-*.sqlite3
-backend/db.sqlite3
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+ENV/
+env/
 
 # Databases
-db.sqlite3
 *.sqlite3
+db.sqlite3
+backend/db.sqlite3
+
+# Logs
+*.log
