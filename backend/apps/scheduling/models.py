@@ -44,11 +44,9 @@ class Appointment(models.Model):
         ]
 
     def clean(self):
-        # Time sanity
         if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
             raise ValidationError({"ends_at": "ends_at must be after starts_at"})
 
-        # Clinic consistency
         if self.patient_id and self.clinic_id and self.patient.clinic_id != self.clinic_id:
             raise ValidationError({"patient": "Patient clinic must match appointment clinic."})
 
@@ -59,8 +57,6 @@ class Appointment(models.Model):
         ):
             raise ValidationError({"vet": "Vet clinic must match appointment clinic."})
 
-        # Overlap prevention (MVP): no overlapping appointments for the same vet in the same clinic,
-        # ignoring CANCELLED appointments.
         if self.vet_id and self.clinic_id and self.starts_at and self.ends_at:
             qs = Appointment.objects.filter(
                 clinic_id=self.clinic_id,
@@ -70,7 +66,6 @@ class Appointment(models.Model):
             if self.pk:
                 qs = qs.exclude(pk=self.pk)
 
-            # overlap condition: existing.starts < new.ends AND existing.ends > new.starts
             qs = qs.filter(starts_at__lt=self.ends_at, ends_at__gt=self.starts_at)
 
             if qs.exists():
@@ -79,10 +74,13 @@ class Appointment(models.Model):
                 )
 
     def save(self, *args, **kwargs):
-        # Ensure model validation runs on save (Admin + API)
         self.full_clean()
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         start = timezone.localtime(self.starts_at).strftime("%Y-%m-%d %H:%M")
         return f"{self.clinic} | {start} | {self.patient} | {self.vet}"
+
+
+# Register additional scheduling models kept in separate modules
+from .models_working_hours import VetWorkingHours  # noqa: E402,F401
