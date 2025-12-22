@@ -14,6 +14,7 @@ A full-stack web application for managing veterinary clinics, built with Django 
 ## Tech Stack
 
 ### Backend
+
 - **Django 5.2+**: Web framework
 - **Django REST Framework**: API framework
 - **SQLite**: Database (development)
@@ -21,6 +22,7 @@ A full-stack web application for managing veterinary clinics, built with Django 
 - **django-cors-headers**: CORS support
 
 ### Frontend
+
 - **React 18**: UI library
 - **Vite**: Build tool and dev server
 - **Axios**: HTTP client for API calls
@@ -125,6 +127,7 @@ cd backend
 ```
 
 To stop it:
+
 ```bash
 lsof -ti:8000 | xargs kill
 ```
@@ -189,11 +192,13 @@ veto/
 If you get a "port already in use" error:
 
 **Backend (port 8000):**
+
 ```bash
 lsof -ti:8000 | xargs kill -9
 ```
 
 **Frontend (port 3000):**
+
 ```bash
 lsof -ti:3000 | xargs kill -9
 ```
@@ -239,12 +244,14 @@ rm db.sqlite3
 ### Running Tests
 
 **Backend:**
+
 ```bash
 cd backend
 ./venv/bin/python manage.py test
 ```
 
 **Frontend:**
+
 ```bash
 cd frontend
 npm test
@@ -253,6 +260,7 @@ npm test
 ### Code Quality
 
 The project uses:
+
 - **Ruff**: Python linting and formatting
 - **Black**: Python code formatting
 - **ESLint**: JavaScript linting (if configured)
@@ -271,4 +279,3 @@ The project uses:
 ## Contributing
 
 [Add contribution guidelines here]
-

@@ -2,6 +2,21 @@ import React, { useState, useEffect } from 'react'
 import { appointmentsAPI, patientsAPI, authAPI, vetsAPI } from '../../services/api'
 import './Modal.css'
 
+const formatDateTimeLocal = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+const add30Minutes = (datetimeLocalString) => {
+  const date = new Date(datetimeLocalString)
+  date.setMinutes(date.getMinutes() + 30)
+  return formatDateTimeLocal(date)
+}
+
 const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     patient: '',
@@ -18,64 +33,49 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (isOpen) {
-      fetchPatients()
-      fetchVets()
-      fetchCurrentUser()
-      // Set default times (next hour)
-      const now = new Date()
-      const nextHour = new Date(now.getTime() + 60 * 60 * 1000)
-      nextHour.setMinutes(0)
-      const endTime = new Date(nextHour.getTime() + 30 * 60 * 1000)
-      
-      setFormData(prev => ({
-        ...prev,
-        starts_at: nextHour.toISOString().slice(0, 16),
-        ends_at: endTime.toISOString().slice(0, 16),
-      }))
-    }
-  }, [isOpen])
+    if (!isOpen) return
 
-  const fetchVets = async () => {
-    try {
-      const response = await vetsAPI.list()
-      const vetsData = response.data.results || response.data
-      setVets(vetsData)
-    } catch (err) {
-      console.error('Error fetching vets:', err)
-    }
-  }
-
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await authAPI.me()
-      setCurrentUser(response.data)
-      if (response.data.id) {
-        setFormData(prev => ({
-          ...prev,
-          vet: response.data.id.toString(),
-        }))
+    const loadData = async () => {
+      try {
+        const [patientsRes, vetsRes, userRes] = await Promise.all([
+          patientsAPI.list(),
+          vetsAPI.list(),
+          authAPI.me(),
+        ])
+        setPatients(patientsRes.data.results || patientsRes.data)
+        setVets(vetsRes.data.results || vetsRes.data)
+        const user = userRes.data
+        setCurrentUser(user)
+        if (user.id) {
+          setFormData(prev => ({ ...prev, vet: user.id.toString() }))
+        }
+      } catch (err) {
+        console.error('Error loading data:', err)
       }
-    } catch (err) {
-      console.error('Error fetching current user:', err)
     }
-  }
 
-  const fetchPatients = async () => {
-    try {
-      const response = await patientsAPI.list()
-      setPatients(response.data.results || response.data)
-    } catch (err) {
-      console.error('Error fetching patients:', err)
-    }
-  }
+    loadData()
+
+    const now = new Date()
+    const nextHour = new Date(now.getTime() + 60 * 60 * 1000)
+    nextHour.setMinutes(0, 0, 0)
+    const startTime = formatDateTimeLocal(nextHour)
+    setFormData(prev => ({
+      ...prev,
+      starts_at: startTime,
+      ends_at: add30Minutes(startTime),
+    }))
+  }, [isOpen])
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    setFormData(prev => {
+      const updated = { ...prev, [name]: value }
+      if (name === 'starts_at' && value) {
+        updated.ends_at = add30Minutes(value)
+      }
+      return updated
+    })
   }
 
   const handleSubmit = async (e) => {
@@ -84,20 +84,31 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
     setError(null)
 
     try {
-      // Convert datetime-local to ISO format
       const appointmentData = {
         ...formData,
         starts_at: new Date(formData.starts_at).toISOString(),
         ends_at: new Date(formData.ends_at).toISOString(),
         patient: parseInt(formData.patient),
-        vet: parseInt(formData.vet) || (currentUser?.id || null),
+        vet: parseInt(formData.vet) || currentUser?.id || null,
       }
       await appointmentsAPI.create(appointmentData)
       onSuccess()
       onClose()
     } catch (err) {
-      setError(err.response?.data?.detail || err.response?.data?.message || 'Failed to create appointment. Please try again.')
-      console.error('Error creating appointment:', err)
+      let errorMessage = 'Failed to create appointment. Please try again.'
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail
+      } else if (typeof err.response?.data === 'object') {
+        const errors = Object.entries(err.response.data)
+          .map(([field, messages]) => {
+            const fieldLabel = field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+            const msg = Array.isArray(messages) ? messages.join(', ') : String(messages)
+            return `${fieldLabel}: ${msg}`
+          })
+          .join('; ')
+        errorMessage = errors || errorMessage
+      }
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -118,13 +129,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-group">
             <label htmlFor="patient">Patient *</label>
-            <select
-              id="patient"
-              name="patient"
-              value={formData.patient}
-              onChange={handleChange}
-              required
-            >
+            <select id="patient" name="patient" value={formData.patient} onChange={handleChange} required>
               <option value="">Select Patient</option>
               {patients.map(patient => (
                 <option key={patient.id} value={patient.id}>
@@ -136,19 +141,11 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-group">
             <label htmlFor="vet">Veterinarian *</label>
-            <select
-              id="vet"
-              name="vet"
-              value={formData.vet}
-              onChange={handleChange}
-              required
-            >
+            <select id="vet" name="vet" value={formData.vet} onChange={handleChange} required>
               <option value="">Select Veterinarian</option>
               {vets.map(vet => (
                 <option key={vet.id} value={vet.id}>
-                  {vet.first_name && vet.last_name 
-                    ? `${vet.first_name} ${vet.last_name}` 
-                    : vet.username}
+                  {vet.first_name && vet.last_name ? `${vet.first_name} ${vet.last_name}` : vet.username}
                 </option>
               ))}
             </select>
@@ -166,7 +163,6 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 required
               />
             </div>
-
             <div className="form-group">
               <label htmlFor="ends_at">End Time *</label>
               <input
@@ -174,7 +170,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 id="ends_at"
                 name="ends_at"
                 value={formData.ends_at}
-                onChange={handleChange}
+                readOnly
                 required
               />
             </div>
@@ -195,12 +191,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-group">
             <label htmlFor="status">Status</label>
-            <select
-              id="status"
-              name="status"
-              value={formData.status}
-              onChange={handleChange}
-            >
+            <select id="status" name="status" value={formData.status} onChange={handleChange}>
               <option value="scheduled">Scheduled</option>
               <option value="confirmed">Confirmed</option>
               <option value="checked_in">Checked-in</option>
@@ -209,9 +200,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
-            </button>
+            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? 'Scheduling...' : 'Schedule Visit'}
             </button>
@@ -223,4 +212,3 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 }
 
 export default AddAppointmentModal
-
