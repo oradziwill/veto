@@ -1,6 +1,8 @@
-from rest_framework import permissions, viewsets
+from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 
+from apps.accounts.permissions import HasClinic
 from apps.clients.models import ClientClinic
 from apps.patients.models import Patient
 
@@ -8,7 +10,7 @@ from .serializers import PatientReadSerializer, PatientWriteSerializer
 
 
 class PatientViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasClinic]
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
@@ -17,13 +19,8 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if not getattr(user, "clinic_id", None):
-            return Patient.objects.none()
-
-        qs = (
-            Patient.objects.filter(clinic_id=user.clinic_id)
-            .select_related("owner", "primary_vet", "clinic")
-            .order_by("name")
+        qs = Patient.objects.filter(clinic_id=user.clinic_id).select_related(
+            "owner", "primary_vet", "clinic"
         )
 
         species = self.request.query_params.get("species")
@@ -37,16 +34,12 @@ class PatientViewSet(viewsets.ModelViewSet):
         if vet_id:
             qs = qs.filter(primary_vet_id=vet_id)
 
-        return qs
+        return qs.order_by("name")
 
     def perform_create(self, serializer):
         user = self.request.user
-        if not getattr(user, "clinic_id", None):
-            raise ValidationError("User must belong to a clinic to create patients.")
-
         patient = serializer.save(clinic=user.clinic)
 
-        # Ensure client membership exists for this clinic
         if patient.owner_id and patient.clinic_id:
             ClientClinic.objects.get_or_create(
                 client_id=patient.owner_id,
@@ -58,11 +51,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         user = self.request.user
         instance = self.get_object()
 
-        if (
-            instance.clinic_id
-            and getattr(user, "clinic_id", None) != instance.clinic_id
-            and not user.is_superuser
-        ):
+        if instance.clinic_id != user.clinic_id and not user.is_superuser:
             raise ValidationError("You cannot modify patients outside your clinic.")
 
         patient = serializer.save()

@@ -15,40 +15,16 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
         fields = [
             "patient",
             "vet",
-            "start_at",
-            "end_at",
-            "reason",
-            "notes",
+            "starts_at",
+            "ends_at",
             "status",
+            "reason",
+            "internal_notes",
         ]
 
     def validate(self, attrs):
-        """
-        Prevent overlapping appointments for the same vet.
-        Assumes model has start_at and end_at DateTimeFields.
-        """
-        start_at = attrs.get("start_at")
-        end_at = attrs.get("end_at")
-        vet = attrs.get("vet")
-
-        if start_at and end_at and start_at >= end_at:
-            raise serializers.ValidationError("end_at must be after start_at.")
-
-        # If vet or times are missing, skip overlap check (serializer-level)
-        if not (vet and start_at and end_at):
-            return attrs
-
-        qs = Appointment.objects.filter(vet=vet)
-
-        # When updating, exclude current instance
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-
-        # Overlap condition:
-        # existing.start < new.end AND existing.end > new.start
-        qs = qs.filter(start_at__lt=end_at, end_at__gt=start_at)
-
-        if qs.exists():
-            raise serializers.ValidationError("Vet already has an appointment in this time range.")
-
+        starts_at = attrs.get("starts_at")
+        ends_at = attrs.get("ends_at")
+        if starts_at and ends_at and ends_at <= starts_at:
+            raise serializers.ValidationError({"ends_at": "ends_at must be after starts_at"})
         return attrs

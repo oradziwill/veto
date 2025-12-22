@@ -8,15 +8,11 @@ from .serializers import AppointmentReadSerializer, AppointmentWriteSerializer
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
-    queryset = Appointment.objects.all()
     permission_classes = [IsAuthenticated, HasClinic]
 
     def get_permissions(self):
-        # Read is allowed for any clinic member
         if self.action in ("list", "retrieve"):
             return [IsAuthenticated(), HasClinic()]
-
-        # Write restricted for staff/vets
         return [IsAuthenticated(), HasClinic(), IsStaffOrVet()]
 
     def get_serializer_class(self):
@@ -26,18 +22,15 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-
         qs = (
             Appointment.objects.filter(clinic_id=user.clinic_id)
             .select_related("clinic", "patient", "vet")
-            .order_by("start_at")
+            .order_by("starts_at")
         )
 
-        # Optional filters for frontend:
-        # /api/appointments/?date=2025-12-22
         date = self.request.query_params.get("date")
         if date:
-            qs = qs.filter(start_at__date=date)
+            qs = qs.filter(starts_at__date=date)
 
         vet_id = self.request.query_params.get("vet")
         if vet_id:
@@ -50,5 +43,4 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        # Force clinic to current user's clinic
         serializer.save(clinic=self.request.user.clinic)
