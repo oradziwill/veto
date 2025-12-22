@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.clients.apps.ClientsConfig",
     "apps.patients.apps.PatientsConfig",
     "apps.scheduling.apps.SchedulingConfig",
+    "apps.inventory.apps.InventoryConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
