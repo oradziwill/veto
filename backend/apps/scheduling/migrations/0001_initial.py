@@ -10,30 +10,87 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('patients', '0001_initial'),
-        ('tenancy', '0001_initial'),
+        ("patients", "0001_initial"),
+        ("tenancy", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Appointment',
+            name="Appointment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('starts_at', models.DateTimeField()),
-                ('ends_at', models.DateTimeField()),
-                ('status', models.CharField(choices=[('scheduled', 'Scheduled'), ('confirmed', 'Confirmed'), ('checked_in', 'Checked-in'), ('completed', 'Completed'), ('cancelled', 'Cancelled'), ('no_show', 'No-show')], default='scheduled', max_length=20)),
-                ('reason', models.CharField(blank=True, max_length=255)),
-                ('internal_notes', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('clinic', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='appointments', to='tenancy.clinic')),
-                ('patient', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='appointments', to='patients.patient')),
-                ('vet', models.ForeignKey(limit_choices_to={'is_vet': True}, on_delete=django.db.models.deletion.PROTECT, related_name='appointments', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("starts_at", models.DateTimeField()),
+                ("ends_at", models.DateTimeField()),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("scheduled", "Scheduled"),
+                            ("confirmed", "Confirmed"),
+                            ("checked_in", "Checked-in"),
+                            ("completed", "Completed"),
+                            ("cancelled", "Cancelled"),
+                            ("no_show", "No-show"),
+                        ],
+                        default="scheduled",
+                        max_length=20,
+                    ),
+                ),
+                ("reason", models.CharField(blank=True, max_length=255)),
+                ("internal_notes", models.TextField(blank=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "clinic",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="appointments",
+                        to="tenancy.clinic",
+                    ),
+                ),
+                (
+                    "patient",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="appointments",
+                        to="patients.patient",
+                    ),
+                ),
+                (
+                    "vet",
+                    models.ForeignKey(
+                        limit_choices_to={"is_vet": True},
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="appointments",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
             options={
-                'ordering': ['starts_at'],
-                'indexes': [models.Index(fields=['clinic', 'starts_at'], name='scheduling__clinic__54e009_idx'), models.Index(fields=['vet', 'starts_at'], name='scheduling__vet_id_d857ff_idx'), models.Index(fields=['patient', 'starts_at'], name='scheduling__patient_6d1824_idx')],
+                "ordering": ["starts_at"],
+                "indexes": [
+                    models.Index(
+                        fields=["clinic", "starts_at"],
+                        name="scheduling__clinic__54e009_idx",
+                    ),
+                    models.Index(
+                        fields=["vet", "starts_at"],
+                        name="scheduling__vet_id_d857ff_idx",
+                    ),
+                    models.Index(
+                        fields=["patient", "starts_at"],
+                        name="scheduling__patient_6d1824_idx",
+                    ),
+                ],
             },
         ),
     ]

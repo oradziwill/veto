@@ -34,7 +34,7 @@ api.interceptors.response.use(
         code: error.code
       })
     }
-    
+
     if (error.response?.status === 401) {
       // Clear invalid token
       localStorage.removeItem('access_token')
@@ -87,9 +87,9 @@ export const clientsAPI = {
 }
 
 export const authAPI = {
-  login: (username, password) => 
+  login: (username, password) =>
     api.post('/auth/token/', { username, password }),
-  refresh: (refreshToken) => 
+  refresh: (refreshToken) =>
     api.post('/auth/token/refresh/', { refresh: refreshToken }),
   me: () => api.get('/me/'),
 }
@@ -100,4 +100,3 @@ export const vetsAPI = {
 }
 
 export default api
-

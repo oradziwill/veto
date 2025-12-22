@@ -160,4 +160,3 @@ cd backend
 ```
 
 This will create all the sample data matching what's shown in the frontend!
-

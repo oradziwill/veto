@@ -19,6 +19,7 @@ class VetViewSet(viewsets.ReadOnlyModelViewSet):
     - return vets in the current user's clinic
     - if user has no clinic, return empty list (safe MVP)
     """
+
     serializer_class = VetSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -27,7 +28,6 @@ class VetViewSet(viewsets.ReadOnlyModelViewSet):
         if not getattr(user, "clinic_id", None):
             return User.objects.none()
 
-        return (
-            User.objects.filter(is_vet=True, clinic_id=user.clinic_id)
-            .order_by("last_name", "first_name", "username")
+        return User.objects.filter(is_vet=True, clinic_id=user.clinic_id).order_by(
+            "last_name", "first_name", "username"
         )

@@ -1,5 +1,5 @@
-from django.db import models
-from rest_framework import viewsets, permissions
+from rest_framework import permissions, viewsets
+
 from .models import InventoryItem
 from .serializers import InventoryItemSerializer
 
@@ -12,19 +12,19 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not getattr(user, "clinic_id", None):
             return InventoryItem.objects.none()
-        
+
         qs = InventoryItem.objects.filter(clinic_id=user.clinic_id)
-        
+
         # Filter by category
         category = self.request.query_params.get("category", "")
         if category:
             qs = qs.filter(category=category)
-        
+
         # Search by name
         search = self.request.query_params.get("search", "")
         if search:
             qs = qs.filter(name__icontains=search)
-        
+
         return qs.order_by("name")
 
     def perform_create(self, serializer):

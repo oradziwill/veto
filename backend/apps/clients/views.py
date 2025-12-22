@@ -38,6 +38,7 @@ class ClientClinicViewSet(viewsets.ModelViewSet):
     Manage memberships (client <-> clinic links).
     We force clinic_id to the current user's clinic for safety.
     """
+
     serializer_class = ClientClinicSerializer
     permission_classes = [permissions.IsAuthenticated]
 

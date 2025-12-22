@@ -55,4 +55,3 @@ The frontend uses the API service layer located at `frontend/src/services/api.js
 - `authAPI` - Authentication API calls
 
 All API calls automatically include the JWT token from localStorage if available.
-

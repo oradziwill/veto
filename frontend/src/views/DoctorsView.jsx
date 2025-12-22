@@ -82,8 +82,8 @@ const DoctorsView = () => {
                 <div className="user-avatar">DS</div>
               </>
             ) : (
-              <button 
-                className="btn-secondary" 
+              <button
+                className="btn-secondary"
                 onClick={() => setShowLoginModal(true)}
                 style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
               >
@@ -128,4 +128,3 @@ const DoctorsView = () => {
 }
 
 export default DoctorsView
-
