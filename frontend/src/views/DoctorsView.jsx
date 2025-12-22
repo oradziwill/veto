@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PatientsTab from '../components/tabs/PatientsTab'
 import VisitsTab from '../components/tabs/VisitsTab'
 import CalendarTab from '../components/tabs/CalendarTab'
@@ -9,7 +10,8 @@ import { authAPI } from '../services/api'
 import './DoctorsView.css'
 
 const DoctorsView = () => {
-  const [activeTab, setActiveTab] = useState('patients')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') || 'patients'
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
@@ -42,6 +44,10 @@ const DoctorsView = () => {
     }
     checkAuth()
   }, [])
+
+  const handleTabChange = (tabId) => {
+    setSearchParams({ tab: tabId })
+  }
 
   const tabs = [
     { id: 'patients', label: 'Patients', icon: '🐾' },
@@ -100,7 +106,7 @@ const DoctorsView = () => {
             <button
               key={tab.id}
               className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
             >
               <span className="tab-icon">{tab.icon}</span>
               <span className="tab-label">{tab.label}</span>
