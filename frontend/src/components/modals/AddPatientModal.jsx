@@ -6,7 +6,7 @@ import './Modal.css'
 
 const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
-    owner_id: '',
+    owner: '',
     name: '',
     species: '',
     breed: '',
@@ -81,12 +81,17 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
     setError(null)
 
     try {
-      await patientsAPI.create(formData)
+      // Prepare data for API - convert owner to integer
+      const submitData = {
+        ...formData,
+        owner: formData.owner ? parseInt(formData.owner, 10) : null,
+      }
+      await patientsAPI.create(submitData)
       onSuccess()
       onClose()
       // Reset form
       setFormData({
-        owner_id: '',
+        owner: '',
         name: '',
         species: '',
         breed: '',
@@ -97,8 +102,15 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
         notes: '',
       })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create patient. Please try again.')
+      const errorMessage = err.response?.data?.detail || 
+                          (err.response?.data && typeof err.response.data === 'object' 
+                            ? JSON.stringify(err.response.data) 
+                            : err.response?.data) ||
+                          err.message ||
+                          'Failed to create patient. Please try again.'
+      setError(errorMessage)
       console.error('Error creating patient:', err)
+      console.error('Error response:', err.response?.data)
     } finally {
       setLoading(false)
     }
@@ -118,7 +130,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
-            <label htmlFor="owner_id">Owner *</label>
+            <label htmlFor="owner">Owner *</label>
             {loadingClients ? (
               <div className="loading-text">Loading clients...</div>
             ) : clientsError ? (
@@ -127,9 +139,9 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
             ) : (
               <select
-                id="owner_id"
-                name="owner_id"
-                value={formData.owner_id}
+                id="owner"
+                name="owner"
+                value={formData.owner}
                 onChange={handleChange}
                 required
                 disabled={clients.length === 0}
