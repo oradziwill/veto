@@ -1,7 +1,8 @@
 from django.db import models
-from apps.tenancy.models import Clinic
-from apps.clients.models import Client
+
 from apps.accounts.models import User
+from apps.clients.models import Client
+from apps.tenancy.models import Clinic
 
 
 class Patient(models.Model):
@@ -9,12 +10,9 @@ class Patient(models.Model):
     Animal (pet). Belongs to exactly one clinic.
     Owner is a global Client.
     """
-    clinic = models.ForeignKey(
-        Clinic, on_delete=models.PROTECT, related_name="patients"
-    )
-    owner = models.ForeignKey(
-        Client, on_delete=models.PROTECT, related_name="patients"
-    )
+
+    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, related_name="patients")
+    owner = models.ForeignKey(Client, on_delete=models.PROTECT, related_name="patients")
 
     name = models.CharField(max_length=120)
     species = models.CharField(max_length=80)

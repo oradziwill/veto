@@ -18,8 +18,8 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'stock_quantity' || name === 'min_stock_level' 
-        ? parseInt(value) || 0 
+      [name]: name === 'stock_quantity' || name === 'min_stock_level'
+        ? parseInt(value) || 0
         : value
     }))
   }
@@ -157,4 +157,3 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
 }
 
 export default AddInventoryModal
-

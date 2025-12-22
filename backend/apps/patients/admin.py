@@ -1,6 +1,8 @@
 from django.contrib import admin
-from .models import Patient
+
 from apps.clients.models import ClientClinic
+
+from .models import Patient
 
 
 @admin.register(Patient)

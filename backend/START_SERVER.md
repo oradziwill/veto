@@ -38,4 +38,3 @@ To stop it:
 ```bash
 lsof -ti:8000 | xargs kill
 ```
-

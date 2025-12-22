@@ -43,7 +43,7 @@ const PatientsTab = () => {
     if (!useAPI) {
       // Filter placeholder data
       const filtered = search
-        ? placeholderPatients.filter(p => 
+        ? placeholderPatients.filter(p =>
             p.name.toLowerCase().includes(search.toLowerCase()) ||
             p.species.toLowerCase().includes(search.toLowerCase()) ||
             `${p.owner.first_name} ${p.owner.last_name}`.toLowerCase().includes(search.toLowerCase())
@@ -63,7 +63,7 @@ const PatientsTab = () => {
       // Fall back to placeholder data on error
       setUseAPI(false)
       const filtered = search
-        ? placeholderPatients.filter(p => 
+        ? placeholderPatients.filter(p =>
             p.name.toLowerCase().includes(search.toLowerCase()) ||
             p.species.toLowerCase().includes(search.toLowerCase()) ||
             `${p.owner.first_name} ${p.owner.last_name}`.toLowerCase().includes(search.toLowerCase())
@@ -116,12 +116,12 @@ const PatientsTab = () => {
           + Add Patient
         </button>
       </div>
-      
+
       <div className="tab-content-wrapper">
         <div className="search-bar">
-          <input 
-            type="text" 
-            placeholder="Search patients by name, owner, or ID..." 
+          <input
+            type="text"
+            placeholder="Search patients by name, owner, or ID..."
             className="search-input"
             value={searchTerm}
             onChange={handleSearch}
@@ -129,7 +129,7 @@ const PatientsTab = () => {
         </div>
 
         {loading && <div className="loading-message">Loading patients...</div>}
-        
+
         <div className="patients-grid">
           {patients.length === 0 ? (
             <div className="empty-state">No patients found</div>
@@ -179,4 +179,3 @@ const PatientsTab = () => {
 }
 
 export default PatientsTab
-

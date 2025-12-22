@@ -8,6 +8,7 @@ class MedicalRecord(models.Model):
     """
     SOAP clinical note attached 1:1 to an appointment.
     """
+
     appointment = models.OneToOneField(
         Appointment,
         on_delete=models.PROTECT,

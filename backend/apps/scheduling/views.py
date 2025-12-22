@@ -1,5 +1,5 @@
 from django.utils.dateparse import parse_datetime
-from rest_framework import viewsets, permissions, decorators, response
+from rest_framework import decorators, permissions, response, viewsets
 
 from .models import Appointment
 from .serializers import AppointmentSerializer
@@ -17,8 +17,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             return Appointment.objects.none()
 
         qs = (
-            Appointment.objects
-            .filter(clinic_id=user.clinic_id)
+            Appointment.objects.filter(clinic_id=user.clinic_id)
             .select_related("patient", "vet", "clinic")
             .order_by("starts_at")
         )

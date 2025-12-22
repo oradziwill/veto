@@ -95,4 +95,3 @@ The frontend is configured to proxy API requests to the Django backend running o
 - The application uses a modern, responsive design with a gradient color scheme
 - All components are functional React components using hooks
 - The UI is designed to be intuitive and user-friendly for veterinary professionals
-

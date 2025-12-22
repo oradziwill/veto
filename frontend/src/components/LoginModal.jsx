@@ -95,4 +95,3 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
 }
 
 export default LoginModal
-

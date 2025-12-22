@@ -10,28 +10,60 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('clients', '0001_initial'),
-        ('tenancy', '0001_initial'),
+        ("clients", "0001_initial"),
+        ("tenancy", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Patient',
+            name="Patient",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=120)),
-                ('species', models.CharField(max_length=80)),
-                ('breed', models.CharField(blank=True, max_length=120)),
-                ('sex', models.CharField(blank=True, max_length=16)),
-                ('birth_date', models.DateField(blank=True, null=True)),
-                ('microchip_no', models.CharField(blank=True, max_length=64)),
-                ('allergies', models.TextField(blank=True)),
-                ('notes', models.TextField(blank=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('clinic', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='patients', to='tenancy.clinic')),
-                ('owner', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='patients', to='clients.client')),
-                ('primary_vet', models.ForeignKey(blank=True, limit_choices_to={'is_vet': True}, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='primary_patients', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=120)),
+                ("species", models.CharField(max_length=80)),
+                ("breed", models.CharField(blank=True, max_length=120)),
+                ("sex", models.CharField(blank=True, max_length=16)),
+                ("birth_date", models.DateField(blank=True, null=True)),
+                ("microchip_no", models.CharField(blank=True, max_length=64)),
+                ("allergies", models.TextField(blank=True)),
+                ("notes", models.TextField(blank=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "clinic",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="patients",
+                        to="tenancy.clinic",
+                    ),
+                ),
+                (
+                    "owner",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="patients",
+                        to="clients.client",
+                    ),
+                ),
+                (
+                    "primary_vet",
+                    models.ForeignKey(
+                        blank=True,
+                        limit_choices_to={"is_vet": True},
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="primary_patients",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
     ]

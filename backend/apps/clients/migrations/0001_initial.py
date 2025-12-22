@@ -9,33 +9,67 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('tenancy', '0001_initial'),
+        ("tenancy", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Client',
+            name="Client",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('first_name', models.CharField(max_length=120)),
-                ('last_name', models.CharField(max_length=120)),
-                ('phone', models.CharField(blank=True, max_length=64)),
-                ('email', models.EmailField(blank=True, max_length=254)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("first_name", models.CharField(max_length=120)),
+                ("last_name", models.CharField(max_length=120)),
+                ("phone", models.CharField(blank=True, max_length=64)),
+                ("email", models.EmailField(blank=True, max_length=254)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
         ),
         migrations.CreateModel(
-            name='ClientClinic',
+            name="ClientClinic",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('notes', models.TextField(blank=True)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('client', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='memberships', to='clients.client')),
-                ('clinic', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='client_memberships', to='tenancy.clinic')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("notes", models.TextField(blank=True)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "client",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="memberships",
+                        to="clients.client",
+                    ),
+                ),
+                (
+                    "clinic",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="client_memberships",
+                        to="tenancy.clinic",
+                    ),
+                ),
             ],
             options={
-                'constraints': [models.UniqueConstraint(fields=('client', 'clinic'), name='uniq_client_per_clinic')],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("client", "clinic"), name="uniq_client_per_clinic"
+                    )
+                ],
             },
         ),
     ]

@@ -56,7 +56,7 @@ const InventoryTab = () => {
           + Add Item
         </button>
       </div>
-      
+
       <div className="tab-content-wrapper">
         <div className="inventory-stats">
           <div className="stat-card">
@@ -74,14 +74,14 @@ const InventoryTab = () => {
         </div>
 
         <div className="search-bar">
-          <input 
-            type="text" 
-            placeholder="Search inventory items..." 
+          <input
+            type="text"
+            placeholder="Search inventory items..."
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <select 
+          <select
             className="filter-select"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -149,4 +149,3 @@ const InventoryTab = () => {
 }
 
 export default InventoryTab
-

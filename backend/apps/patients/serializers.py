@@ -1,8 +1,8 @@
 from rest_framework import serializers
 
-from apps.patients.models import Patient
-from apps.clients.models import Client
 from apps.accounts.models import User
+from apps.clients.models import Client
+from apps.patients.models import Patient
 
 
 class ClientMiniSerializer(serializers.ModelSerializer):

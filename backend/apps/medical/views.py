@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions
+from rest_framework import permissions, viewsets
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from .models import MedicalRecord

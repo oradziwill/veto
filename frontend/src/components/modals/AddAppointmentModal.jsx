@@ -27,7 +27,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
       const nextHour = new Date(now.getTime() + 60 * 60 * 1000)
       nextHour.setMinutes(0)
       const endTime = new Date(nextHour.getTime() + 30 * 60 * 1000)
-      
+
       setFormData(prev => ({
         ...prev,
         starts_at: nextHour.toISOString().slice(0, 16),
@@ -146,8 +146,8 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
               <option value="">Select Veterinarian</option>
               {vets.map(vet => (
                 <option key={vet.id} value={vet.id}>
-                  {vet.first_name && vet.last_name 
-                    ? `${vet.first_name} ${vet.last_name}` 
+                  {vet.first_name && vet.last_name
+                    ? `${vet.first_name} ${vet.last_name}`
                     : vet.username}
                 </option>
               ))}
@@ -223,4 +223,3 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 }
 
 export default AddAppointmentModal
-
