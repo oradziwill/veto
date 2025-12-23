@@ -32,7 +32,7 @@ A full-stack web application for managing veterinary clinics, built with Django 
 
 Before you begin, ensure you have the following installed:
 
-- **Python 3.13+** (or Python 3.9+)
+- **Python 3.13+**
 - **Node.js 16+** and npm
 - **Git**
 

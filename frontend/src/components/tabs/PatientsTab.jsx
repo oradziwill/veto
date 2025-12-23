@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { patientsAPI } from '../../services/api'
 import AddPatientModal from '../modals/AddPatientModal'
+import PatientDetailsModal from '../modals/PatientDetailsModal'
 import './Tabs.css'
 
 // Placeholder data
@@ -38,6 +39,8 @@ const PatientsTab = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [useAPI, setUseAPI] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedPatient, setSelectedPatient] = useState(null)
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
 
   const fetchPatients = async (search = '') => {
     if (!useAPI) {
@@ -158,7 +161,15 @@ const PatientsTab = () => {
                     </div>
                   </div>
                   <div className="patient-actions">
-                    <button className="btn-secondary">View Details</button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => {
+                        setSelectedPatient(patient)
+                        setIsDetailsModalOpen(true)
+                      }}
+                    >
+                      View Details
+                    </button>
                   </div>
                 </div>
             ))
@@ -173,6 +184,15 @@ const PatientsTab = () => {
           fetchPatients(searchTerm)
           setUseAPI(true)
         }}
+      />
+
+      <PatientDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={() => {
+          setIsDetailsModalOpen(false)
+          setSelectedPatient(null)
+        }}
+        patient={selectedPatient}
       />
     </div>
   )

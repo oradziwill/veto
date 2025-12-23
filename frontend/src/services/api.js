@@ -103,4 +103,9 @@ export const availabilityAPI = {
   get: (params) => api.get('/availability/', { params }),
 }
 
+export const patientHistoryAPI = {
+  list: (patientId) => api.get(`/patients/${patientId}/history/`),
+  create: (patientId, data) => api.post(`/patients/${patientId}/history/`, data),
+}
+
 export default api
