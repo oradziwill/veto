@@ -26,3 +26,8 @@ backend/db.sqlite3
 
 # Logs
 *.log
+
+__pycache__/
+*.pyc
+*.sqlite3
+.DS_Store
