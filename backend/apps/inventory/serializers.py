@@ -24,20 +24,21 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
         ]
 
     def validate_sku(self, value: str) -> str:
-        value = (value or "").strip()
+        # Canonical format: trim, upper, spaces -> underscores
+        value = (value or "").strip().upper().replace(" ", "_")
         if not value:
             raise serializers.ValidationError("SKU is required.")
         return value
 
     def validate(self, attrs):
         """
-        Enforce uniqueness of (clinic, sku) at the serializer level so we return 400,
-        not a 500 IntegrityError.
+        Enforce uniqueness of (clinic, sku) at the serializer level
+        so we return 400 instead of a DB 500.
         """
         request = self.context.get("request")
         clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
         if not clinic_id:
-            # HasClinic permission should guarantee this, but keep it safe.
+            # HasClinic should guarantee clinic_id, but keep safe.
             return attrs
 
         sku = attrs.get("sku") or getattr(self.instance, "sku", None)
@@ -56,34 +57,20 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
 class InventoryMovementReadSerializer(serializers.ModelSerializer):
     item_name = serializers.CharField(source="item.name", read_only=True)
     item_sku = serializers.CharField(source="item.sku", read_only=True)
-    created_by_name = serializers.CharField(source="created_by.username", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryMovement
-        fields = [
-            "id",
-            "clinic",
-            "item",
-            "item_name",
-            "item_sku",
-            "kind",
-            "quantity",
-            "note",
-            "patient_id",
-            "appointment_id",
-            "created_by",
-            "created_by_name",
-            "created_at",
-        ]
-        read_only_fields = ["id", "clinic", "created_by", "created_at"]
+        fields = "__all__"
+
+    def get_created_by_name(self, obj) -> str:
+        user = getattr(obj, "created_by", None)
+        if not user:
+            return ""
+        return getattr(user, "username", "") or getattr(user, "email", "") or str(user)
 
 
 class InventoryMovementWriteSerializer(serializers.ModelSerializer):
-    """
-    This serializer validates request payload only.
-    Stock mutation is done in the view inside a DB transaction.
-    """
-
     class Meta:
         model = InventoryMovement
         fields = [
@@ -95,34 +82,17 @@ class InventoryMovementWriteSerializer(serializers.ModelSerializer):
             "appointment_id",
         ]
 
-    def validate_quantity(self, value: int) -> int:
-        if value is None or value <= 0:
-            raise serializers.ValidationError("quantity must be > 0")
-        return value
-
     def validate(self, attrs):
-        """
-        Validate:
-        - item must belong to the user's clinic
-        - OUT must not exceed current stock (best-effort; final enforcement in transaction)
-        """
-        request = self.context.get("request")
-        user = getattr(request, "user", None)
-        clinic_id = getattr(user, "clinic_id", None)
-
-        item: InventoryItem = attrs.get("item")
-        if clinic_id and item and item.clinic_id != clinic_id:
-            raise serializers.ValidationError({"item": "Item must belong to your clinic."})
+        qty = attrs.get("quantity")
+        if qty is None or qty <= 0:
+            raise serializers.ValidationError({"quantity": "quantity must be > 0"})
 
         kind = attrs.get("kind")
-        qty = attrs.get("quantity") or 0
+        if kind not in InventoryMovement.Kind.values:
+            raise serializers.ValidationError({"kind": "Invalid kind."})
 
-        # Best-effort: prevent obvious negatives early.
-        # Final check is enforced in the locked transaction in the view.
-        if kind == InventoryMovement.Kind.OUT and item:
-            if qty > item.stock_on_hand:
-                raise serializers.ValidationError(
-                    {"quantity": f"Not enough stock. On hand: {item.stock_on_hand}."}
-                )
+        # We treat ADJUST as absolute: quantity is the new stock_on_hand (>= 0).
+        if kind == InventoryMovement.Kind.ADJUST and qty < 0:
+            raise serializers.ValidationError({"quantity": "adjust quantity must be >= 0"})
 
         return attrs

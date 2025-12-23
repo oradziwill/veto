@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from django.db import IntegrityError, models, transaction
-from django.db.models import Q
-from django.utils.dateparse import parse_datetime
+from django.db import IntegrityError, transaction
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -10,13 +8,14 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
 
-from .models import InventoryItem, InventoryMovement
+from .models import InventoryMovement
 from .serializers import (
     InventoryItemReadSerializer,
     InventoryItemWriteSerializer,
     InventoryMovementReadSerializer,
     InventoryMovementWriteSerializer,
 )
+from .services.stock import StockError, apply_inventory_movement
 
 
 class InventoryItemViewSet(viewsets.ModelViewSet):
@@ -24,21 +23,17 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = InventoryItem.objects.filter(clinic_id=user.clinic_id).order_by("name")
+        qs = InventoryMovement.objects.filter(clinic_id=user.clinic_id).select_related("item")
 
-        q = self.request.query_params.get("q")
-        if q:
-            qs = qs.filter(Q(name__icontains=q) | Q(sku__icontains=q))
+        item_id = self.request.query_params.get("item")
+        if item_id:
+            qs = qs.filter(item_id=item_id)
 
-        category = self.request.query_params.get("category")
-        if category:
-            qs = qs.filter(category=category)
+        kind = self.request.query_params.get("kind")
+        if kind:
+            qs = qs.filter(kind=kind)
 
-        low_stock = self.request.query_params.get("low_stock")
-        if low_stock in ("1", "true", "True", "yes", "YES"):
-            qs = qs.filter(stock_on_hand__lte=models.F("low_stock_threshold"))
-
-        return qs
+        return qs.order_by("-created_at")
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve", "ledger"):
@@ -58,55 +53,42 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="ledger")
     def ledger(self, request, pk=None):
         """
-        GET /api/inventory/items/<id>/ledger/
-        Returns item snapshot + movements (newest first).
-
-        Optional query params:
-          - limit: int (default 50, max 200)
-          - kind: in|out|adjust
-          - before: ISO datetime (return movements created_at < before)
+        Return item + recent movements.
+        Query params:
+          - limit (default 50, max 200)
+          - kind (optional)
+          - before (optional ISO datetime, filter created_at__lt)
         """
         user = request.user
-
-        # Ensure item is clinic-scoped
         item = self.get_queryset().filter(pk=pk).first()
         if not item:
             return Response({"detail": "Not found."}, status=404)
 
-        # limit
-        limit_raw = request.query_params.get("limit")
+        limit_raw = request.query_params.get("limit") or "50"
         try:
-            limit = int(limit_raw) if limit_raw else 50
+            limit = max(1, min(int(limit_raw), 200))
         except ValueError:
-            return Response({"detail": "Invalid limit. Must be an integer."}, status=400)
-        limit = max(1, min(limit, 200))
-
-        # filters
-        qs = InventoryMovement.objects.filter(clinic_id=user.clinic_id, item_id=item.id)
+            limit = 50
 
         kind = request.query_params.get("kind")
-        if kind:
-            qs = qs.filter(kind=kind)
-
         before = request.query_params.get("before")
+
+        mqs = InventoryMovement.objects.filter(
+            clinic_id=user.clinic_id, item_id=item.id
+        ).select_related("item")
+
+        if kind:
+            mqs = mqs.filter(kind=kind)
+
         if before:
-            dt = parse_datetime(before)
-            if dt is None:
-                return Response(
-                    {"detail": "Invalid before datetime. Use ISO format."},
-                    status=400,
-                )
-            qs = qs.filter(created_at__lt=dt)
+            mqs = mqs.filter(created_at__lt=before)
 
-        qs = qs.select_related("item").order_by("-created_at")[:limit]
-
-        item_data = InventoryItemReadSerializer(item).data
-        movements_data = InventoryMovementReadSerializer(qs, many=True).data
+        mqs = mqs.order_by("-created_at")[:limit]
 
         return Response(
             {
-                "item": item_data,
-                "movements": movements_data,
+                "item": InventoryItemReadSerializer(item).data,
+                "movements": InventoryMovementReadSerializer(mqs, many=True).data,
                 "limit": limit,
                 "filters": {"kind": kind, "before": before},
             }
@@ -124,6 +106,18 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
         if item_id:
             qs = qs.filter(item_id=item_id)
 
+        kind = self.request.query_params.get("kind")
+        if kind:
+            qs = qs.filter(kind=kind)
+
+        date_from = self.request.query_params.get("date_from")
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+
+        date_to = self.request.query_params.get("date_to")
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
         return qs.order_by("-created_at")
 
     def get_serializer_class(self):
@@ -133,4 +127,20 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        serializer.save(clinic_id=user.clinic_id, created_by=user)
+
+        item = serializer.validated_data["item"]
+        kind = serializer.validated_data["kind"]
+        qty = serializer.validated_data["quantity"]
+
+        # Atomic: lock item row, apply stock change, then create movement.
+        try:
+            with transaction.atomic():
+                apply_inventory_movement(
+                    clinic_id=user.clinic_id,
+                    item_id=item.id,
+                    kind=kind,
+                    quantity=qty,
+                )
+                serializer.save(clinic_id=user.clinic_id, created_by=user)
+        except StockError as err:
+            raise serializers.ValidationError({"detail": str(err)}) from err

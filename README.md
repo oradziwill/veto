@@ -270,7 +270,7 @@ The project uses:
 - [Backend Server Guide](./backend/START_SERVER.md)
 - [Frontend README](./frontend/README.md)
 - [API Endpoints Documentation](./API_ENDPOINTS.md)
-- [How to Add Data](./backend/HOW_TO_ADD_DATA.md)
+- [How to Add Data](backend/documentation/HOW_TO_ADD_DATA.md)
 
 ## License
 
