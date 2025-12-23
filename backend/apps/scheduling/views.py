@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
+from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
@@ -64,7 +65,13 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return AppointmentWriteSerializer
 
     def perform_create(self, serializer):
-        serializer.save(clinic=self.request.user.clinic)
+        appointment = serializer.save(clinic=self.request.user.clinic)
+        # Invalidate AI summary cache for the patient when a new visit is added
+        if appointment.patient_id:
+            patient = Patient.objects.get(pk=appointment.patient_id)
+            patient.ai_summary = ""
+            patient.ai_summary_updated_at = None
+            patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
 
     def perform_update(self, serializer):
         serializer.save(clinic=self.request.user.clinic)

@@ -35,5 +35,9 @@ class Patient(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # AI Summary cache
+    ai_summary = models.TextField(blank=True)
+    ai_summary_updated_at = models.DateTimeField(null=True, blank=True)
+
     def __str__(self) -> str:
         return f"{self.name} ({self.species})"
