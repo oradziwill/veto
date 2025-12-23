@@ -3,6 +3,8 @@ Management command to seed the database with initial data.
 Usage: python manage.py seed_data
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 
 from django.core.management.base import BaseCommand
@@ -77,22 +79,23 @@ class Command(BaseCommand):
             },
         ]
 
-        created_clients = []
+        created_clients: list[Client] = []
         for client_data in clients_data:
             client, created = Client.objects.get_or_create(
                 email=client_data["email"], defaults=client_data
             )
+            created_clients.append(client)
             if created:
-                created_clients.append(client)
                 self.stdout.write(self.style.SUCCESS(f"✓ Created client: {client}"))
             else:
-                created_clients.append(client)
                 self.stdout.write(f"→ Client already exists: {client}")
 
         # Link clients to clinic
         for client in created_clients:
             ClientClinic.objects.get_or_create(
-                client=client, clinic=clinic, defaults={"is_active": True}
+                client=client,
+                clinic=clinic,
+                defaults={"is_active": True},
             )
 
         # Create Patients
@@ -123,7 +126,7 @@ class Command(BaseCommand):
             },
         ]
 
-        created_patients = []
+        created_patients: list[Patient] = []
         for patient_data in patients_data:
             patient, created = Patient.objects.get_or_create(
                 clinic=clinic,
@@ -134,11 +137,10 @@ class Command(BaseCommand):
                     "primary_vet": vet,
                 },
             )
+            created_patients.append(patient)
             if created:
-                created_patients.append(patient)
                 self.stdout.write(self.style.SUCCESS(f"✓ Created patient: {patient}"))
             else:
-                created_patients.append(patient)
                 self.stdout.write(f"→ Patient already exists: {patient}")
 
         # Create Appointments
@@ -186,41 +188,68 @@ class Command(BaseCommand):
                 self.stdout.write(f"→ Appointment already exists: {appointment}")
 
         # Create Inventory Items
+        #
+        # IMPORTANT:
+        # - Category choices are: medication, supply, food, other
+        # - Fields were renamed:
+        #   * stock_quantity -> stock_on_hand
+        #   * min_stock_level -> low_stock_threshold
+        #
+        # If your InventoryItem has required fields like `created_by` or `sku`,
+        # ensure they are provided below.
         inventory_data = [
             {
                 "name": "Antibiotic A",
                 "category": InventoryItem.Category.MEDICATION,
-                "stock_quantity": 150,
+                "stock_on_hand": 150,
                 "unit": "vials",
-                "min_stock_level": 50,
+                "low_stock_threshold": 50,
             },
             {
                 "name": "Surgical Gloves",
-                "category": InventoryItem.Category.SUPPLIES,
-                "stock_quantity": 25,
+                "category": InventoryItem.Category.SUPPLY,
+                "stock_on_hand": 25,
                 "unit": "boxes",
-                "min_stock_level": 30,
+                "low_stock_threshold": 30,
             },
             {
                 "name": "X-Ray Film",
-                "category": InventoryItem.Category.EQUIPMENT,
-                "stock_quantity": 0,
+                "category": InventoryItem.Category.SUPPLY,
+                "stock_on_hand": 0,
                 "unit": "packs",
-                "min_stock_level": 10,
+                "low_stock_threshold": 10,
             },
             {
                 "name": "Vaccine B",
                 "category": InventoryItem.Category.MEDICATION,
-                "stock_quantity": 80,
+                "stock_on_hand": 80,
                 "unit": "doses",
-                "min_stock_level": 50,
+                "low_stock_threshold": 50,
             },
         ]
 
         for inv_data in inventory_data:
-            item, created = InventoryItem.objects.get_or_create(
-                clinic=clinic, name=inv_data["name"], defaults=inv_data
-            )
+            # If created_by exists and is non-nullable, set it.
+            if "created_by" in {f.name for f in InventoryItem._meta.get_fields()}:
+                inv_data["created_by"] = vet
+
+            # If sku exists, generate a stable seed SKU (and use it for idempotency).
+            has_sku = "sku" in {f.name for f in InventoryItem._meta.get_fields()}
+            if has_sku:
+                sku = inv_data["name"].upper().replace(" ", "_").replace("-", "_")
+                inv_data["sku"] = sku
+                item, created = InventoryItem.objects.get_or_create(
+                    clinic=clinic,
+                    sku=sku,
+                    defaults=inv_data,
+                )
+            else:
+                item, created = InventoryItem.objects.get_or_create(
+                    clinic=clinic,
+                    name=inv_data["name"],
+                    defaults=inv_data,
+                )
+
             if created:
                 self.stdout.write(self.style.SUCCESS(f"✓ Created inventory item: {item}"))
             else:
