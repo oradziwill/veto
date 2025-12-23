@@ -5,6 +5,7 @@ import {
   authAPI,
   vetsAPI,
   clientsAPI,
+  availabilityAPI,
 } from "../../services/api";
 import AddClientModal from "./AddClientModal";
 import "./Modal.css";
@@ -58,6 +59,8 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
   const [searchingClients, setSearchingClients] = useState(false);
   const [error, setError] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
+  const [availability, setAvailability] = useState(null);
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -185,6 +188,53 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
     setShowClientModal(false);
   };
 
+  // Fetch availability when vet and date are selected
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (!formData.vet || !formData.starts_at) {
+        setAvailability(null);
+        return;
+      }
+
+      try {
+        setLoadingAvailability(true);
+        const selectedDate = new Date(formData.starts_at);
+        const dateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        
+        const response = await availabilityAPI.get({
+          date: dateStr,
+          vet: formData.vet,
+          slot_minutes: 30,
+        });
+        setAvailability(response.data);
+      } catch (err) {
+        console.error("Error fetching availability:", err);
+        setAvailability(null);
+      } finally {
+        setLoadingAvailability(false);
+      }
+    };
+
+    fetchAvailability();
+  }, [formData.vet, formData.starts_at ? formData.starts_at.split('T')[0] : null]); // Only refetch when date changes, not time
+
+  const isTimeAvailable = (dateTimeString) => {
+    if (!availability || !availability.free || availability.free.length === 0) {
+      return false;
+    }
+
+    const selectedTime = new Date(dateTimeString);
+    const selectedEnd = new Date(selectedTime.getTime() + 30 * 60 * 1000); // 30 min duration
+
+    // Check if the selected time falls within any free slot
+    return availability.free.some((slot) => {
+      const slotStart = new Date(slot.start);
+      const slotEnd = new Date(slot.end);
+      // Time is available if it starts at or after slot start and ends at or before slot end
+      return selectedTime >= slotStart && selectedEnd <= slotEnd;
+    });
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => {
@@ -197,6 +247,11 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
       // If reason changes, clear custom reason if not "Other"
       if (name === "reason" && value !== "Other") {
         updated.reasonCustom = "";
+      }
+      
+      // If vet changes, clear availability
+      if (name === "vet") {
+        setAvailability(null);
       }
       
       return updated;
@@ -246,6 +301,26 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
       setError("Please enter a custom reason.");
       setLoading(false);
       return;
+    }
+
+    // Validate that the selected time is not in the past
+    if (formData.starts_at) {
+      const selectedStartTime = new Date(formData.starts_at);
+      const now = new Date();
+      if (selectedStartTime < now) {
+        setError("Cannot schedule a visit in the past. Please select a future date and time.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Validate that the selected time is available
+    if (formData.vet && formData.starts_at && availability) {
+      if (!isTimeAvailable(formData.starts_at)) {
+        setError("The selected time is not available. Please choose an available time slot.");
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -473,7 +548,58 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 value={formData.starts_at}
                 onChange={handleChange}
                 required
+                min={formatDateTimeLocal(new Date())}
+                style={{
+                  borderColor: (() => {
+                    if (!formData.starts_at) return undefined;
+                    const selectedTime = new Date(formData.starts_at);
+                    const now = new Date();
+                    if (selectedTime < now) {
+                      return '#ef4444'; // Red border if in the past
+                    }
+                    if (formData.vet && availability && !isTimeAvailable(formData.starts_at)) {
+                      return '#ef4444'; // Red border if not available
+                    }
+                    return undefined;
+                  })()
+                }}
               />
+              {formData.starts_at && (() => {
+                const selectedTime = new Date(formData.starts_at);
+                const now = new Date();
+                if (selectedTime < now) {
+                  return (
+                    <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                      <span style={{ color: '#ef4444' }}>✗ Cannot schedule in the past</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+              {loadingAvailability && (
+                <div style={{ fontSize: '0.85rem', color: '#718096', marginTop: '0.25rem' }}>
+                  Checking availability...
+                </div>
+              )}
+              {formData.vet && formData.starts_at && availability && (() => {
+                const selectedTime = new Date(formData.starts_at);
+                const now = new Date();
+                if (selectedTime < now) return null; // Don't show availability check if in past
+                
+                return (
+                  <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                    {isTimeAvailable(formData.starts_at) ? (
+                      <span style={{ color: '#10b981' }}>✓ Time slot is available</span>
+                    ) : (
+                      <span style={{ color: '#ef4444' }}>
+                        ✗ Time slot is not available. {availability.free && availability.free.length > 0 
+                          ? 'Please select an available time.'
+                          : availability.closed_reason || 'No available slots for this date.'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="form-group">
               <label htmlFor="ends_at">End Time *</label>
@@ -482,6 +608,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 id="ends_at"
                 name="ends_at"
                 value={formData.ends_at}
+                onChange={handleChange}
                 readOnly
                 required
               />

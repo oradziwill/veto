@@ -420,6 +420,22 @@
   min-height: 60px;
 }
 
+.calendar-cell-unavailable {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+  opacity: 0.6;
+}
+
+.calendar-cell-busy {
+  background: #fff5f5;
+  border-color: #fc8181;
+}
+
+.calendar-cell-free {
+  background: #f0fff4;
+  border-color: #68d391;
+}
+
 .calendar-event {
   background: linear-gradient(135deg, #48bb78 0%, #2f855a 100%);
   color: white;

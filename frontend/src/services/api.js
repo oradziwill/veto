@@ -99,4 +99,8 @@ export const vetsAPI = {
   get: (id) => api.get(`/vets/${id}/`),
 }
 
+export const availabilityAPI = {
+  get: (params) => api.get('/availability/', { params }),
+}
+
 export default api
