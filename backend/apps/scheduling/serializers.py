@@ -3,12 +3,16 @@ from rest_framework import serializers
 from .models import Appointment
 
 
-class AppointmentSerializer(serializers.ModelSerializer):
+class AppointmentReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Appointment
+        fields = "__all__"
+
+
+class AppointmentWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Appointment
         fields = [
-            "id",
-            "clinic",
             "patient",
             "vet",
             "starts_at",
@@ -16,7 +20,11 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "status",
             "reason",
             "internal_notes",
-            "created_at",
-            "updated_at",
         ]
-        read_only_fields = ["clinic", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        starts_at = attrs.get("starts_at")
+        ends_at = attrs.get("ends_at")
+        if starts_at and ends_at and ends_at <= starts_at:
+            raise serializers.ValidationError({"ends_at": "ends_at must be after starts_at"})
+        return attrs
