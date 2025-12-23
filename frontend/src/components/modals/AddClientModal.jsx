@@ -26,8 +26,9 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     setError(null)
 
     try {
-      await clientsAPI.create(formData)
-      onSuccess()
+      const response = await clientsAPI.create(formData)
+      const newClient = response.data
+      onSuccess(newClient)
       onClose()
       // Reset form
       setFormData({
