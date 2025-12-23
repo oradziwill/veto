@@ -165,14 +165,33 @@ const VisitsTab = () => {
                     </div>
                     <div className="visit-info">
                       <h3>
-                        {appointment.patient?.name || 'Unknown'} - {appointment.reason || 'Visit'}
+                        {(() => {
+                          // Remove "Unknown -" prefix from reason if present
+                          let displayReason = appointment.reason || 'Visit';
+                          if (displayReason.startsWith('Unknown - ')) {
+                            displayReason = displayReason.replace('Unknown - ', '');
+                          }
+                          return displayReason;
+                        })()}
                       </h3>
                       <p className="visit-owner">
                         Owner: {appointment.patient?.owner
-                          ? `${appointment.patient.owner.first_name} ${appointment.patient.owner.last_name}`
+                          ? `${appointment.patient.owner.first_name || ''} ${appointment.patient.owner.last_name || ''}`.trim() || 'Unknown'
                           : 'Unknown'}
                       </p>
-                      <p className="visit-type">Type: {appointment.reason || 'General'}</p>
+                      <p className="visit-type">Type: {(() => {
+                        let reason = appointment.reason || 'General';
+                        // Remove "Unknown -" prefix if present
+                        if (reason.startsWith('Unknown - ')) {
+                          reason = reason.replace('Unknown - ', '');
+                        }
+                        // Extract just the reason part if it contains "Pet Name - Reason" format
+                        if (reason.includes(' - ')) {
+                          const parts = reason.split(' - ');
+                          return parts.length > 1 ? parts[1] : parts[0];
+                        }
+                        return reason;
+                      })()}</p>
                     </div>
                     <div className="visit-status">
                       <span className={`status-badge ${getStatusClass(appointment.status)}`}>
