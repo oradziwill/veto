@@ -16,55 +16,91 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
     allergies: '',
     notes: '',
   })
-  const [clients, setClients] = useState([])
+  const [ownerSearch, setOwnerSearch] = useState('')
+  const [ownerSearchResults, setOwnerSearchResults] = useState([])
+  const [selectedOwner, setSelectedOwner] = useState(null)
+  const [showOwnerDropdown, setShowOwnerDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [loadingClients, setLoadingClients] = useState(false)
+  const [searchingClients, setSearchingClients] = useState(false)
   const [error, setError] = useState(null)
-  const [clientsError, setClientsError] = useState(null)
   const [showClientModal, setShowClientModal] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
-      fetchClients()
+      // Reset form when modal opens
+      setFormData({
+        owner: '',
+        name: '',
+        species: '',
+        breed: '',
+        sex: '',
+        birth_date: '',
+        microchip_no: '',
+        allergies: '',
+        notes: '',
+      })
+      setOwnerSearch('')
+      setSelectedOwner(null)
+      setOwnerSearchResults([])
+      setShowOwnerDropdown(false)
     }
   }, [isOpen])
 
-  const fetchClients = async () => {
-    try {
-      setLoadingClients(true)
-      setClientsError(null)
-      // Use in_my_clinic filter to get clients in the current clinic
-      const response = await clientsAPI.inMyClinic()
-      const clientsData = response.data.results || response.data
-      // If no clinic clients, try getting all clients
-      if (clientsData.length === 0) {
-        const allResponse = await clientsAPI.list()
-        const allClients = allResponse.data.results || allResponse.data
-        setClients(allClients)
-        if (allClients.length === 0) {
-          setClientsError('No clients found. Please create a client first.')
+  // Search for clients when ownerSearch changes
+  useEffect(() => {
+    const searchClients = async () => {
+      if (ownerSearch.trim().length < 2) {
+        setOwnerSearchResults([])
+        setShowOwnerDropdown(false)
+        return
+      }
+
+      try {
+        setSearchingClients(true)
+        const response = await clientsAPI.list({ search: ownerSearch.trim() })
+        const results = response.data.results || response.data
+        setOwnerSearchResults(results)
+        setShowOwnerDropdown(results.length > 0)
+      } catch (err) {
+        if (err.response?.status === 401) {
+          setShowLoginModal(true)
         }
-      } else {
-        setClients(clientsData)
+        console.error('Error searching clients:', err)
+        setOwnerSearchResults([])
+        setShowOwnerDropdown(false)
+      } finally {
+        setSearchingClients(false)
       }
-    } catch (err) {
-      if (err.response?.status === 401) {
-        setClientsError('Authentication required.')
-        setShowLoginModal(true)
-      } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setClientsError(
-          'Cannot connect to server. ' +
-          'Make sure Django is running: cd backend && ./venv/bin/python manage.py runserver'
-        )
-      } else {
-        const errorMsg = err.response?.data?.detail || err.message || 'Failed to load clients. Please check your connection.'
-        setClientsError(errorMsg)
-      }
-      console.error('Error fetching clients:', err)
-    } finally {
-      setLoadingClients(false)
     }
+
+    const timeoutId = setTimeout(searchClients, 300) // Debounce search
+    return () => clearTimeout(timeoutId)
+  }, [ownerSearch])
+
+  const handleOwnerSearchChange = (e) => {
+    const value = e.target.value
+    setOwnerSearch(value)
+    if (!value) {
+      setSelectedOwner(null)
+      setFormData(prev => ({ ...prev, owner: '' }))
+      setShowOwnerDropdown(false)
+    }
+  }
+
+  const handleOwnerSelect = (client) => {
+    setSelectedOwner(client)
+    setOwnerSearch(`${client.first_name} ${client.last_name}`)
+    setFormData(prev => ({ ...prev, owner: client.id }))
+    setShowOwnerDropdown(false)
+    setOwnerSearchResults([])
+  }
+
+  const handleNewClientCreated = (newClient) => {
+    setSelectedOwner(newClient)
+    setOwnerSearch(`${newClient.first_name} ${newClient.last_name}`)
+    setFormData(prev => ({ ...prev, owner: newClient.id }))
+    setShowClientModal(false)
   }
 
   const handleChange = (e) => {
@@ -80,11 +116,18 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
     setLoading(true)
     setError(null)
 
+    // Validate owner is selected
+    if (!formData.owner) {
+      setError('Please select or create an owner for this patient.')
+      setLoading(false)
+      return
+    }
+
     try {
       // Prepare data for API - convert owner to integer
       const submitData = {
         ...formData,
-        owner: formData.owner ? parseInt(formData.owner, 10) : null,
+        owner: parseInt(formData.owner, 10),
       }
       await patientsAPI.create(submitData)
       onSuccess()
@@ -129,47 +172,113 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="modal-form">
           {error && <div className="error-message">{error}</div>}
 
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative' }}>
             <label htmlFor="owner">Owner *</label>
-            {loadingClients ? (
-              <div className="loading-text">Loading clients...</div>
-            ) : clientsError ? (
-              <div className="error-message" style={{ marginBottom: '0.5rem' }}>
-                {clientsError}
-              </div>
-            ) : (
-              <select
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
                 id="owner"
                 name="owner"
-                value={formData.owner}
-                onChange={handleChange}
-                required
-                disabled={clients.length === 0}
-              >
-                <option value="">
-                  {clients.length === 0 ? 'No clients available' : 'Select Owner'}
-                </option>
-                {clients.map(client => (
-                  <option key={client.id} value={client.id}>
-                    {client.first_name} {client.last_name}
-                    {client.email ? ` (${client.email})` : ''}
-                  </option>
-                ))}
-              </select>
+                value={ownerSearch}
+                onChange={handleOwnerSearchChange}
+                placeholder="Search for owner by name, phone, or email..."
+                style={{ 
+                  width: '100%',
+                  padding: '0.5rem',
+                  fontSize: '1rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                }}
+                onFocus={() => {
+                  if (ownerSearchResults.length > 0) {
+                    setShowOwnerDropdown(true)
+                  }
+                }}
+                onBlur={() => {
+                  // Delay hiding dropdown to allow clicks on results
+                  setTimeout(() => setShowOwnerDropdown(false), 200)
+                }}
+              />
+              {searchingClients && (
+                <div style={{ 
+                  position: 'absolute', 
+                  right: '0.5rem', 
+                  top: '50%', 
+                  transform: 'translateY(-50%)',
+                  fontSize: '0.85rem',
+                  color: '#718096'
+                }}>
+                  Searching...
+                </div>
+              )}
+              {showOwnerDropdown && ownerSearchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'white',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  marginTop: '0.25rem',
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}>
+                  {ownerSearchResults.map(client => (
+                    <div
+                      key={client.id}
+                      onClick={() => handleOwnerSelect(client)}
+                      style={{
+                        padding: '0.75rem',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #eee',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                    >
+                      <div style={{ fontWeight: '500' }}>
+                        {client.first_name} {client.last_name}
+                      </div>
+                      {(client.email || client.phone) && (
+                        <div style={{ fontSize: '0.85rem', color: '#718096', marginTop: '0.25rem' }}>
+                          {client.email && <span>{client.email}</span>}
+                          {client.email && client.phone && <span> • </span>}
+                          {client.phone && <span>{client.phone}</span>}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#718096' }}>
+                No owners found. Create a new one below.
+              </div>
             )}
-            {clients.length === 0 && !loadingClients && !clientsError && (
-              <div style={{ marginTop: '0.5rem' }}>
-                <p className="help-text" style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.5rem' }}>
-                  No clients found.
-                </p>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setShowClientModal(true)}
-                  style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
-                >
-                  + Create New Client
-                </button>
+            <div style={{ marginTop: '0.75rem' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowClientModal(true)}
+                style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
+              >
+                + Create New Owner
+              </button>
+            </div>
+            {selectedOwner && (
+              <div style={{ 
+                marginTop: '0.5rem', 
+                padding: '0.5rem', 
+                backgroundColor: '#f0f9ff', 
+                borderRadius: '4px',
+                fontSize: '0.9rem'
+              }}>
+                Selected: <strong>{selectedOwner.first_name} {selectedOwner.last_name}</strong>
+                {selectedOwner.email && <span> ({selectedOwner.email})</span>}
               </div>
             )}
           </div>
@@ -286,9 +395,8 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
       <AddClientModal
         isOpen={showClientModal}
         onClose={() => setShowClientModal(false)}
-        onSuccess={() => {
-          fetchClients()
-          setShowClientModal(false)
+        onSuccess={(newClient) => {
+          handleNewClientCreated(newClient)
         }}
       />
 
