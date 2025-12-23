@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { patientHistoryAPI } from '../../services/api'
+import { patientHistoryAPI, patientAISummaryAPI } from '../../services/api'
 import './Modal.css'
 
 const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState(null)
+  const [aiSummary, setAiSummary] = useState(null)
+  const [loadingAISummary, setLoadingAISummary] = useState(false)
+  const [aiSummaryError, setAiSummaryError] = useState(null)
+  const [aiSummaryCached, setAiSummaryCached] = useState(false)
   const hasFetchedRef = useRef(false)
+  const hasFetchedAISummaryRef = useRef(false)
   const currentPatientIdRef = useRef(null)
 
   useEffect(() => {
@@ -15,20 +20,32 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
       setHistory([])
       setError(null)
       setLoadingHistory(false)
+      setAiSummary(null)
+      setAiSummaryError(null)
+      setLoadingAISummary(false)
+      setAiSummaryCached(false)
       hasFetchedRef.current = false
+      hasFetchedAISummaryRef.current = false
       currentPatientIdRef.current = null
       return
     }
 
     // Only fetch if we have a patient ID and haven't fetched for this patient yet
     if (patient?.id) {
-      // If this is a different patient, reset the fetch flag
+      // If this is a different patient, reset the fetch flags
       if (currentPatientIdRef.current !== patient.id) {
         hasFetchedRef.current = false
+        hasFetchedAISummaryRef.current = false
         currentPatientIdRef.current = patient.id
       }
 
-      // Only fetch once per patient ID
+      // Show cached summary immediately if available in patient object
+      if (patient.ai_summary && !aiSummary) {
+        setAiSummary(patient.ai_summary)
+        setAiSummaryCached(true)
+      }
+
+      // Fetch history
       if (!hasFetchedRef.current) {
         hasFetchedRef.current = true
         
@@ -49,6 +66,34 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
         }
 
         fetchHistory()
+      }
+
+      // Always fetch AI summary (backend will use cache if valid or regenerate if needed)
+      // Only fetch once per patient
+      if (!hasFetchedAISummaryRef.current) {
+        hasFetchedAISummaryRef.current = true
+        
+        const fetchAISummary = async () => {
+          try {
+            // Only show loading if we don't have a cached version to display
+            if (!patient.ai_summary) {
+              setLoadingAISummary(true)
+            }
+            setAiSummaryError(null)
+            const response = await patientAISummaryAPI.get(patient.id)
+            setAiSummary(response.data.summary || null)
+            setAiSummaryCached(response.data.cached || false)
+          } catch (err) {
+            console.error('Error fetching AI summary:', err)
+            // Don't block UI if AI summary fails - it's optional
+            setAiSummaryError(err.response?.data?.error || 'Failed to generate AI summary. This feature requires OpenAI API key configuration.')
+            hasFetchedAISummaryRef.current = false // Allow retry on error
+          } finally {
+            setLoadingAISummary(false)
+          }
+        }
+
+        fetchAISummary()
       }
     }
   }, [isOpen, patient?.id])
@@ -173,6 +218,74 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <div style={{ fontSize: '1rem', color: '#2d3748', padding: '0.75rem', backgroundColor: '#f7fafc', borderRadius: '6px', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>
                   {patient.notes}
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* AI Summary Section */}
+          <div style={{ marginBottom: '2rem', paddingTop: '1.5rem', borderTop: '2px solid #e2e8f0' }}>
+            <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600', color: '#2d3748', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              🤖 AI-Powered Summary
+            </h3>
+            
+            {loadingAISummary && (
+              <div style={{ padding: '1.5rem', textAlign: 'center', color: '#718096', backgroundColor: '#f7fafc', borderRadius: '8px' }}>
+                <div style={{ marginBottom: '0.5rem' }}>Generating AI summary...</div>
+                <div style={{ fontSize: '0.875rem' }}>Analyzing patient history and records</div>
+              </div>
+            )}
+
+            {aiSummaryError && !loadingAISummary && (
+              <div style={{ padding: '1rem', backgroundColor: '#fff5f5', borderRadius: '8px', border: '1px solid #fed7d7', color: '#c53030' }}>
+                <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>Unable to generate AI summary</div>
+                <div style={{ fontSize: '0.875rem' }}>{aiSummaryError}</div>
+                <button
+                  onClick={async () => {
+                    try {
+                      setLoadingAISummary(true)
+                      setAiSummaryError(null)
+                      const response = await patientAISummaryAPI.get(patient.id)
+                      setAiSummary(response.data.summary || null)
+                      setAiSummaryCached(response.data.cached || false)
+                      hasFetchedAISummaryRef.current = true
+                    } catch (err) {
+                      setAiSummaryError(err.response?.data?.error || 'Failed to generate AI summary.')
+                      hasFetchedAISummaryRef.current = false
+                    } finally {
+                      setLoadingAISummary(false)
+                    }
+                  }}
+                  style={{
+                    marginTop: '0.75rem',
+                    padding: '0.5rem 1rem',
+                    backgroundColor: '#48bb78',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {aiSummary && !loadingAISummary && (
+              <div
+                style={{
+                  padding: '1.5rem',
+                  backgroundColor: '#f0f9ff',
+                  borderRadius: '8px',
+                  border: '1px solid #bee3f8',
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: '1.8',
+                  fontSize: '0.9375rem',
+                  color: '#2d3748',
+                }}
+              >
+                {aiSummary}
               </div>
             )}
           </div>

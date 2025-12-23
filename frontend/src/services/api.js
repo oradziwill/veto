@@ -108,4 +108,8 @@ export const patientHistoryAPI = {
   create: (patientId, data) => api.post(`/patients/${patientId}/history/`, data),
 }
 
+export const patientAISummaryAPI = {
+  get: (patientId) => api.get(`/patients/${patientId}/ai-summary/`),
+}
+
 export default api

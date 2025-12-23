@@ -20,6 +20,12 @@ env/
 .venv/
 
 # =========================
+# Environment variables
+# =========================
+.env
+.env.local
+
+# =========================
 # Databases (NEVER COMMIT)
 # =========================
 *.sqlite3
