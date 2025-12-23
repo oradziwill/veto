@@ -1,8 +1,7 @@
 from apps.patients.serializers import PatientReadSerializer
 from apps.scheduling.models import Appointment
 from django.core.exceptions import ValidationError as DjangoValidationError
-from apps.patients.serializers import PatientReadSerializer
-from apps.scheduling.models import Appointment
+from rest_framework import serializers
 
 
 class AppointmentReadSerializer(serializers.ModelSerializer):
