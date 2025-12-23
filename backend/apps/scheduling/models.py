@@ -6,6 +6,8 @@ from django.utils import timezone
 from apps.patients.models import Patient
 from apps.tenancy.models import Clinic
 
+from .models_exceptions import VetAvailabilityException  # noqa: F401
+
 
 class Appointment(models.Model):
     class Status(models.TextChoices):
