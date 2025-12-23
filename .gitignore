@@ -1,11 +1,8 @@
-# Ignore all files/directories starting with . (except .gitignore itself)
-.*
-!.gitignore
-
+# =========================
 # Python
+# =========================
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.pyd
 .Python
 *.so
@@ -14,15 +11,29 @@ __pycache__/
 dist/
 build/
 
+# =========================
 # Virtual environments
+# =========================
 venv/
 ENV/
 env/
+.venv/
 
-# Databases
+# =========================
+# Databases (NEVER COMMIT)
+# =========================
 *.sqlite3
 db.sqlite3
 backend/db.sqlite3
 
+# =========================
 # Logs
+# =========================
 *.log
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+.vscode/
+.idea/
