@@ -8,4 +8,6 @@ router.register(r"appointments", AppointmentViewSet, basename="appointments")
 
 urlpatterns = [
     path("availability/", AvailabilityView.as_view(), name="availability"),
-] + router.urls
+]
+
+urlpatterns += router.urls
