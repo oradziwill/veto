@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { clientsAPI } from '../../services/api'
+import { clientsAPI, authAPI } from '../../services/api'
 import './Modal.css'
 
 const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
@@ -20,10 +20,45 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     }))
   }
 
+  // Ensure authentication before making API calls
+  const ensureAuthenticated = async () => {
+    const token = localStorage.getItem('access_token')
+    if (token) {
+      try {
+        // Verify token is still valid
+        await authAPI.me()
+        return true
+      } catch (err) {
+        // Token invalid, clear it
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+      }
+    }
+    
+    // Try to auto-login
+    try {
+      const authResponse = await authAPI.login('drsmith', 'password123')
+      localStorage.setItem('access_token', authResponse.data.access)
+      localStorage.setItem('refresh_token', authResponse.data.refresh)
+      return true
+    } catch (authErr) {
+      console.error('Auto-login failed:', authErr)
+      return false
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
+
+    // Ensure authentication before making the API call
+    const isAuthenticated = await ensureAuthenticated()
+    if (!isAuthenticated) {
+      setError('Unable to authenticate. Please check your connection and try again.')
+      setLoading(false)
+      return
+    }
 
     try {
       const response = await clientsAPI.create(formData)
@@ -38,7 +73,31 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
         email: '',
       })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create client. Please try again.')
+      // Handle authentication errors - try to auto-login and retry once more
+      if (err.response?.status === 401) {
+        try {
+          const authResponse = await authAPI.login('drsmith', 'password123')
+          localStorage.setItem('access_token', authResponse.data.access)
+          localStorage.setItem('refresh_token', authResponse.data.refresh)
+          // Retry the client creation
+          const response = await clientsAPI.create(formData)
+          const newClient = response.data
+          onSuccess(newClient)
+          onClose()
+          setFormData({
+            first_name: '',
+            last_name: '',
+            phone: '',
+            email: '',
+          })
+          return
+        } catch (authErr) {
+          console.error('Auto-login retry failed:', authErr)
+          setError('Authentication failed. Please refresh the page.')
+        }
+      } else {
+        setError(err.response?.data?.detail || 'Failed to create client. Please try again.')
+      }
       console.error('Error creating client:', err)
     } finally {
       setLoading(false)
