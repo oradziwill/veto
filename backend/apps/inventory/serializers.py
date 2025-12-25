@@ -4,6 +4,8 @@ import re
 
 from rest_framework import serializers
 
+from apps.scheduling.models import Appointment
+
 from .models import InventoryItem, InventoryMovement
 
 
@@ -35,31 +37,22 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
 
     def validate_sku(self, value: str) -> str:
         """
-        Normalize SKU so we avoid case/space duplicates:
-        - strip
-        - uppercase
-        - replace whitespace with underscore
-        - collapse multiple underscores
-        - allow A-Z, 0-9, underscore, dash
+        Normalize SKU so user input like "bandage roll" becomes "BANDAGE_ROLL".
         """
         value = (value or "").strip()
         if not value:
             raise serializers.ValidationError("SKU is required.")
 
         value = value.upper()
-        value = re.sub(r"\s+", "_", value)
-        value = re.sub(r"_+", "_", value)
-
-        if not re.fullmatch(r"[A-Z0-9_-]+", value):
-            raise serializers.ValidationError(
-                "SKU may contain only letters, numbers, underscore, and dash."
-            )
-
+        value = re.sub(r"[^A-Z0-9]+", "_", value)  # spaces/dashes/etc -> underscore
+        value = re.sub(r"_+", "_", value)  # collapse multiple underscores
+        value = value.strip("_")
         return value
 
     def validate(self, attrs):
         """
-        Enforce uniqueness of (clinic, sku) at serializer level -> clean 400, not 500.
+        Enforce uniqueness of (clinic, sku) at the serializer level so we return 400,
+        not a 500 IntegrityError.
         """
         request = self.context.get("request")
         clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
@@ -80,22 +73,9 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
 
 
 class InventoryMovementReadSerializer(serializers.ModelSerializer):
-    item_name = serializers.CharField(source="item.name", read_only=True)
-    item_sku = serializers.CharField(source="item.sku", read_only=True)
-    created_by_name = serializers.SerializerMethodField()
-
     class Meta:
         model = InventoryMovement
         fields = "__all__"
-
-    def get_created_by_name(self, obj: InventoryMovement) -> str:
-        user = getattr(obj, "created_by", None)
-        if not user:
-            return ""
-        return (
-            getattr(user, "username", "")
-            or f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip()
-        )
 
 
 class InventoryMovementWriteSerializer(serializers.ModelSerializer):
@@ -111,7 +91,34 @@ class InventoryMovementWriteSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+
         qty = attrs.get("quantity")
         if qty is not None and qty <= 0:
             raise serializers.ValidationError({"quantity": "quantity must be > 0"})
+
+        # ---- HARDEN TENANCY: item must belong to user's clinic ----
+        item = attrs.get("item")  # this is an InventoryItem instance after DRF parsing
+        if clinic_id and item and item.clinic_id != clinic_id:
+            raise serializers.ValidationError(
+                {"item": "Inventory item must belong to your clinic."}
+            )
+
+        # ---- Optional: appointment scoping hardening ----
+        appointment_id = attrs.get("appointment_id")
+        if appointment_id and clinic_id:
+            try:
+                appt = Appointment.objects.get(pk=appointment_id, clinic_id=clinic_id)
+            except Appointment.DoesNotExist as err:
+                raise serializers.ValidationError(
+                    {"appointment_id": "Appointment must belong to your clinic."}
+                ) from err
+
+            patient_id = attrs.get("patient_id")
+            if patient_id and appt.patient_id and patient_id != appt.patient_id:
+                raise serializers.ValidationError(
+                    {"patient_id": "patient_id must match appointment.patient_id."}
+                )
+
         return attrs
