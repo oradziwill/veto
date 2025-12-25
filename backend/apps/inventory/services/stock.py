@@ -4,63 +4,44 @@ from dataclasses import dataclass
 
 from apps.inventory.models import InventoryItem, InventoryMovement
 from django.db import transaction
-from django.db.models import F
 
 
 @dataclass(frozen=True)
-class StockResult:
-    item_id: int
-    previous_stock: int
-    new_stock: int
-    movement_id: int
+class StockChange:
+    new_stock_on_hand: int
 
 
-@transaction.atomic
-def apply_stock_movement(
-    *,
-    clinic_id: int,
-    item_id: int,
-    kind: str,
-    quantity: int,
-    created_by_id: int,
-    note: str = "",
-    patient_id: int | None = None,
-    appointment_id: int | None = None,
-) -> StockResult:
+def apply_movement(movement: InventoryMovement) -> StockChange:
     """
-    Applies a stock movement and updates InventoryItem.stock_on_hand.
+    Apply a single InventoryMovement to its InventoryItem.stock_on_hand.
 
     Rules:
-    - IN:      +quantity
-    - OUT:     -quantity
-    - ADJUST:  set stock_on_hand = quantity  (absolute stocktake)
+      - kind="in":     stock += quantity
+      - kind="out":    stock -= quantity (cannot go below 0)
+      - kind="adjust": stock = quantity (absolute set)
     """
-    item = InventoryItem.objects.select_for_update().get(pk=item_id, clinic_id=clinic_id)
-    previous = int(item.stock_on_hand)
+    if movement.quantity is None or movement.quantity <= 0:
+        raise ValueError("quantity must be > 0")
 
-    if kind == InventoryMovement.Kind.IN:
-        InventoryItem.objects.filter(pk=item.pk).update(stock_on_hand=F("stock_on_hand") + quantity)
-    elif kind == InventoryMovement.Kind.OUT:
-        InventoryItem.objects.filter(pk=item.pk).update(stock_on_hand=F("stock_on_hand") - quantity)
-    elif kind == InventoryMovement.Kind.ADJUST:
-        InventoryItem.objects.filter(pk=item.pk).update(stock_on_hand=quantity)
-    else:
-        raise ValueError(f"Unknown movement kind: {kind}")
+    # Ensure we apply under transaction and lock the row to avoid race conditions.
+    with transaction.atomic():
+        item = InventoryItem.objects.select_for_update().get(pk=movement.item_id)
 
-    movement = InventoryMovement.objects.create(
-        clinic_id=clinic_id,
-        item_id=item.pk,
-        kind=kind,
-        quantity=quantity,
-        note=note or "",
-        patient_id=patient_id,
-        appointment_id=appointment_id,
-        created_by_id=created_by_id,
-    )
+        kind = movement.kind
+        qty = int(movement.quantity)
 
-    item.refresh_from_db(fields=["stock_on_hand"])
-    new = int(item.stock_on_hand)
+        if kind == InventoryMovement.Kind.IN:
+            new_val = item.stock_on_hand + qty
+        elif kind == InventoryMovement.Kind.OUT:
+            new_val = item.stock_on_hand - qty
+            if new_val < 0:
+                raise ValueError("Insufficient stock on hand.")
+        elif kind == InventoryMovement.Kind.ADJUST:
+            new_val = qty
+        else:
+            raise ValueError("Invalid movement kind.")
 
-    return StockResult(
-        item_id=item.pk, previous_stock=previous, new_stock=new, movement_id=movement.pk
-    )
+        item.stock_on_hand = new_val
+        item.save(update_fields=["stock_on_hand", "updated_at"])
+
+    return StockChange(new_stock_on_hand=new_val)
