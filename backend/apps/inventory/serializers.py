@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+import re
+
 from rest_framework import serializers
+
+from apps.scheduling.models import Appointment
 
 from .models import InventoryItem, InventoryMovement
 
 
 class InventoryItemReadSerializer(serializers.ModelSerializer):
+    is_low_stock = serializers.SerializerMethodField()
+
     class Meta:
         model = InventoryItem
         fields = "__all__"
+
+    def get_is_low_stock(self, obj: InventoryItem) -> bool:
+        try:
+            return obj.stock_on_hand <= obj.low_stock_threshold
+        except TypeError:
+            return False
 
 
 class InventoryItemWriteSerializer(serializers.ModelSerializer):
@@ -24,21 +36,27 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
         ]
 
     def validate_sku(self, value: str) -> str:
-        # Canonical format: trim, upper, spaces -> underscores
-        value = (value or "").strip().upper().replace(" ", "_")
+        """
+        Normalize SKU so user input like "bandage roll" becomes "BANDAGE_ROLL".
+        """
+        value = (value or "").strip()
         if not value:
             raise serializers.ValidationError("SKU is required.")
+
+        value = value.upper()
+        value = re.sub(r"[^A-Z0-9]+", "_", value)  # spaces/dashes/etc -> underscore
+        value = re.sub(r"_+", "_", value)  # collapse multiple underscores
+        value = value.strip("_")
         return value
 
     def validate(self, attrs):
         """
-        Enforce uniqueness of (clinic, sku) at the serializer level
-        so we return 400 instead of a DB 500.
+        Enforce uniqueness of (clinic, sku) at the serializer level so we return 400,
+        not a 500 IntegrityError.
         """
         request = self.context.get("request")
         clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
         if not clinic_id:
-            # HasClinic should guarantee clinic_id, but keep safe.
             return attrs
 
         sku = attrs.get("sku") or getattr(self.instance, "sku", None)
@@ -55,19 +73,9 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
 
 
 class InventoryMovementReadSerializer(serializers.ModelSerializer):
-    item_name = serializers.CharField(source="item.name", read_only=True)
-    item_sku = serializers.CharField(source="item.sku", read_only=True)
-    created_by_name = serializers.SerializerMethodField()
-
     class Meta:
         model = InventoryMovement
         fields = "__all__"
-
-    def get_created_by_name(self, obj) -> str:
-        user = getattr(obj, "created_by", None)
-        if not user:
-            return ""
-        return getattr(user, "username", "") or getattr(user, "email", "") or str(user)
 
 
 class InventoryMovementWriteSerializer(serializers.ModelSerializer):
@@ -83,16 +91,34 @@ class InventoryMovementWriteSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+
         qty = attrs.get("quantity")
-        if qty is None or qty <= 0:
+        if qty is not None and qty <= 0:
             raise serializers.ValidationError({"quantity": "quantity must be > 0"})
 
-        kind = attrs.get("kind")
-        if kind not in InventoryMovement.Kind.values:
-            raise serializers.ValidationError({"kind": "Invalid kind."})
+        # ---- HARDEN TENANCY: item must belong to user's clinic ----
+        item = attrs.get("item")  # this is an InventoryItem instance after DRF parsing
+        if clinic_id and item and item.clinic_id != clinic_id:
+            raise serializers.ValidationError(
+                {"item": "Inventory item must belong to your clinic."}
+            )
 
-        # We treat ADJUST as absolute: quantity is the new stock_on_hand (>= 0).
-        if kind == InventoryMovement.Kind.ADJUST and qty < 0:
-            raise serializers.ValidationError({"quantity": "adjust quantity must be >= 0"})
+        # ---- Optional: appointment scoping hardening ----
+        appointment_id = attrs.get("appointment_id")
+        if appointment_id and clinic_id:
+            try:
+                appt = Appointment.objects.get(pk=appointment_id, clinic_id=clinic_id)
+            except Appointment.DoesNotExist as err:
+                raise serializers.ValidationError(
+                    {"appointment_id": "Appointment must belong to your clinic."}
+                ) from err
+
+            patient_id = attrs.get("patient_id")
+            if patient_id and appt.patient_id and patient_id != appt.patient_id:
+                raise serializers.ValidationError(
+                    {"patient_id": "patient_id must match appointment.patient_id."}
+                )
 
         return attrs

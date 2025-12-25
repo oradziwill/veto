@@ -7,65 +7,60 @@ from django.db import transaction
 from django.db.models import F
 
 
-class StockError(Exception):
-    """Domain-level stock error (converted to DRF validation error in the API layer)."""
-
-
 @dataclass(frozen=True)
 class StockResult:
     item_id: int
     previous_stock: int
     new_stock: int
+    movement_id: int
 
 
 @transaction.atomic
-def apply_inventory_movement(
+def apply_stock_movement(
     *,
     clinic_id: int,
     item_id: int,
     kind: str,
     quantity: int,
+    created_by_id: int,
+    note: str = "",
+    patient_id: int | None = None,
+    appointment_id: int | None = None,
 ) -> StockResult:
     """
-    Apply a movement to an inventory item atomically.
+    Applies a stock movement and updates InventoryItem.stock_on_hand.
 
     Rules:
-    - IN: stock_on_hand += quantity
-    - OUT: stock_on_hand -= quantity (must not go below 0)
-    - ADJUST: stock_on_hand = quantity (absolute)
-
-    Concurrency:
-    - Uses select_for_update() to prevent race conditions.
+    - IN:      +quantity
+    - OUT:     -quantity
+    - ADJUST:  set stock_on_hand = quantity  (absolute stocktake)
     """
-    if quantity is None or quantity <= 0:
-        raise StockError("quantity must be > 0")
-
-    # Lock the row for update within this transaction
-    item = (
-        InventoryItem.objects.select_for_update()
-        .only("id", "clinic_id", "stock_on_hand")
-        .get(id=item_id, clinic_id=clinic_id)
-    )
-
+    item = InventoryItem.objects.select_for_update().get(pk=item_id, clinic_id=clinic_id)
     previous = int(item.stock_on_hand)
 
     if kind == InventoryMovement.Kind.IN:
-        InventoryItem.objects.filter(id=item.id).update(stock_on_hand=F("stock_on_hand") + quantity)
-        new_stock = previous + quantity
-
+        InventoryItem.objects.filter(pk=item.pk).update(stock_on_hand=F("stock_on_hand") + quantity)
     elif kind == InventoryMovement.Kind.OUT:
-        if previous - quantity < 0:
-            raise StockError("Insufficient stock for this OUT movement.")
-        InventoryItem.objects.filter(id=item.id).update(stock_on_hand=F("stock_on_hand") - quantity)
-        new_stock = previous - quantity
-
+        InventoryItem.objects.filter(pk=item.pk).update(stock_on_hand=F("stock_on_hand") - quantity)
     elif kind == InventoryMovement.Kind.ADJUST:
-        if quantity < 0:
-            raise StockError("adjust quantity must be >= 0")
-        InventoryItem.objects.filter(id=item.id).update(stock_on_hand=quantity)
-        new_stock = quantity
-
+        InventoryItem.objects.filter(pk=item.pk).update(stock_on_hand=quantity)
     else:
-        raise StockError("Invalid movement kind.")
+        raise ValueError(f"Unknown movement kind: {kind}")
 
-    return StockResult(item_id=item.id, previous_stock=previous, new_stock=new_stock)
+    movement = InventoryMovement.objects.create(
+        clinic_id=clinic_id,
+        item_id=item.pk,
+        kind=kind,
+        quantity=quantity,
+        note=note or "",
+        patient_id=patient_id,
+        appointment_id=appointment_id,
+        created_by_id=created_by_id,
+    )
+
+    item.refresh_from_db(fields=["stock_on_hand"])
+    new = int(item.stock_on_hand)
+
+    return StockResult(
+        item_id=item.pk, previous_stock=previous, new_stock=new, movement_id=movement.pk
+    )
