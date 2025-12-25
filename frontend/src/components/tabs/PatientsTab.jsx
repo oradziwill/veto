@@ -76,7 +76,7 @@ const PatientsTab = () => {
         <div className="search-bar">
           <input
             type="text"
-            placeholder="Search patients by name, owner, or ID..."
+            placeholder="Search by patient name, owner name, surname, or phone..."
             className="search-input"
             value={searchTerm}
             onChange={handleSearch}

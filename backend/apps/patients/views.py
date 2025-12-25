@@ -1,6 +1,7 @@
 import os
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -38,6 +39,16 @@ class PatientViewSet(viewsets.ModelViewSet):
             "primary_vet",
             "clinic",
         )
+
+        # Search across patient name, owner name, surname, and phone
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search)
+                | Q(owner__first_name__icontains=search)
+                | Q(owner__last_name__icontains=search)
+                | Q(owner__phone__icontains=search)
+            )
 
         species = self.request.query_params.get("species")
         owner_id = self.request.query_params.get("owner")
