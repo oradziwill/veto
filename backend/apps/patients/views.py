@@ -247,11 +247,26 @@ class PatientViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        # Build focused prompt for executive summary
-        prompt = "Create a brief executive summary for a veterinarian. Include:\n"
-        prompt += "1. Key medical history and notable events\n"
-        prompt += "2. Current medications and prescriptions\n"
-        prompt += "3. Important context to remember this patient\n\n"
+        # If there's no history data at all, return a simple message
+        if not history_data and not appointments_data and not medical_records_data:
+            summary = "No visit history for this patient."
+            patient.ai_summary = summary
+            patient.ai_summary_updated_at = timezone.now()
+            patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
+            return Response(
+                {
+                    "summary": summary,
+                    "model": "gpt-4o-mini",
+                    "cached": False,
+                }
+            )
+
+        # Build focused prompt for executive summary using ONLY the provided data
+        prompt = "Create a brief executive summary for a veterinarian based ONLY on the provided visit history data below. Use ONLY the information provided - do not infer, assume, or add any information not explicitly stated in the data.\n\n"
+        prompt += "Include:\n"
+        prompt += "1. Key medical history and notable events from the visit notes\n"
+        prompt += "2. Current medications and prescriptions mentioned in the visit notes\n"
+        prompt += "3. Important context from the visit history\n\n"
 
         # Add allergies if present (critical information)
         if patient.allergies:
@@ -260,25 +275,28 @@ class PatientViewSet(viewsets.ModelViewSet):
         # Extract medications from visit history, receipts, and medical records
         # Collect visit history
         if history_data:
-            prompt += f"Visit Notes (last {min(len(history_data), 10)} visits):\n"
-            for entry in history_data[:10]:  # Limit to last 10
-                prompt += f"- {entry['date']}: {entry['note']}\n"
+            prompt += f"Visit History ({len(history_data)} visits):\n"
+            for entry in history_data[:15]:  # Limit to last 15 for more context
+                prompt += f"- Date: {entry['date']}\n"
+                prompt += f"  Notes: {entry['note']}\n"
                 if entry["receipt_summary"]:
                     prompt += f"  Medications/Treatment: {entry['receipt_summary']}\n"
+                if entry.get("appointment_reason"):
+                    prompt += f"  Reason: {entry['appointment_reason']}\n"
+                prompt += "\n"
 
         # Add medical records (focus on plan/medications)
         if medical_records_data:
-            prompt += "\nMedical Records:\n"
-            for record in medical_records_data[:5]:  # Limit to last 5
-                if record["assessment"] or record["plan"]:
-                    prompt += f"- {record['date']}: "
-                    if record["assessment"]:
-                        prompt += f"Assessment: {record['assessment']} "
-                    if record["plan"]:
-                        prompt += f"Plan: {record['plan']}"
-                    prompt += "\n"
+            prompt += f"\nMedical Records ({len(medical_records_data)} records):\n"
+            for record in medical_records_data[:10]:  # Limit to last 10
+                prompt += f"- Date: {record['date']}\n"
+                if record["assessment"]:
+                    prompt += f"  Assessment: {record['assessment']}\n"
+                if record["plan"]:
+                    prompt += f"  Plan: {record['plan']}\n"
+                prompt += "\n"
 
-        prompt += "\nProvide a concise executive summary (1-2 short paragraphs) covering: medical history highlights, current medications/prescriptions, and key patient context."
+        prompt += "\nIMPORTANT: Base your summary ONLY on the visit history and medical records provided above. Do not include any information that is not explicitly mentioned in the data. If no medications are mentioned, do not mention medications. If no specific conditions are mentioned, do not infer conditions. Be factual and concise (1-2 short paragraphs)."
 
         try:
             client = OpenAI(api_key=api_key)
@@ -287,11 +305,11 @@ class PatientViewSet(viewsets.ModelViewSet):
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a veterinary assistant creating executive summaries. Write brief, focused summaries (1-2 paragraphs max) that help doctors quickly remember the patient's history, understand current medications/prescriptions, and recall important context. Do NOT include patient name, species, or breed. Be concise and focus only on essential medical information, medications, and key patient context.",
+                        "content": "You are a veterinary assistant creating factual executive summaries. You MUST use ONLY the information explicitly provided in the visit history and medical records. Do NOT infer, assume, or add any information that is not directly stated in the provided data. Do NOT include patient name, species, or breed. If information is not provided, do not make it up. Be concise, factual, and focus only on what is explicitly documented.",
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.3,
+                temperature=0.2,  # Lower temperature for more factual, less creative output
                 max_tokens=400,  # Very short executive summary
             )
 
