@@ -2,19 +2,20 @@ from __future__ import annotations
 
 from datetime import date as date_type
 
+from django.core.exceptions import PermissionDenied
 from django.utils.dateparse import parse_date
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
+from apps.medical.models import ClinicalExam
+from apps.medical.serializers import ClinicalExamReadSerializer, ClinicalExamWriteSerializer
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
-from apps.scheduling.serializers import (
-    AppointmentReadSerializer,
-    AppointmentWriteSerializer,
-)
+from apps.scheduling.serializers import AppointmentReadSerializer, AppointmentWriteSerializer
 from apps.scheduling.services.availability import compute_availability
 
 
@@ -28,20 +29,15 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-
         qs = (
             Appointment.objects.filter(clinic_id=user.clinic_id)
             .select_related("clinic", "patient", "vet")
             .order_by("starts_at")
         )
 
-        # Optional filters
         day = self.request.query_params.get("date")
         if day:
-            try:
-                parsed = parse_date(day)
-            except ValueError:
-                parsed = None
+            parsed = parse_date(day)
             if parsed:
                 qs = qs.filter(starts_at__date=parsed)
 
@@ -66,7 +62,6 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         appointment = serializer.save(clinic=self.request.user.clinic)
-        # Invalidate AI summary cache for the patient when a new visit is added
         if appointment.patient_id:
             patient = Patient.objects.get(pk=appointment.patient_id)
             patient.ai_summary = ""
@@ -75,6 +70,52 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(clinic=self.request.user.clinic)
+
+    @action(detail=True, methods=["get", "post", "patch"], url_path="exam")
+    def exam(self, request, pk=None):
+        """
+        Semantics C:
+          GET   -> 200 with exam, or 404 if none
+          POST  -> create only: 201 if created, 409 if already exists
+          PATCH -> update only: 200 if updated, 404 if none
+        """
+        user = request.user
+        appt = self.get_object()  # already clinic-scoped by queryset
+
+        # Only vets can write
+        if request.method in ("POST", "PATCH") and not getattr(user, "is_vet", False):
+            raise PermissionDenied("Only vets can create/update clinical exam.")
+
+        exam = ClinicalExam.objects.filter(
+            clinic_id=user.clinic_id,
+            appointment_id=appt.id,
+        ).first()
+
+        if request.method == "GET":
+            if not exam:
+                return Response({"detail": "No clinical exam for this appointment."}, status=404)
+            return Response(ClinicalExamReadSerializer(exam).data, status=200)
+
+        if request.method == "POST":
+            if exam:
+                return Response({"detail": "Clinical exam already exists."}, status=409)
+            serializer = ClinicalExamWriteSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            exam = serializer.save(
+                clinic_id=user.clinic_id,
+                appointment=appt,
+                created_by=user,
+            )
+            return Response(ClinicalExamReadSerializer(exam).data, status=201)
+
+        # PATCH
+        if not exam:
+            return Response({"detail": "No clinical exam for this appointment."}, status=404)
+
+        serializer = ClinicalExamWriteSerializer(exam, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        exam = serializer.save()
+        return Response(ClinicalExamReadSerializer(exam).data, status=200)
 
 
 class AvailabilityView(APIView):
@@ -88,13 +129,9 @@ class AvailabilityView(APIView):
     def get(self, request):
         user = request.user
 
-        # ---- date validation (robust, no 500s) ----
         date_str = request.query_params.get("date")
         if not date_str:
-            return Response(
-                {"detail": "Missing required query param: date=YYYY-MM-DD"},
-                status=400,
-            )
+            return Response({"detail": "Missing required query param: date=YYYY-MM-DD"}, status=400)
 
         try:
             parsed_day: date_type | None = parse_date(date_str)
@@ -103,18 +140,15 @@ class AvailabilityView(APIView):
 
         if parsed_day is None:
             return Response(
-                {"detail": "Invalid date. Use YYYY-MM-DD (e.g., 2025-12-23)."},
-                status=400,
+                {"detail": "Invalid date. Use YYYY-MM-DD (e.g., 2025-12-23)."}, status=400
             )
 
-        # ---- optional params ----
         vet = request.query_params.get("vet")
         vet_id = int(vet) if vet else None
 
         slot = request.query_params.get("slot")
         slot_minutes = int(slot) if slot else None
 
-        # ---- compute availability ----
         data = compute_availability(
             clinic_id=user.clinic_id,
             date_str=date_str,
@@ -125,10 +159,7 @@ class AvailabilityView(APIView):
         work_bounds = data.get("work_bounds")
 
         def dump_interval(interval):
-            return {
-                "start": interval.start.isoformat(),
-                "end": interval.end.isoformat(),
-            }
+            return {"start": interval.start.isoformat(), "end": interval.end.isoformat()}
 
         return Response(
             {

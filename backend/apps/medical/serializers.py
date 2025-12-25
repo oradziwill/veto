@@ -1,6 +1,64 @@
+from __future__ import annotations
+
 from rest_framework import serializers
 
-from .models import MedicalRecord, PatientHistoryEntry
+from apps.medical.models import ClinicalExam, MedicalRecord, PatientHistoryEntry
+
+# -------------------------
+# Clinical Exam
+# -------------------------
+
+
+class ClinicalExamReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClinicalExam
+        fields = [
+            "id",
+            "clinic",
+            "appointment",
+            "initial_notes",
+            "clinical_examination",
+            "temperature_c",
+            "heart_rate_bpm",
+            "respiratory_rate_rpm",
+            "additional_notes",
+            "owner_instructions",
+            "initial_diagnosis",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ClinicalExamWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClinicalExam
+        # clinic/appointment/created_by are set in the view; clients should not send them
+        fields = [
+            "initial_notes",
+            "clinical_examination",
+            "temperature_c",
+            "heart_rate_bpm",
+            "respiratory_rate_rpm",
+            "additional_notes",
+            "owner_instructions",
+            "initial_diagnosis",
+        ]
+
+    def validate_temperature_c(self, value):
+        # Optional: allow empty
+        if value is None:
+            return value
+        # Basic sanity bounds; adjust/remove if you dislike constraints
+        if value < 20 or value > 50:
+            raise serializers.ValidationError("temperature_c looks out of range.")
+        return value
+
+
+# -------------------------
+# Medical Record (if used elsewhere)
+# -------------------------
 
 
 class MedicalRecordReadSerializer(serializers.ModelSerializer):
@@ -8,74 +66,47 @@ class MedicalRecordReadSerializer(serializers.ModelSerializer):
         model = MedicalRecord
         fields = [
             "id",
-            "appointment",
-            "subjective",
-            "objective",
-            "assessment",
-            "plan",
-            "weight_kg",
-            "temperature_c",
+            "clinic",
+            "patient",
+            "ai_summary",
             "created_by",
             "created_at",
-            "updated_at",
         ]
+        read_only_fields = fields
 
 
 class MedicalRecordWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = MedicalRecord
         fields = [
-            "appointment",
-            "subjective",
-            "objective",
-            "assessment",
-            "plan",
-            "weight_kg",
-            "temperature_c",
+            "patient",
+            "ai_summary",
         ]
 
 
+# -------------------------
+# Patient History Entry (if used elsewhere)
+# -------------------------
+
+
 class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
-    """
-    Frontend-friendly shape:
-    - visit_date prefers appointment.starts_at when appointment exists
-    - include created_by basic identity
-    """
-
-    visit_date = serializers.SerializerMethodField()
-    created_by_name = serializers.SerializerMethodField()
-
     class Meta:
         model = PatientHistoryEntry
         fields = [
             "id",
-            "patient",
             "clinic",
-            "appointment",
-            "visit_date",
+            "record",
             "note",
-            "receipt_summary",
             "created_by",
-            "created_by_name",
             "created_at",
         ]
-
-    def get_visit_date(self, obj):
-        if obj.appointment_id and obj.appointment and obj.appointment.starts_at:
-            return obj.appointment.starts_at.isoformat()
-        return obj.created_at.isoformat()
-
-    def get_created_by_name(self, obj):
-        u = obj.created_by
-        full = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
-        return full or u.username
+        read_only_fields = fields
 
 
 class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientHistoryEntry
         fields = [
-            "appointment",
+            "record",
             "note",
-            "receipt_summary",
         ]
