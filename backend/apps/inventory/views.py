@@ -2,11 +2,8 @@ from __future__ import annotations
 
 from django.db import IntegrityError, models, transaction
 from django.db.models import Q
-from django.utils.dateparse import parse_date
 from rest_framework import serializers, viewsets
-from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
 
@@ -17,7 +14,7 @@ from .serializers import (
     InventoryMovementReadSerializer,
     InventoryMovementWriteSerializer,
 )
-from .services.stock import apply_stock_movement
+from .services.stock import apply_movement
 
 
 class InventoryItemViewSet(viewsets.ModelViewSet):
@@ -42,11 +39,15 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         return qs
 
     def get_serializer_class(self):
-        if self.action in ("list", "retrieve", "ledger"):
+        if self.action in ("list", "retrieve"):
             return InventoryItemReadSerializer
         return InventoryItemWriteSerializer
 
     def perform_create(self, serializer):
+        """
+        Creating an InventoryItem should NOT call apply_movement().
+        Stock changes happen via InventoryMovement only.
+        """
         user = self.request.user
         try:
             with transaction.atomic():
@@ -56,71 +57,17 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
                 {"sku": ["SKU must be unique within the clinic."]}
             ) from err
 
-    @action(detail=True, methods=["get"], url_path="ledger")
-    def ledger(self, request, pk=None):
-        """
-        GET /api/inventory/items/<id>/ledger/?kind=out&limit=50
-        Returns item + latest movements for that item.
-        """
-        user = request.user
-        item = self.get_object()
-
-        limit = request.query_params.get("limit")
-        try:
-            limit_n = int(limit) if limit else 50
-        except ValueError:
-            limit_n = 50
-        limit_n = max(1, min(limit_n, 200))
-
-        kind = request.query_params.get("kind")
-        qs = InventoryMovement.objects.filter(
-            clinic_id=user.clinic_id, item_id=item.id
-        ).select_related("item", "created_by")
-
-        if kind:
-            qs = qs.filter(kind=kind)
-
-        qs = qs.order_by("-created_at")[:limit_n]
-
-        return Response(
-            {
-                "item": InventoryItemReadSerializer(item).data,
-                "movements": InventoryMovementReadSerializer(qs, many=True).data,
-                "limit": limit_n,
-                "filters": {"kind": kind},
-            }
-        )
-
 
 class InventoryMovementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get_queryset(self):
         user = self.request.user
-        qs = InventoryMovement.objects.filter(clinic_id=user.clinic_id).select_related(
-            "item", "created_by"
-        )
+        qs = InventoryMovement.objects.filter(clinic_id=user.clinic_id).select_related("item")
 
         item_id = self.request.query_params.get("item")
         if item_id:
             qs = qs.filter(item_id=item_id)
-
-        kind = self.request.query_params.get("kind")
-        if kind:
-            qs = qs.filter(kind=kind)
-
-        # Optional date range filtering by created_at (YYYY-MM-DD)
-        date_from = self.request.query_params.get("date_from")
-        if date_from:
-            d = parse_date(date_from)
-            if d:
-                qs = qs.filter(created_at__date__gte=d)
-
-        date_to = self.request.query_params.get("date_to")
-        if date_to:
-            d = parse_date(date_to)
-            if d:
-                qs = qs.filter(created_at__date__lte=d)
 
         return qs.order_by("-created_at")
 
@@ -130,25 +77,10 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
         return InventoryMovementWriteSerializer
 
     def perform_create(self, serializer):
-        """
-        Use service layer so stock_on_hand is updated atomically and consistently.
-        """
         user = self.request.user
-        data = serializer.validated_data
-
-        result = apply_stock_movement(
-            clinic_id=user.clinic_id,
-            item_id=data["item"].id,
-            kind=data["kind"],
-            quantity=data["quantity"],
-            created_by_id=user.id,
-            note=data.get("note", ""),
-            patient_id=data.get("patient_id"),
-            appointment_id=data.get("appointment_id"),
-        )
-
-        # Return created movement instance as DRF expects
-        movement = InventoryMovement.objects.select_related("item", "created_by").get(
-            pk=result.movement_id
-        )
-        serializer.instance = movement
+        try:
+            with transaction.atomic():
+                movement = serializer.save(clinic_id=user.clinic_id, created_by=user)
+                apply_movement(movement)
+        except ValueError as err:
+            raise serializers.ValidationError({"detail": str(err)}) from err
