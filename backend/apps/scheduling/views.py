@@ -29,12 +29,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+
         qs = (
             Appointment.objects.filter(clinic_id=user.clinic_id)
             .select_related("clinic", "patient", "vet")
             .order_by("starts_at")
         )
 
+        # Optional filters
         day = self.request.query_params.get("date")
         if day:
             parsed = parse_date(day)
@@ -62,6 +64,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         appointment = serializer.save(clinic=self.request.user.clinic)
+
+        # Invalidate AI summary cache for the patient when a new visit is added
         if appointment.patient_id:
             patient = Patient.objects.get(pk=appointment.patient_id)
             patient.ai_summary = ""
@@ -74,43 +78,50 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get", "post", "patch"], url_path="exam")
     def exam(self, request, pk=None):
         """
-        Semantics C:
-          GET   -> 200 with exam, or 404 if none
-          POST  -> create only: 201 if created, 409 if already exists
-          PATCH -> update only: 200 if updated, 404 if none
+        GET   /api/appointments/<id>/exam/   -> fetch exam (404 if none)
+        POST  /api/appointments/<id>/exam/   -> create (400 if already exists)
+        PATCH /api/appointments/<id>/exam/   -> partial update (404 if none)
         """
-        user = request.user
-        appt = self.get_object()  # already clinic-scoped by queryset
+        appt = self.get_object()  # clinic-scoped by queryset already
 
-        # Only vets can write
-        if request.method in ("POST", "PATCH") and not getattr(user, "is_vet", False):
+        # Extra safety (defensive; should already be enforced by queryset)
+        if appt.clinic_id != request.user.clinic_id:
+            return Response({"detail": "Not found."}, status=404)
+
+        # Optional rule: only vets can write
+        if request.method in ("POST", "PATCH") and not getattr(request.user, "is_vet", False):
             raise PermissionDenied("Only vets can create/update clinical exam.")
 
-        exam = ClinicalExam.objects.filter(
-            clinic_id=user.clinic_id,
-            appointment_id=appt.id,
-        ).first()
+        exam = (
+            ClinicalExam.objects.filter(
+                appointment_id=appt.id,
+                clinic_id=request.user.clinic_id,
+            )
+            .order_by("id")
+            .first()
+        )
 
         if request.method == "GET":
             if not exam:
-                return Response({"detail": "No clinical exam for this appointment."}, status=404)
+                return Response({"detail": "Not found."}, status=404)
             return Response(ClinicalExamReadSerializer(exam).data, status=200)
 
         if request.method == "POST":
             if exam:
-                return Response({"detail": "Clinical exam already exists."}, status=409)
+                return Response({"detail": "Exam already exists."}, status=400)
+
             serializer = ClinicalExamWriteSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             exam = serializer.save(
-                clinic_id=user.clinic_id,
+                clinic_id=request.user.clinic_id,
                 appointment=appt,
-                created_by=user,
+                created_by=request.user,
             )
             return Response(ClinicalExamReadSerializer(exam).data, status=201)
 
         # PATCH
         if not exam:
-            return Response({"detail": "No clinical exam for this appointment."}, status=404)
+            return Response({"detail": "Not found."}, status=404)
 
         serializer = ClinicalExamWriteSerializer(exam, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -133,14 +144,11 @@ class AvailabilityView(APIView):
         if not date_str:
             return Response({"detail": "Missing required query param: date=YYYY-MM-DD"}, status=400)
 
-        try:
-            parsed_day: date_type | None = parse_date(date_str)
-        except ValueError:
-            parsed_day = None
-
+        parsed_day: date_type | None = parse_date(date_str)
         if parsed_day is None:
             return Response(
-                {"detail": "Invalid date. Use YYYY-MM-DD (e.g., 2025-12-23)."}, status=400
+                {"detail": "Invalid date. Use YYYY-MM-DD (e.g., 2025-12-23)."},
+                status=400,
             )
 
         vet = request.query_params.get("vet")
