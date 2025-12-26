@@ -2,11 +2,34 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.medical.models import ClinicalExam, MedicalRecord, PatientHistoryEntry
+from apps.medical.models import ClinicalExam, MedicalRecord, PatientHistoryEntry, Prescription
 
-# -------------------------
-# Clinical Exam
-# -------------------------
+
+class MedicalRecordWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MedicalRecord
+        # Keep fields minimal; clinic/patient/created_by are assigned in views.
+        fields = ["ai_summary"]
+
+
+class MedicalRecordReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MedicalRecord
+        fields = ["id", "clinic", "patient", "ai_summary", "created_by", "created_at"]
+        read_only_fields = fields
+
+
+class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientHistoryEntry
+        fields = ["id", "clinic", "record", "note", "created_by", "created_at"]
+        read_only_fields = fields
+
+
+class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PatientHistoryEntry
+        fields = ["note"]
 
 
 class ClinicalExamReadSerializer(serializers.ModelSerializer):
@@ -34,7 +57,6 @@ class ClinicalExamReadSerializer(serializers.ModelSerializer):
 class ClinicalExamWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClinicalExam
-        # clinic/appointment/created_by are set in the view; clients should not send them
         fields = [
             "initial_notes",
             "clinical_examination",
@@ -46,67 +68,26 @@ class ClinicalExamWriteSerializer(serializers.ModelSerializer):
             "initial_diagnosis",
         ]
 
-    def validate_temperature_c(self, value):
-        # Optional: allow empty
-        if value is None:
-            return value
-        # Basic sanity bounds; adjust/remove if you dislike constraints
-        if value < 20 or value > 50:
-            raise serializers.ValidationError("temperature_c looks out of range.")
-        return value
 
-
-# -------------------------
-# Medical Record (if used elsewhere)
-# -------------------------
-
-
-class MedicalRecordReadSerializer(serializers.ModelSerializer):
+class PrescriptionReadSerializer(serializers.ModelSerializer):
     class Meta:
-        model = MedicalRecord
+        model = Prescription
         fields = [
             "id",
             "clinic",
+            "appointment",
             "patient",
-            "ai_summary",
+            "medication",
+            "instructions",
+            "quantity",
+            "refills",
             "created_by",
             "created_at",
         ]
         read_only_fields = fields
 
 
-class MedicalRecordWriteSerializer(serializers.ModelSerializer):
+class PrescriptionWriteSerializer(serializers.ModelSerializer):
     class Meta:
-        model = MedicalRecord
-        fields = [
-            "patient",
-            "ai_summary",
-        ]
-
-
-# -------------------------
-# Patient History Entry (if used elsewhere)
-# -------------------------
-
-
-class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PatientHistoryEntry
-        fields = [
-            "id",
-            "clinic",
-            "record",
-            "note",
-            "created_by",
-            "created_at",
-        ]
-        read_only_fields = fields
-
-
-class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PatientHistoryEntry
-        fields = [
-            "record",
-            "note",
-        ]
+        model = Prescription
+        fields = ["medication", "instructions", "quantity", "refills"]

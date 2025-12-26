@@ -69,14 +69,12 @@ class PatientHistoryEntry(models.Model):
 
 
 class ClinicalExam(models.Model):
-    # IMPORTANT: different related_name than MedicalRecord
     clinic = models.ForeignKey(
         Clinic,
         on_delete=models.PROTECT,
         related_name="clinical_exams",
         related_query_name="clinical_exam",
     )
-
     appointment = models.OneToOneField(
         "scheduling.Appointment",
         on_delete=models.CASCADE,
@@ -110,3 +108,43 @@ class ClinicalExam(models.Model):
 
     def __str__(self) -> str:
         return f"ClinicalExam(appt={self.appointment_id})"
+
+
+class Prescription(models.Model):
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="prescriptions",
+        related_query_name="prescription",
+    )
+    appointment = models.ForeignKey(
+        "scheduling.Appointment",
+        on_delete=models.CASCADE,
+        related_name="prescriptions",
+    )
+    patient = models.ForeignKey(
+        "patients.Patient",
+        on_delete=models.CASCADE,
+        related_name="prescriptions",
+    )
+
+    medication = models.CharField(max_length=255)
+    instructions = models.TextField(blank=True)
+    quantity = models.CharField(max_length=64, blank=True)
+    refills = models.PositiveIntegerField(default=0)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_prescriptions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["clinic", "appointment", "patient", "-created_at"])]
+
+    def __str__(self) -> str:
+        return f"Prescription(appt={self.appointment_id}, med={self.medication})"
