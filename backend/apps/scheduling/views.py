@@ -39,7 +39,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # Optional filters
         day = self.request.query_params.get("date")
         if day:
-            parsed = parse_date(day)
+            try:
+                parsed = parse_date(day)
+            except ValueError:
+                parsed = None
             if parsed:
                 qs = qs.filter(starts_at__date=parsed)
 
@@ -79,23 +82,19 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     def exam(self, request, pk=None):
         """
         GET   /api/appointments/<id>/exam/   -> fetch exam (404 if none)
-        POST  /api/appointments/<id>/exam/   -> create (400 if already exists)
-        PATCH /api/appointments/<id>/exam/   -> partial update (404 if none)
+        POST  /api/appointments/<id>/exam/   -> create (400 if exists)
+        PATCH /api/appointments/<id>/exam/   -> partial update
         """
-        appt = self.get_object()  # clinic-scoped by queryset already
+        user = request.user
+        appt = self.get_object()  # already clinic-scoped by queryset
 
-        # Extra safety (defensive; should already be enforced by queryset)
-        if appt.clinic_id != request.user.clinic_id:
-            return Response({"detail": "Not found."}, status=404)
-
-        # Optional rule: only vets can write
-        if request.method in ("POST", "PATCH") and not getattr(request.user, "is_vet", False):
+        if request.method in ("POST", "PATCH") and not getattr(user, "is_vet", False):
             raise PermissionDenied("Only vets can create/update clinical exam.")
 
         exam = (
             ClinicalExam.objects.filter(
                 appointment_id=appt.id,
-                clinic_id=request.user.clinic_id,
+                clinic_id=user.clinic_id,
             )
             .order_by("id")
             .first()
@@ -113,9 +112,9 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             serializer = ClinicalExamWriteSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             exam = serializer.save(
-                clinic_id=request.user.clinic_id,
+                clinic_id=user.clinic_id,
                 appointment=appt,
-                created_by=request.user,
+                created_by=user,
             )
             return Response(ClinicalExamReadSerializer(exam).data, status=201)
 
@@ -127,6 +126,24 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         exam = serializer.save()
         return Response(ClinicalExamReadSerializer(exam).data, status=200)
+
+    @action(detail=True, methods=["post"], url_path="close-visit")
+    def close_visit(self, request, pk=None):
+        """
+        POST /api/appointments/<id>/close-visit/
+        Vet-only: marks the appointment as completed.
+        """
+        user = request.user
+        appt = self.get_object()  # clinic-scoped
+
+        if not getattr(user, "is_vet", False):
+            raise PermissionDenied("Only vets can close a visit.")
+
+        # If your domain wants a different terminal status, adjust here.
+        appt.status = "completed"
+        appt.save(update_fields=["status"])
+
+        return Response(status=204)
 
 
 class AvailabilityView(APIView):
@@ -140,23 +157,33 @@ class AvailabilityView(APIView):
     def get(self, request):
         user = request.user
 
+        # ---- date validation (robust, no 500s) ----
         date_str = request.query_params.get("date")
         if not date_str:
-            return Response({"detail": "Missing required query param: date=YYYY-MM-DD"}, status=400)
+            return Response(
+                {"detail": "Missing required query param: date=YYYY-MM-DD"},
+                status=400,
+            )
 
-        parsed_day: date_type | None = parse_date(date_str)
+        try:
+            parsed_day: date_type | None = parse_date(date_str)
+        except ValueError:
+            parsed_day = None
+
         if parsed_day is None:
             return Response(
                 {"detail": "Invalid date. Use YYYY-MM-DD (e.g., 2025-12-23)."},
                 status=400,
             )
 
+        # ---- optional params ----
         vet = request.query_params.get("vet")
         vet_id = int(vet) if vet else None
 
         slot = request.query_params.get("slot")
         slot_minutes = int(slot) if slot else None
 
+        # ---- compute availability ----
         data = compute_availability(
             clinic_id=user.clinic_id,
             date_str=date_str,
@@ -167,7 +194,10 @@ class AvailabilityView(APIView):
         work_bounds = data.get("work_bounds")
 
         def dump_interval(interval):
-            return {"start": interval.start.isoformat(), "end": interval.end.isoformat()}
+            return {
+                "start": interval.start.isoformat(),
+                "end": interval.end.isoformat(),
+            }
 
         return Response(
             {
