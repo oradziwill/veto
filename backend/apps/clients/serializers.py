@@ -6,7 +6,20 @@ from .models import Client, ClientClinic
 class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
-        fields = ["id", "first_name", "last_name", "phone", "email", "created_at"]
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "phone",
+            "email",
+            "street",
+            "house_number",
+            "apartment",
+            "city",
+            "postal_code",
+            "country",
+            "created_at",
+        ]
         read_only_fields = ["created_at"]
 
 

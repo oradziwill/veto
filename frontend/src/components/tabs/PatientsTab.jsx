@@ -24,7 +24,11 @@ const PatientsTab = () => {
       setPatients(Array.isArray(patientsData) ? patientsData : []);
     } catch (err) {
       console.error("Error fetching patients:", err);
-      setError("Failed to load patients. Please try again.");
+      const errorMessage =
+        err.response?.data?.detail ||
+        err.message ||
+        "Failed to load patients. Please try again.";
+      setError(errorMessage);
       setPatients([]);
     } finally {
       setLoading(false);
