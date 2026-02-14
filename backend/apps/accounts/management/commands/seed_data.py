@@ -11,6 +11,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.billing.models import Service
 from apps.clients.models import Client, ClientClinic
 from apps.inventory.models import InventoryItem
 from apps.patients.models import Patient
@@ -38,7 +39,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"→ Clinic already exists: {clinic.name}")
 
-        # Create Vet User
+        # Create Doctor
         vet, created = User.objects.get_or_create(
             username="drsmith",
             defaults={
@@ -47,15 +48,60 @@ class Command(BaseCommand):
                 "email": "dr.smith@vetoclinic.com",
                 "clinic": clinic,
                 "is_vet": True,
+                "role": User.Role.DOCTOR,
                 "is_staff": True,
             },
         )
         if created:
             vet.set_password("password123")
             vet.save()
-            self.stdout.write(self.style.SUCCESS(f"✓ Created vet user: {vet.username}"))
+            self.stdout.write(self.style.SUCCESS(f"✓ Created doctor user: {vet.username}"))
         else:
-            self.stdout.write(f"→ Vet user already exists: {vet.username}")
+            self.stdout.write(f"→ Doctor user already exists: {vet.username}")
+
+        # Create Receptionist
+        receptionist, created = User.objects.get_or_create(
+            username="receptionist",
+            defaults={
+                "first_name": "Anna",
+                "last_name": "Kowalska",
+                "email": "anna@vetoclinic.com",
+                "clinic": clinic,
+                "is_vet": False,
+                "role": User.Role.RECEPTIONIST,
+                "is_staff": False,
+            },
+        )
+        if created:
+            receptionist.set_password("password123")
+            receptionist.save()
+            self.stdout.write(
+                self.style.SUCCESS(f"✓ Created receptionist user: {receptionist.username}")
+            )
+        else:
+            self.stdout.write(f"→ Receptionist user already exists: {receptionist.username}")
+
+        # Create Clinic Admin
+        admin_user, created = User.objects.get_or_create(
+            username="admin",
+            defaults={
+                "first_name": "Maria",
+                "last_name": "Director",
+                "email": "admin@vetoclinic.com",
+                "clinic": clinic,
+                "is_vet": False,
+                "role": User.Role.ADMIN,
+                "is_staff": True,
+            },
+        )
+        if created:
+            admin_user.set_password("password123")
+            admin_user.save()
+            self.stdout.write(
+                self.style.SUCCESS(f"✓ Created clinic admin user: {admin_user.username}")
+            )
+        else:
+            self.stdout.write(f"→ Clinic admin user already exists: {admin_user.username}")
 
         # Create Clients
         clients_data = [
@@ -255,7 +301,30 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"→ Inventory item already exists: {item}")
 
+        # Create Billing Services
+        services_data = [
+            {"name": "Consultation", "code": "CONS", "price": "150.00"},
+            {"name": "Vaccination", "code": "VACC", "price": "80.00"},
+            {"name": "Routine Checkup", "code": "CHECK", "price": "120.00"},
+            {"name": "Blood Test", "code": "BLOOD", "price": "200.00"},
+            {"name": "X-Ray", "code": "XRAY", "price": "250.00"},
+        ]
+        for svc_data in services_data:
+            svc, created = Service.objects.get_or_create(
+                clinic=clinic,
+                code=svc_data["code"],
+                defaults={
+                    "name": svc_data["name"],
+                    "price": svc_data["price"],
+                },
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"✓ Created service: {svc.name}"))
+            else:
+                self.stdout.write(f"→ Service already exists: {svc.name}")
+
         self.stdout.write(self.style.SUCCESS("\n✓ Database seeding completed!"))
-        self.stdout.write("\nYou can now login with:")
-        self.stdout.write("  Username: drsmith")
-        self.stdout.write("  Password: password123")
+        self.stdout.write("\nYou can now login with (password: password123):")
+        self.stdout.write("  Doctor:       drsmith")
+        self.stdout.write("  Receptionist: receptionist")
+        self.stdout.write("  Clinic Admin: admin")

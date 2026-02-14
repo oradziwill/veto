@@ -16,7 +16,12 @@ def close_visit_url(appt_id: int) -> str:
 def test_close_visit_happy_path_by_vet():
     clinic = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
     vet = User.objects.create_user(
-        username="vet", password="pass", clinic=clinic, is_vet=True, is_staff=True
+        username="vet",
+        password="pass",
+        clinic=clinic,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
     )
 
     owner = Client.objects.create(first_name="A", last_name="B")
@@ -46,14 +51,24 @@ def test_close_visit_happy_path_by_vet():
 def test_close_visit_forbidden_for_non_vet():
     clinic = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
 
-    # Authenticated user is staff (non-vet)
+    # Authenticated user is receptionist (cannot close visit)
     staff = User.objects.create_user(
-        username="staff", password="pass", clinic=clinic, is_vet=False, is_staff=True
+        username="staff",
+        password="pass",
+        clinic=clinic,
+        is_vet=False,
+        is_staff=True,
+        role=User.Role.RECEPTIONIST,
     )
 
     # Appointment must reference a valid vet user due to model validation
     vet = User.objects.create_user(
-        username="vet", password="pass", clinic=clinic, is_vet=True, is_staff=True
+        username="vet",
+        password="pass",
+        clinic=clinic,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
     )
 
     owner = Client.objects.create(first_name="A", last_name="B")
@@ -82,10 +97,20 @@ def test_close_visit_not_found_outside_clinic():
     clinic2 = Clinic.objects.create(name="C2", address="a2", phone="p2", email="e2@e.com")
 
     vet1 = User.objects.create_user(
-        username="vet1", password="pass", clinic=clinic1, is_vet=True, is_staff=True
+        username="vet1",
+        password="pass",
+        clinic=clinic1,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
     )
     vet2 = User.objects.create_user(
-        username="vet2", password="pass", clinic=clinic2, is_vet=True, is_staff=True
+        username="vet2",
+        password="pass",
+        clinic=clinic2,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
     )
 
     owner = Client.objects.create(first_name="A", last_name="B")

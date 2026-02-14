@@ -3,7 +3,7 @@ from __future__ import annotations
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
-from apps.accounts.permissions import HasClinic, IsVet
+from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin
 
 from .models import MedicalRecord, PatientHistoryEntry
 from .serializers import (
@@ -15,7 +15,7 @@ from .serializers import (
 
 
 class MedicalRecordViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, HasClinic, IsVet]
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
 
     def get_queryset(self):
         return MedicalRecord.objects.filter(clinic_id=self.request.user.clinic_id)
@@ -33,7 +33,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 
 
 class PatientHistoryEntryViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated, HasClinic, IsVet]
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
 
     def get_queryset(self):
         return PatientHistoryEntry.objects.filter(clinic_id=self.request.user.clinic_id)

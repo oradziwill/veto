@@ -17,6 +17,7 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Appointment
         fields = [
+            "id",
             "patient",
             "vet",
             "starts_at",
@@ -25,6 +26,7 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
             "reason",
             "internal_notes",
         ]
+        read_only_fields = ["id"]
 
     def validate(self, attrs):
         starts_at = attrs.get("starts_at")

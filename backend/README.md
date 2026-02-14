@@ -27,8 +27,11 @@ backend/
 │   ├── scheduling/         # Appointments, availability, clinical exams
 │   ├── medical/            # Medical records, history entries
 │   ├── inventory/          # Items and stock movements
+│   ├── billing/            # Services, invoices, payments
 │   └── tenancy/            # Clinics, holidays (models only)
 ├── documentation/          # API docs and handoffs
+├── conftest.py             # Shared pytest fixtures
+├── tests/behavior/         # End-to-end behavior tests
 ├── manage.py
 ├── requirements.txt
 └── pyproject.toml          # Ruff, Black, pytest config
@@ -57,7 +60,7 @@ python manage.py migrate
 python manage.py seed_data
 ```
 
-Creates: 1 clinic, 1 vet (`drsmith` / `password123`), clients, patients, appointments, inventory items.
+Creates: 1 clinic, 3 users (doctor: `drsmith`, receptionist: `receptionist`, admin: `admin` — password: `password123`), clients, patients, appointments, inventory items, billing services.
 
 ### 4. Start the server
 
@@ -141,6 +144,15 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 | CRUD | `/api/inventory/items/` | Items. Filters: `?q=`, `?category=`, `?low_stock=1` |
 | CRUD | `/api/inventory/movements/` | Stock movements (in/out/adjust). Filter: `?item=` |
 
+### Billing
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| CRUD | `/api/billing/services/` | Service catalog (name, code, price) |
+| CRUD | `/api/billing/invoices/` | Invoices. Filters: `?client=`, `?status=` |
+| POST | `/api/billing/invoices/<id>/send/` | Mark invoice as sent |
+| GET/POST | `/api/billing/invoices/<id>/payments/` | List or record payments |
+
 ## Apps and Responsibilities
 
 | App | Purpose |
@@ -151,22 +163,39 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 | **scheduling** | Appointments, availability, clinical exams, close visit |
 | **medical** | Medical records, history entries |
 | **inventory** | Items, stock movements, low-stock alerts |
+| **billing** | Services, invoices, invoice lines, payments |
 | **tenancy** | Clinics, holidays (no API routes) |
+
+## User Roles (Personas)
+
+Three clinic personas are supported:
+
+| Role | Description | Can do |
+|------|-------------|--------|
+| **Doctor** | Veterinarian | Full access: clinical exams, close visits, medical records, patient history, appointments, inventory |
+| **Receptionist** | Front desk | Appointments, clients, patients, inventory, availability. No clinical actions |
+| **Clinic Admin** | Clinic administrator | Same as Doctor, plus Django admin access |
+
+- **Doctor** and **Admin** can: create/update clinical exams, close visits, add patient history, access medical records
+- **Receptionist** can: manage appointments, clients, patients, inventory, view availability
+- All three roles require a clinic (`HasClinic`)
 
 ## Permissions
 
 - **HasClinic** – User must belong to a clinic
-- **IsVet** – User must have `is_vet=True`
-- **IsStaffOrVet** – Staff or vet
+- **IsDoctorOrAdmin** – Doctor or Clinic Admin (clinical actions)
+- **IsStaffOrVet** – Any clinic role (doctor, receptionist, admin) – for appointments, inventory
 - Data is scoped by user’s clinic; users without a clinic get empty lists or 403 where applicable
 
 ## Testing
 
 ```bash
 pytest
+# or: pytest tests/ apps/ -v
 ```
 
-Tests live in each app’s `tests/` directory.
+- **`tests/behavior/`** – Behavior tests for end-to-end workflows (visit-to-invoice, role access, clinic isolation).
+- **`conftest.py`** – Shared pytest fixtures (clinic, doctor, receptionist, patient, appointment, service, etc.).
 
 ## Code Quality
 
@@ -179,6 +208,7 @@ Config in `pyproject.toml`.
 
 ## Documentation
 
+- `documentation/CHANGELOG_cleanup-and-next-steps.md` – Changes in this branch
 - `documentation/FRONTEND_HANDOFF_backend-core-v1.md` – API integration guide
 - `documentation/AVAILABILITY_API.md` – Availability endpoint
 - `documentation/CLINICAL_EXAM_DOCUMENTATION.md` – Clinical exam API

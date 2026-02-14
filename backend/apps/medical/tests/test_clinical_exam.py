@@ -11,7 +11,12 @@ from rest_framework.test import APIClient
 def test_exam_create_and_get():
     clinic = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
     vet = User.objects.create_user(
-        username="vet", password="pass", clinic=clinic, is_vet=True, is_staff=True
+        username="vet",
+        password="pass",
+        clinic=clinic,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
     )
 
     owner = Client.objects.create(first_name="A", last_name="B")
@@ -53,7 +58,12 @@ def test_exam_create_and_get():
 def test_exam_all_fields_optional():
     clinic = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
     vet = User.objects.create_user(
-        username="vet", password="pass", clinic=clinic, is_vet=True, is_staff=True
+        username="vet",
+        password="pass",
+        clinic=clinic,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
     )
 
     owner = Client.objects.create(first_name="A", last_name="B")
