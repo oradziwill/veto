@@ -1,0 +1,22 @@
+# local virtualenvs
+venv/
+.venv/
+
+# python caches
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# local/dev artifacts
+.env
+.env.*
+.DS_Store
+*.log
+
+# git + eb local state
+.git/
+.elasticbeanstalk/
+
+# local sqlite (production uses RDS)
+db.sqlite3
