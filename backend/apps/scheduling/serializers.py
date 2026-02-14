@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.patients.serializers import PatientReadSerializer
-from apps.scheduling.models import Appointment
+from apps.scheduling.models import Appointment, HospitalStay
 
 
 class AppointmentReadSerializer(serializers.ModelSerializer):
@@ -20,6 +20,7 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
             "id",
             "patient",
             "vet",
+            "visit_type",
             "starts_at",
             "ends_at",
             "status",
@@ -48,3 +49,36 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"non_field_errors": e.messages}) from e
 
         return attrs
+
+
+class HospitalStayReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalStay
+        fields = "__all__"
+
+
+class HospitalStayWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalStay
+        fields = [
+            "patient",
+            "attending_vet",
+            "admission_appointment",
+            "reason",
+            "cage_or_room",
+            "admitted_at",
+        ]
+
+    def validate_patient(self, value):
+        request = self.context.get("request")
+        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+            raise serializers.ValidationError("Patient must belong to your clinic.")
+        return value
+
+    def validate_attending_vet(self, value):
+        request = self.context.get("request")
+        if request and getattr(value, "clinic_id", None) != getattr(
+            request.user, "clinic_id", None
+        ):
+            raise serializers.ValidationError("Vet must belong to your clinic.")
+        return value
