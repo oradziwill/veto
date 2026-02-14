@@ -14,8 +14,13 @@ from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.medical.models import ClinicalExam
 from apps.medical.serializers import ClinicalExamReadSerializer, ClinicalExamWriteSerializer
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment
-from apps.scheduling.serializers import AppointmentReadSerializer, AppointmentWriteSerializer
+from apps.scheduling.models import Appointment, HospitalStay
+from apps.scheduling.serializers import (
+    AppointmentReadSerializer,
+    AppointmentWriteSerializer,
+    HospitalStayReadSerializer,
+    HospitalStayWriteSerializer,
+)
 from apps.scheduling.services.availability import compute_availability
 
 
@@ -57,6 +62,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         status = self.request.query_params.get("status")
         if status:
             qs = qs.filter(status=status)
+
+        visit_type = self.request.query_params.get("visit_type")
+        if visit_type:
+            qs = qs.filter(visit_type=visit_type)
 
         return qs
 
@@ -147,6 +156,57 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         appt.save(update_fields=["status"])
 
         return Response(status=204)
+
+
+class HospitalStayViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for hospital stays (in-patient hospitalization).
+    Doctor/Admin only for create/update.
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+
+    def get_queryset(self):
+        user = self.request.user
+        return (
+            HospitalStay.objects.filter(clinic_id=user.clinic_id)
+            .select_related("patient", "attending_vet", "admission_appointment")
+            .order_by("-admitted_at")
+        )
+
+    def get_serializer_class(self):
+        if self.action in ("list", "retrieve"):
+            return HospitalStayReadSerializer
+        return HospitalStayWriteSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(
+            HospitalStayReadSerializer(serializer.instance).data,
+            status=201,
+        )
+
+    def perform_create(self, serializer):
+        serializer.save(clinic_id=self.request.user.clinic_id, status="admitted")
+
+    @action(detail=True, methods=["post"], url_path="discharge")
+    def discharge(self, request, pk=None):
+        """Discharge the patient from hospital."""
+        from django.utils import timezone
+
+        stay = self.get_object()
+        if stay.status != "admitted":
+            return Response(
+                {"detail": "Stay is already discharged."},
+                status=400,
+            )
+        stay.status = "discharged"
+        stay.discharged_at = timezone.now()
+        stay.discharge_notes = request.data.get("discharge_notes", "")
+        stay.save(update_fields=["status", "discharged_at", "discharge_notes", "updated_at"])
+        return Response(HospitalStayReadSerializer(stay).data)
 
 
 class AvailabilityView(APIView):

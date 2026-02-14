@@ -28,6 +28,7 @@ backend/
 │   ├── medical/            # Medical records, history entries
 │   ├── inventory/          # Items and stock movements
 │   ├── billing/            # Services, invoices, payments
+│   ├── labs/               # Labs, lab tests, lab orders, results
 │   └── tenancy/            # Clinics, holidays (models only)
 ├── documentation/          # API docs and handoffs
 ├── conftest.py             # Shared pytest fixtures
@@ -129,6 +130,8 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 | GET | `/api/availability/` | Free slots: `?date=YYYY-MM-DD&vet=<id>&slot=<minutes>` |
 | GET/POST/PATCH | `/api/appointments/<id>/exam/` | Clinical exam (vet only) |
 | POST | `/api/appointments/<id>/close-visit/` | Mark visit completed (vet only) |
+| CRUD | `/api/hospital-stays/` | Hospital stays (Doctor/Admin only) |
+| POST | `/api/hospital-stays/<id>/discharge/` | Discharge patient |
 
 ### Medical
 
@@ -153,6 +156,16 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 | POST | `/api/billing/invoices/<id>/send/` | Mark invoice as sent |
 | GET/POST | `/api/billing/invoices/<id>/payments/` | List or record payments |
 
+### Labs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| CRUD | `/api/labs/` | Labs (in-clinic, external). Filter: `?lab_type=` |
+| CRUD | `/api/lab-tests/` | Lab test catalog. Filter: `?lab=` |
+| CRUD | `/api/lab-orders/` | Lab orders. Filters: `?patient=`, `?status=` |
+| POST | `/api/lab-orders/<id>/send/` | Send order to lab |
+| POST/PATCH | `/api/lab-orders/<id>/enter-result/` | Enter/update result (Doctor/Admin) |
+
 ## Apps and Responsibilities
 
 | App | Purpose |
@@ -164,6 +177,7 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 | **medical** | Medical records, history entries |
 | **inventory** | Items, stock movements, low-stock alerts |
 | **billing** | Services, invoices, invoice lines, payments |
+| **labs** | Labs, lab tests, lab orders, results (in-clinic + external) |
 | **tenancy** | Clinics, holidays (no API routes) |
 
 ## User Roles (Personas)

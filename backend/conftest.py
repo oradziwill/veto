@@ -7,6 +7,7 @@ from apps.accounts.models import User
 from apps.billing.models import Service
 from apps.clients.models import Client, ClientClinic
 from apps.inventory.models import InventoryItem
+from apps.labs.models import Lab, LabTest
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
@@ -130,6 +131,29 @@ def inventory_item(clinic, doctor):
         stock_on_hand=100,
         low_stock_threshold=10,
         created_by=doctor,
+    )
+
+
+@pytest.fixture
+def lab(clinic):
+    """In-clinic lab."""
+    return Lab.objects.create(
+        clinic=clinic,
+        name="Test Lab",
+        lab_type=Lab.LabType.IN_CLINIC,
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def lab_test(lab):
+    """A lab test."""
+    return LabTest.objects.create(
+        lab=lab,
+        code="CBC",
+        name="Complete Blood Count",
+        unit="cells/µL",
+        is_active=True,
     )
 
 

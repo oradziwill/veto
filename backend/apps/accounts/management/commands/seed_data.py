@@ -14,6 +14,7 @@ from apps.accounts.models import User
 from apps.billing.models import Service
 from apps.clients.models import Client, ClientClinic
 from apps.inventory.models import InventoryItem
+from apps.labs.models import Lab, LabTest
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
@@ -322,6 +323,34 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"✓ Created service: {svc.name}"))
             else:
                 self.stdout.write(f"→ Service already exists: {svc.name}")
+
+        # Create in-clinic Lab and tests
+        lab, created = Lab.objects.get_or_create(
+            clinic=clinic,
+            name="Veto Clinic Lab",
+            defaults={
+                "lab_type": Lab.LabType.IN_CLINIC,
+                "is_active": True,
+            },
+        )
+        if created:
+            self.stdout.write(self.style.SUCCESS(f"✓ Created lab: {lab.name}"))
+        else:
+            self.stdout.write(f"→ Lab already exists: {lab.name}")
+
+        lab_tests_data = [
+            {"code": "CBC", "name": "Complete Blood Count", "unit": "cells/µL"},
+            {"code": "BIO", "name": "Biochemistry Panel", "unit": "mg/dL"},
+            {"code": "URI", "name": "Urinalysis", "unit": ""},
+        ]
+        for lt in lab_tests_data:
+            test, created = LabTest.objects.get_or_create(
+                lab=lab,
+                code=lt["code"],
+                defaults={"name": lt["name"], "unit": lt["unit"], "is_active": True},
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"✓ Created lab test: {test.name}"))
 
         self.stdout.write(self.style.SUCCESS("\n✓ Database seeding completed!"))
         self.stdout.write("\nYou can now login with (password: password123):")
