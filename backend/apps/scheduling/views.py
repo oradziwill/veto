@@ -10,7 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import HasClinic, IsStaffOrVet
+from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.medical.models import ClinicalExam
 from apps.medical.serializers import ClinicalExamReadSerializer, ClinicalExamWriteSerializer
 from apps.patients.models import Patient
@@ -88,8 +88,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         user = request.user
         appt = self.get_object()  # already clinic-scoped by queryset
 
-        if request.method in ("POST", "PATCH") and not getattr(user, "is_vet", False):
-            raise PermissionDenied("Only vets can create/update clinical exam.")
+        if request.method in ("POST", "PATCH") and not IsDoctorOrAdmin().has_permission(
+            request, self
+        ):
+            raise PermissionDenied(
+                "Only doctors and clinic admins can create/update clinical exam."
+            )
 
         exam = (
             ClinicalExam.objects.filter(
@@ -133,11 +137,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         POST /api/appointments/<id>/close-visit/
         Vet-only: marks the appointment as completed.
         """
-        user = request.user
         appt = self.get_object()  # clinic-scoped
 
-        if not getattr(user, "is_vet", False):
-            raise PermissionDenied("Only vets can close a visit.")
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can close a visit.")
 
         # If your domain wants a different terminal status, adjust here.
         appt.status = "completed"

@@ -9,7 +9,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import HasClinic, IsVet
+from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin
 from apps.clients.models import ClientClinic
 from apps.medical.models import MedicalRecord, PatientHistoryEntry
 from apps.medical.serializers import (
@@ -118,9 +118,9 @@ class PatientViewSet(viewsets.ModelViewSet):
             )
             return Response(PatientHistoryEntryReadSerializer(qs, many=True).data)
 
-        # POST requires vet
-        if not IsVet().has_permission(request, self):
-            raise PermissionDenied("Only vets can add history notes.")
+        # POST requires doctor or clinic admin
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can add history notes.")
 
         serializer = PatientHistoryEntryWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

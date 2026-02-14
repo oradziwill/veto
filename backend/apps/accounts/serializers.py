@@ -11,6 +11,7 @@ class MeSerializer(serializers.ModelSerializer):
             "username",
             "first_name",
             "last_name",
+            "role",
             "is_vet",
             "clinic",
             "is_staff",
