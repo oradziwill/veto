@@ -2,7 +2,6 @@
 Shared pytest fixtures for VETO backend tests.
 """
 
-
 import pytest
 from apps.accounts.models import User
 from apps.billing.models import Service

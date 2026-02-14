@@ -26,9 +26,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get_queryset(self):
-        return Service.objects.filter(
-            clinic_id=self.request.user.clinic_id
-        ).order_by("name")
+        return Service.objects.filter(clinic_id=self.request.user.clinic_id).order_by("name")
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
@@ -46,9 +44,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Invoice.objects.filter(clinic_id=user.clinic_id).select_related(
-            "client", "patient", "appointment"
-        ).prefetch_related("lines", "payments").order_by("-created_at")
+        qs = (
+            Invoice.objects.filter(clinic_id=user.clinic_id)
+            .select_related("client", "patient", "appointment")
+            .prefetch_related("lines", "payments")
+            .order_by("-created_at")
+        )
 
         client_id = self.request.query_params.get("client")
         status = self.request.query_params.get("status")

@@ -46,9 +46,7 @@ class TestRoleAccess:
         appt_id = r.data["id"]
 
         # Receptionist cannot close visit
-        close_r = api_client.post(
-            f"/api/appointments/{appt_id}/close-visit/", {}, format="json"
-        )
+        close_r = api_client.post(f"/api/appointments/{appt_id}/close-visit/", {}, format="json")
         assert close_r.status_code == 403
 
     def test_receptionist_can_create_invoice_and_record_payment(

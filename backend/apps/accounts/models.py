@@ -17,7 +17,9 @@ class User(AbstractUser):
         blank=True,
         related_name="users",
     )
-    is_vet = models.BooleanField(default=False)  # Deprecated: use role. Kept for migration/backward compat.
+    is_vet = models.BooleanField(
+        default=False
+    )  # Deprecated: use role. Kept for migration/backward compat.
     role = models.CharField(
         max_length=20,
         choices=Role.choices,

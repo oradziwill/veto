@@ -80,6 +80,4 @@ class IsStaffOrVet(BasePermission):
         role = getattr(user, "role", None)
         if role in ("doctor", "receptionist", "admin"):
             return True
-        return bool(
-            getattr(user, "is_staff", False) or getattr(user, "is_vet", False)
-        )
+        return bool(getattr(user, "is_staff", False) or getattr(user, "is_vet", False))

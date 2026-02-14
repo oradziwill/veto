@@ -142,12 +142,11 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
         user = self.context["request"].user
         if value:
             from apps.clients.models import ClientClinic
+
             if not ClientClinic.objects.filter(
                 client=value, clinic_id=user.clinic_id, is_active=True
             ).exists():
-                raise serializers.ValidationError(
-                    "Client must be a member of your clinic."
-                )
+                raise serializers.ValidationError("Client must be a member of your clinic.")
         return value
 
     def validate_appointment(self, value):
@@ -159,9 +158,7 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
     def _validate_line(self, line_data, clinic_id):
         service = line_data.get("service")
         if service and service.clinic_id != clinic_id:
-            raise serializers.ValidationError(
-                {"lines": "Service must belong to your clinic."}
-            )
+            raise serializers.ValidationError({"lines": "Service must belong to your clinic."})
         inv_item = line_data.get("inventory_item")
         if inv_item and inv_item.clinic_id != clinic_id:
             raise serializers.ValidationError(
@@ -185,9 +182,7 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         if instance.status != Invoice.Status.DRAFT:
-            raise serializers.ValidationError(
-                {"status": "Only draft invoices can be edited."}
-            )
+            raise serializers.ValidationError({"status": "Only draft invoices can be edited."})
         lines_data = validated_data.pop("lines", None)
         clinic_id = instance.clinic_id
         if lines_data is not None:

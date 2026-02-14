@@ -88,8 +88,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         user = request.user
         appt = self.get_object()  # already clinic-scoped by queryset
 
-        if request.method in ("POST", "PATCH") and not IsDoctorOrAdmin().has_permission(request, self):
-            raise PermissionDenied("Only doctors and clinic admins can create/update clinical exam.")
+        if request.method in ("POST", "PATCH") and not IsDoctorOrAdmin().has_permission(
+            request, self
+        ):
+            raise PermissionDenied(
+                "Only doctors and clinic admins can create/update clinical exam."
+            )
 
         exam = (
             ClinicalExam.objects.filter(
