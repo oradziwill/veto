@@ -10,11 +10,9 @@ As a receptionist and doctor, I can:
 """
 
 import pytest
-from django.utils import timezone
-from rest_framework.test import APIClient
-
 from apps.billing.models import Invoice
 from apps.scheduling.models import Appointment
+from django.utils import timezone
 
 
 @pytest.mark.django_db

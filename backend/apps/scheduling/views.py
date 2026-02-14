@@ -133,7 +133,6 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         POST /api/appointments/<id>/close-visit/
         Vet-only: marks the appointment as completed.
         """
-        user = request.user
         appt = self.get_object()  # clinic-scoped
 
         if not IsDoctorOrAdmin().has_permission(request, self):

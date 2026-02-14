@@ -10,8 +10,6 @@ As clinic admin, I can do everything a doctor can.
 import pytest
 from django.utils import timezone
 
-from apps.scheduling.models import Appointment
-
 
 @pytest.mark.django_db
 class TestRoleAccess:

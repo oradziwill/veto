@@ -5,14 +5,13 @@ Users from clinic A cannot access or modify data belonging to clinic B.
 """
 
 import pytest
-from django.utils import timezone
-
+from apps.accounts.models import User
 from apps.billing.models import Invoice
 from apps.clients.models import Client, ClientClinic
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
-from apps.accounts.models import User
+from django.utils import timezone
 
 
 @pytest.mark.django_db
@@ -32,7 +31,7 @@ class TestClinicIsolation:
         )
         client1 = Client.objects.create(first_name="A", last_name="B", email="a@x.com")
         ClientClinic.objects.create(client=client1, clinic=c1)
-        patient1 = Patient.objects.create(clinic=c1, owner=client1, name="P1", species="dog")
+        Patient.objects.create(clinic=c1, owner=client1, name="P1", species="dog")
 
         # Invoice in clinic 2
         client2 = Client.objects.create(first_name="C", last_name="D", email="c@x.com")

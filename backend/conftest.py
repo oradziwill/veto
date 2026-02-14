@@ -2,11 +2,8 @@
 Shared pytest fixtures for VETO backend tests.
 """
 
-from datetime import datetime
 
 import pytest
-from django.utils import timezone
-
 from apps.accounts.models import User
 from apps.billing.models import Service
 from apps.clients.models import Client, ClientClinic
@@ -14,6 +11,7 @@ from apps.inventory.models import InventoryItem
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
+from django.utils import timezone
 
 
 @pytest.fixture
