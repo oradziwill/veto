@@ -20,3 +20,6 @@ __pycache__/
 
 # local sqlite (production uses RDS)
 db.sqlite3
+
+# collected static (EB runs collectstatic on deploy)
+staticfiles/
