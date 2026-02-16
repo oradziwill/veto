@@ -2,6 +2,7 @@ import os
 
 from .settings import *  # noqa: F401, F403
 
+
 def _split_csv(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
@@ -33,12 +34,13 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = (
 SECURE_HSTS_PRELOAD = False
 
 # --- Static (WhiteNoise) ---
+_parent_middleware = MIDDLEWARE  # noqa: F405
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     *[
         m
-        for m in MIDDLEWARE
+        for m in _parent_middleware
         if m
         not in (
             "django.middleware.security.SecurityMiddleware",
