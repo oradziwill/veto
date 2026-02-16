@@ -36,3 +36,10 @@ openai>=1.0.0
 # Environment variables
 # -------------------------
 python-dotenv>=1.0.0
+
+# -------------------------
+# Production / AWS
+# -------------------------
+gunicorn>=21.0
+whitenoise>=6.6
+psycopg2-binary>=2.9
