@@ -51,6 +51,24 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             if parsed:
                 qs = qs.filter(starts_at__date=parsed)
 
+        date_from = self.request.query_params.get("date_from")
+        if date_from:
+            try:
+                parsed_from = parse_date(date_from)
+            except ValueError:
+                parsed_from = None
+            if parsed_from:
+                qs = qs.filter(starts_at__date__gte=parsed_from)
+
+        date_to = self.request.query_params.get("date_to")
+        if date_to:
+            try:
+                parsed_to = parse_date(date_to)
+            except ValueError:
+                parsed_to = None
+            if parsed_to:
+                qs = qs.filter(starts_at__date__lte=parsed_to)
+
         vet_id = self.request.query_params.get("vet")
         if vet_id:
             qs = qs.filter(vet_id=vet_id)

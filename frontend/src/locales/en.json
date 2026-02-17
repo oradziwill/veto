@@ -292,5 +292,15 @@
     "visitHistory": "Visit History",
     "noVisitHistory": "No visit history",
     "loadHistoryError": "Failed to load visit history."
+  },
+  "visitDetails": {
+    "title": "Visit Details",
+    "dateTime": "Date & Time",
+    "reason": "Reason",
+    "patient": "Patient",
+    "owner": "Owner",
+    "vet": "Veterinarian",
+    "status": "Status",
+    "internalNotes": "Internal notes"
   }
 }
