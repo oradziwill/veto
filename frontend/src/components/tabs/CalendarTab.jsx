@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { appointmentsAPI, availabilityAPI } from '../../services/api'
+import VisitDetailsModal from '../modals/VisitDetailsModal'
 import './Tabs.css'
 
 const CalendarTab = () => {
   const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState([])
+  const [selectedAppointment, setSelectedAppointment] = useState(null)
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [availabilityByDay, setAvailabilityByDay] = useState({}) // { 'YYYY-MM-DD': { free: [], busy: [] } }
@@ -226,7 +229,25 @@ const CalendarTab = () => {
                           }
                           
                           return (
-                            <div key={apt.id} className="calendar-event">
+                            <div
+                              key={apt.id}
+                              className="calendar-event"
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedAppointment(apt)
+                                setIsDetailsModalOpen(true)
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  setSelectedAppointment(apt)
+                                  setIsDetailsModalOpen(true)
+                                }
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            >
                               <span className="event-time">{formatTime(apt.starts_at)}</span>
                               <span className="event-title">{displayReason}</span>
                             </div>
@@ -241,6 +262,15 @@ const CalendarTab = () => {
           </div>
         </div>
       </div>
+
+      <VisitDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={() => {
+          setIsDetailsModalOpen(false)
+          setSelectedAppointment(null)
+        }}
+        appointment={selectedAppointment}
+      />
     </div>
   )
 }

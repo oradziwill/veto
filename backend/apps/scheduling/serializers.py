@@ -1,12 +1,13 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from apps.patients.serializers import PatientReadSerializer
+from apps.patients.serializers import PatientReadSerializer, VetMiniSerializer
 from apps.scheduling.models import Appointment, HospitalStay
 
 
 class AppointmentReadSerializer(serializers.ModelSerializer):
     patient = PatientReadSerializer(read_only=True)
+    vet = VetMiniSerializer(read_only=True)
 
     class Meta:
         model = Appointment

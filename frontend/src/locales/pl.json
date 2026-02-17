@@ -292,5 +292,15 @@
     "visitHistory": "Historia wizyt",
     "noVisitHistory": "Brak historii wizyt",
     "loadHistoryError": "Nie udało się załadować historii wizyt."
+  },
+  "visitDetails": {
+    "title": "Szczegóły wizyty",
+    "dateTime": "Data i godzina",
+    "reason": "Powód",
+    "patient": "Pacjent",
+    "owner": "Właściciel",
+    "vet": "Lekarz weterynarii",
+    "status": "Status",
+    "internalNotes": "Uwagi wewnętrzne"
   }
 }

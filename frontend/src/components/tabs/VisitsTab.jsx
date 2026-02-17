@@ -38,29 +38,32 @@ const VisitsTab = () => {
   const [useAPI, setUseAPI] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const getDateRange = (filterType) => {
+  const getDateRangeParams = (filterType) => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const toYYYYMMDD = (d) => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
 
     switch (filterType) {
       case 'today':
-        return {
-          from: today.toISOString(),
-          to: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-        }
+        return { date: toYYYYMMDD(today) }
       case 'week':
-        const weekStart = today
-        const weekEnd = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+        const weekEnd = new Date(today)
+        weekEnd.setDate(weekEnd.getDate() + 6)
         return {
-          from: weekStart.toISOString(),
-          to: weekEnd.toISOString(),
+          date_from: toYYYYMMDD(today),
+          date_to: toYYYYMMDD(weekEnd),
         }
       case 'month':
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
         return {
-          from: monthStart.toISOString(),
-          to: monthEnd.toISOString(),
+          date_from: toYYYYMMDD(monthStart),
+          date_to: toYYYYMMDD(monthEnd),
         }
       default:
         return {}
@@ -69,7 +72,6 @@ const VisitsTab = () => {
 
   const fetchAppointments = async (filterType) => {
     if (!useAPI) {
-      // Use placeholder data
       setAppointments(placeholderAppointments)
       return
     }
@@ -77,9 +79,9 @@ const VisitsTab = () => {
     try {
       setLoading(true)
       setError(null)
-      const params = getDateRange(filterType)
+      const params = getDateRangeParams(filterType)
       const response = await appointmentsAPI.list(params)
-      setAppointments(response.data.results || response.data)
+      setAppointments(response.data.results || response.data || [])
     } catch (err) {
       // Fall back to placeholder data on error
       setUseAPI(false)
