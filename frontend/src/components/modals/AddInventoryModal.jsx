@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { inventoryAPI } from '../../services/api'
 import './Modal.css'
 
 const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useTranslation()
   const [formData, setFormData] = useState({
     name: '',
     category: 'other',
@@ -43,7 +45,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
         min_stock_level: 0,
       })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to create inventory item. Please try again.')
+      setError(err.response?.data?.detail || t('addInventory.createError'))
       console.error('Error creating inventory item:', err)
     } finally {
       setLoading(false)
@@ -56,7 +58,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Add Inventory Item</h2>
+          <h2>{t('addInventory.title')}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -64,7 +66,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
-            <label htmlFor="name">Item Name *</label>
+            <label htmlFor="name">{t('addInventory.itemName')}</label>
             <input
               type="text"
               id="name"
@@ -76,7 +78,7 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="category">Category *</label>
+            <label htmlFor="category">{t('addInventory.category')}</label>
             <select
               id="category"
               name="category"
@@ -84,16 +86,16 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
               onChange={handleChange}
               required
             >
-              <option value="medication">Medication</option>
-              <option value="supplies">Supplies</option>
-              <option value="equipment">Equipment</option>
-              <option value="other">Other</option>
+              <option value="medication">{t('inventory.medications')}</option>
+              <option value="supplies">{t('inventory.supplies')}</option>
+              <option value="equipment">{t('inventory.equipment')}</option>
+              <option value="other">{t('inventory.other')}</option>
             </select>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="stock_quantity">Stock Quantity *</label>
+              <label htmlFor="stock_quantity">{t('addInventory.stockQuantity')}</label>
               <input
                 type="number"
                 id="stock_quantity"
@@ -106,14 +108,14 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="unit">Unit *</label>
+              <label htmlFor="unit">{t('addInventory.unit')}</label>
               <input
                 type="text"
                 id="unit"
                 name="unit"
                 value={formData.unit}
                 onChange={handleChange}
-                placeholder="e.g., vials, boxes, packs"
+                placeholder={t('addInventory.unitPlaceholder')}
                 required
               />
             </div>
@@ -144,10 +146,10 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Adding...' : 'Add Item'}
+              {loading ? t('addInventory.creating') : t('addInventory.createItem')}
             </button>
           </div>
         </form>

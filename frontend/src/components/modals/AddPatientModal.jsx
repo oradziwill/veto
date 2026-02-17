@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { patientsAPI, clientsAPI } from '../../services/api'
 import AddClientModal from './AddClientModal'
 import LoginModal from '../LoginModal'
 import './Modal.css'
 
 const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useTranslation()
   const [formData, setFormData] = useState({
     owner: '',
     name: '',
@@ -118,7 +120,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
 
     // Validate owner is selected
     if (!formData.owner) {
-      setError('Please select or create an owner for this patient.')
+      setError(t('addPatient.selectOwnerError'))
       setLoading(false)
       return
     }
@@ -150,7 +152,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
                             ? JSON.stringify(err.response.data) 
                             : err.response?.data) ||
                           err.message ||
-                          'Failed to create patient. Please try again.'
+                          t('addPatient.createError')
       setError(errorMessage)
       console.error('Error creating patient:', err)
       console.error('Error response:', err.response?.data)
@@ -165,7 +167,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Add New Patient</h2>
+          <h2>{t('addPatient.title')}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -173,7 +175,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group" style={{ position: 'relative' }}>
-            <label htmlFor="owner">Owner *</label>
+            <label htmlFor="owner">{t('addPatient.owner')}</label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
@@ -181,7 +183,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
                 name="owner"
                 value={ownerSearch}
                 onChange={handleOwnerSearchChange}
-                placeholder="Search for owner by name, phone, or email..."
+                placeholder={t('addPatient.ownerSearchPlaceholder')}
                 style={{ 
                   width: '100%',
                   padding: '0.5rem',
@@ -208,7 +210,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
                   fontSize: '0.85rem',
                   color: '#718096'
                 }}>
-                  Searching...
+                  {t('common.searching')}
                 </div>
               )}
               {showOwnerDropdown && ownerSearchResults.length > 0 && (
@@ -256,7 +258,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
             {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#718096' }}>
-                No owners found. Create a new one below.
+                {t('addPatient.noOwnersFound')}
               </div>
             )}
             <div style={{ marginTop: '0.75rem' }}>
@@ -266,7 +268,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
                 onClick={() => setShowClientModal(true)}
                 style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
               >
-                + Create New Owner
+                {t('addPatient.createNewOwner')}
               </button>
             </div>
             {selectedOwner && (
@@ -277,7 +279,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
                 borderRadius: '4px',
                 fontSize: '0.9rem'
               }}>
-                Selected: <strong>{selectedOwner.first_name} {selectedOwner.last_name}</strong>
+                {t('addPatient.selectedLabel')} <strong>{selectedOwner.first_name} {selectedOwner.last_name}</strong>
                 {selectedOwner.email && <span> ({selectedOwner.email})</span>}
               </div>
             )}
@@ -285,7 +287,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="name">Patient Name *</label>
+              <label htmlFor="name">{t('addPatient.patientName')}</label>
               <input
                 type="text"
                 id="name"
@@ -297,21 +299,31 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="species">Species *</label>
-              <input
-                type="text"
+              <label htmlFor="species">{t('addPatient.species')}</label>
+              <select
                 id="species"
                 name="species"
                 value={formData.species}
                 onChange={handleChange}
                 required
-              />
+              >
+                <option value="">{t('addPatient.select')}</option>
+                <option value="Dog">{t('addPatient.speciesDog')}</option>
+                <option value="Cat">{t('addPatient.speciesCat')}</option>
+                <option value="Rabbit">{t('addPatient.speciesRabbit')}</option>
+                <option value="Mouse">{t('addPatient.speciesMouse')}</option>
+                <option value="Hamster">{t('addPatient.speciesHamster')}</option>
+                <option value="Guinea pig">{t('addPatient.speciesGuineaPig')}</option>
+                <option value="Bird">{t('addPatient.speciesBird')}</option>
+                <option value="Ferret">{t('addPatient.speciesFerret')}</option>
+                <option value="Other">{t('addPatient.speciesOther')}</option>
+              </select>
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="breed">Breed</label>
+              <label htmlFor="breed">{t('addPatient.breed')}</label>
               <input
                 type="text"
                 id="breed"
@@ -322,23 +334,23 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="sex">Sex</label>
+              <label htmlFor="sex">{t('addPatient.sex')}</label>
               <select
                 id="sex"
                 name="sex"
                 value={formData.sex}
                 onChange={handleChange}
               >
-                <option value="">Select</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Unknown">Unknown</option>
+                <option value="">{t('addPatient.select')}</option>
+                <option value="Male">{t('addPatient.male')}</option>
+                <option value="Female">{t('addPatient.female')}</option>
+                <option value="Unknown">{t('addPatient.unknown')}</option>
               </select>
             </div>
           </div>
 
           <div className="form-group">
-            <label htmlFor="birth_date">Birth Date</label>
+            <label htmlFor="birth_date">{t('addPatient.birthDate')}</label>
             <input
               type="date"
               id="birth_date"
@@ -349,7 +361,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="microchip_no">Microchip Number</label>
+            <label htmlFor="microchip_no">{t('addPatient.microchipNo')}</label>
             <input
               type="text"
               id="microchip_no"
@@ -360,7 +372,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="allergies">Allergies</label>
+            <label htmlFor="allergies">{t('addPatient.allergies')}</label>
             <textarea
               id="allergies"
               name="allergies"
@@ -371,7 +383,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="notes">Notes</label>
+            <label htmlFor="notes">{t('addPatient.notes')}</label>
             <textarea
               id="notes"
               name="notes"
@@ -383,10 +395,10 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Patient'}
+              {loading ? t('addPatient.creating') : t('addPatient.createPatient')}
             </button>
           </div>
         </form>

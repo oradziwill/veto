@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { patientHistoryAPI, patientAISummaryAPI } from '../../services/api'
 import './Modal.css'
 
 const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
+  const { t, i18n } = useTranslation()
   const [history, setHistory] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState(null)
@@ -57,7 +59,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
             setHistory(response.data || [])
           } catch (err) {
             console.error('Error fetching patient history:', err)
-            setError('Failed to load visit history.')
+            setError(t('patientDetails.loadHistoryError'))
             setHistory([])
             hasFetchedRef.current = false // Allow retry on error
           } finally {
@@ -86,7 +88,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
           } catch (err) {
             console.error('Error fetching AI summary:', err)
             // Don't block UI if AI summary fails - it's optional
-            setAiSummaryError(err.response?.data?.error || 'Failed to generate AI summary. This feature requires OpenAI API key configuration.')
+            setAiSummaryError(err.response?.data?.error || t('patientDetails.aiSummaryError'))
             hasFetchedAISummaryRef.current = false // Allow retry on error
           } finally {
             setLoadingAISummary(false)
@@ -98,10 +100,11 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
     }
   }, [isOpen, patient?.id])
 
+  const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A'
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -113,7 +116,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
   const formatDateOnly = (dateString) => {
     if (!dateString) return 'N/A'
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -121,7 +124,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
   }
 
   const calculateAge = (birthDate) => {
-    if (!birthDate) return 'Unknown'
+    if (!birthDate) return t('common.unknown')
     const today = new Date()
     const birth = new Date(birthDate)
     let years = today.getFullYear() - birth.getFullYear()
@@ -142,7 +145,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header">
-          <h2>Patient Details</h2>
+          <h2>{t('patientDetails.title')}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -150,7 +153,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
           {/* Patient Information Section */}
           <div style={{ marginBottom: '2rem' }}>
             <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600', color: '#2d3748' }}>
-              Patient Information
+              {t('patientDetails.patientInfo')}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
               <div>
@@ -225,19 +228,19 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
           {/* AI Summary Section */}
           <div style={{ marginBottom: '2rem', paddingTop: '1.5rem', borderTop: '2px solid #e2e8f0' }}>
             <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600', color: '#2d3748', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              🤖 AI-Powered Summary
+              {t('patientDetails.aiSummary')}
             </h3>
             
             {loadingAISummary && (
               <div style={{ padding: '1.5rem', textAlign: 'center', color: '#718096', backgroundColor: '#f7fafc', borderRadius: '8px' }}>
-                <div style={{ marginBottom: '0.5rem' }}>Generating AI summary...</div>
-                <div style={{ fontSize: '0.875rem' }}>Analyzing patient history and records</div>
+                <div style={{ marginBottom: '0.5rem' }}>{t('patientDetails.generatingSummary')}</div>
+                <div style={{ fontSize: '0.875rem' }}>{t('patientDetails.analyzingHistory')}</div>
               </div>
             )}
 
             {aiSummaryError && !loadingAISummary && (
               <div style={{ padding: '1rem', backgroundColor: '#fff5f5', borderRadius: '8px', border: '1px solid #fed7d7', color: '#c53030' }}>
-                <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>Unable to generate AI summary</div>
+                <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>{t('patientDetails.aiSummaryError')}</div>
                 <div style={{ fontSize: '0.875rem' }}>{aiSummaryError}</div>
                 <button
                   onClick={async () => {
@@ -267,7 +270,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                     fontWeight: '500',
                   }}
                 >
-                  Retry
+                  {t('common.retry')}
                 </button>
               </div>
             )}

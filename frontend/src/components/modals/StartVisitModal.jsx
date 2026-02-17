@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   appointmentsAPI,
   patientsAPI,
@@ -11,6 +12,7 @@ import AddClientModal from './AddClientModal'
 import './Modal.css'
 
 const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useTranslation()
   const [ownerSearch, setOwnerSearch] = useState('')
   const [ownerSearchResults, setOwnerSearchResults] = useState([])
   const [selectedOwner, setSelectedOwner] = useState(null)
@@ -224,14 +226,14 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
 
     // Validate patient is selected
     if (!formData.patient) {
-      setError('Please select a patient for this visit.')
+      setError(t('startVisit.selectPatientError'))
       setLoading(false)
       return
     }
 
     // Validate at least one service is added
     if (selectedServices.length === 0) {
-      setError('Please add at least one service for this visit.')
+      setError(t('startVisit.addServiceError'))
       setLoading(false)
       return
     }
@@ -256,7 +258,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
       
       // Validate that at least one note field is filled (API requires 'note' field)
       if (!combinedNote.trim()) {
-        setError('Please enter at least one of: Visit Notes, Medication, or Additional Notes.')
+        setError(t('startVisit.noteRequired'))
         setLoading(false)
         return
       }
@@ -325,7 +327,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
       setSuggestedAppointment(null)
     } catch (err) {
       // Handle API errors according to the API documentation
-      let errorMessage = 'Failed to save visit details. Please try again.'
+      let errorMessage = t('startVisit.saveError')
       
       if (err.response?.data) {
         // Handle validation errors from the API
@@ -360,7 +362,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px' }}>
         <div className="modal-header">
-          <h2>Start Visit</h2>
+          <h2>{t('startVisit.title')}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -375,16 +377,16 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
               marginBottom: '1rem',
               fontSize: '0.9rem'
             }}>
-              <strong>Suggested appointment found:</strong> {suggestedAppointment.reason || 'Scheduled visit'}
+              <strong>{t('startVisit.suggestedAppointment')}</strong> {suggestedAppointment.reason || t('startVisit.scheduledVisit')}
               <br />
               <span style={{ color: '#666', fontSize: '0.85rem' }}>
-                You can modify the patient/owner below if needed.
+                {t('startVisit.modifyHint')}
               </span>
             </div>
           )}
 
           <div className="form-group" style={{ position: 'relative' }}>
-            <label htmlFor="owner">Owner *</label>
+            <label htmlFor="owner">{t('startVisit.owner')}</label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
@@ -392,7 +394,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                 name="owner"
                 value={ownerSearch}
                 onChange={handleOwnerSearchChange}
-                placeholder="Search for owner by name, phone, or email..."
+                placeholder={t('startVisit.ownerSearchPlaceholder')}
                 style={{
                   width: '100%',
                   padding: '0.5rem',
@@ -418,7 +420,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                   fontSize: '0.85rem',
                   color: '#718096'
                 }}>
-                  Searching...
+                  {t('common.searching')}
                 </div>
               )}
               {showOwnerDropdown && ownerSearchResults.length > 0 && (
@@ -466,7 +468,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
             {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#718096' }}>
-                No owners found. Create a new one below.
+                {t('startVisit.noOwnersFound')}
               </div>
             )}
             <div style={{ marginTop: '0.75rem' }}>
@@ -476,7 +478,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                 onClick={() => setShowClientModal(true)}
                 style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
               >
-                + Create New Owner
+                {t('startVisit.createNewOwner')}
               </button>
             </div>
             {selectedOwner && (
@@ -493,16 +495,16 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="patient">Patient *</label>
+            <label htmlFor="patient">{t('startVisit.patient')}</label>
             {loadingPatients ? (
-              <div className="loading-text">Loading patients...</div>
+              <div className="loading-text">{t('patients.loadingPatients')}</div>
             ) : !selectedOwner ? (
               <div style={{ padding: '0.5rem', color: '#718096', fontSize: '0.9rem' }}>
-                Please select an owner first
+                {t('startVisit.selectOwnerFirst')}
               </div>
             ) : patients.length === 0 ? (
               <div style={{ padding: '0.5rem', color: '#718096', fontSize: '0.9rem' }}>
-                No patients found for this owner
+                {t('startVisit.noPatientsForOwner')}
               </div>
             ) : (
               <select
@@ -512,7 +514,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                 onChange={handleChange}
                 required
               >
-                <option value="">Select Patient</option>
+                <option value="">{t('startVisit.selectPatient')}</option>
                 {patients.map((patient) => (
                   <option key={patient.id} value={patient.id}>
                     {patient.name} ({patient.species})
@@ -523,57 +525,57 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="visitNotes">Visit Notes</label>
+            <label htmlFor="visitNotes">{t('startVisit.visitNotes')}</label>
             <textarea
               id="visitNotes"
               name="visitNotes"
               value={formData.visitNotes}
               onChange={handleChange}
               rows="4"
-              placeholder="Enter visit notes..."
+              placeholder={t('startVisit.visitNotesPlaceholder')}
             />
             <small style={{ color: '#666', fontSize: '0.85rem' }}>
-              At least one note field (Visit Notes, Medication, or Additional Notes) is required.
+              {t('startVisit.noteRequired')}
             </small>
           </div>
 
           <div className="form-group">
-            <label htmlFor="medication">Medication</label>
+            <label htmlFor="medication">{t('startVisit.medication')}</label>
             <textarea
               id="medication"
               name="medication"
               value={formData.medication}
               onChange={handleChange}
               rows="3"
-              placeholder="Enter prescribed medications..."
+              placeholder={t('startVisit.medicationPlaceholder')}
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="medicalReceipts">Medical Receipts</label>
+            <label htmlFor="medicalReceipts">{t('startVisit.medicalReceipts')}</label>
             <input
               type="text"
               id="medicalReceipts"
               name="medicalReceipts"
               value={formData.medicalReceipts}
               onChange={handleChange}
-              placeholder="Enter receipt summary (max 255 characters)..."
+              placeholder={t('startVisit.medicalReceiptsPlaceholder')}
               maxLength={255}
             />
             <small style={{ color: '#666', fontSize: '0.85rem' }}>
-              Optional. Receipt summary information.
+              {t('startVisit.receiptHint')}
             </small>
           </div>
 
           <div className="form-group">
-            <label htmlFor="additionalNotes">Additional Notes</label>
+            <label htmlFor="additionalNotes">{t('startVisit.additionalNotes')}</label>
             <textarea
               id="additionalNotes"
               name="additionalNotes"
               value={formData.additionalNotes}
               onChange={handleChange}
               rows="3"
-              placeholder="Enter any additional notes..."
+              placeholder={t('startVisit.additionalNotesPlaceholder')}
             />
           </div>
 
@@ -585,15 +587,15 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
               borderTop: '1px solid #e2e8f0',
             }}
           >
-            <label>Services *</label>
+            <label>{t('startVisit.services')}</label>
             <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.75rem' }}>
-              Add services to bill for this visit. A draft invoice will be created.
+              {t('startVisit.servicesHint')}
             </p>
             {loadingServices ? (
-              <div className="loading-text">Loading services...</div>
+              <div className="loading-text">{t('startVisit.loadingServices')}</div>
             ) : services.length === 0 ? (
               <div style={{ fontSize: '0.9rem', color: '#718096' }}>
-                No services available in the catalog.
+                {t('startVisit.noServicesAvailable')}
               </div>
             ) : (
               <>
@@ -609,7 +611,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                       borderRadius: '4px',
                     }}
                   >
-                    <option value="">Choose a service...</option>
+                    <option value="">{t('startVisit.chooseService')}</option>
                     {services.map((service) => (
                       <option key={service.id} value={service.id}>
                         {service.name} – {service.price} PLN
@@ -623,7 +625,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                     disabled={!serviceToAdd}
                     style={{ padding: '0.5rem 1rem' }}
                   >
-                    Add
+                    {t('common.add')}
                   </button>
                 </div>
                 {selectedServices.length > 0 && (
@@ -675,7 +677,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                         fontSize: '1.1rem',
                       }}
                     >
-                      <span>Visit balance</span>
+                      <span>{t('startVisit.visitBalance')}</span>
                       <span>
                         {selectedServices
                           .reduce((sum, s) => sum + parseFloat(s.price) || 0, 0)
@@ -691,10 +693,10 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn-primary" disabled={loading || loadingServices}>
-              {loading ? 'Saving...' : 'Save Visit Details'}
+              {loading ? t('startVisit.saving') : t('startVisit.saveVisitDetails')}
             </button>
           </div>
         </form>
