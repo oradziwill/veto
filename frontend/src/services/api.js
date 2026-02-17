@@ -140,4 +140,16 @@ export const patientAISummaryAPI = {
   get: (patientId) => api.get(`/patients/${patientId}/ai-summary/`),
 };
 
+export const servicesAPI = {
+  list: (params) => api.get("/billing/services/", { params }),
+  get: (id) => api.get(`/billing/services/${id}/`),
+};
+
+export const invoicesAPI = {
+  list: (params) => api.get("/billing/invoices/", { params }),
+  get: (id) => api.get(`/billing/invoices/${id}/`),
+  create: (data) => api.post("/billing/invoices/", data),
+  update: (id, data) => api.put(`/billing/invoices/${id}/`, data),
+};
+
 export default api;

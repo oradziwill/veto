@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { appointmentsAPI, patientsAPI, clientsAPI, patientHistoryAPI } from '../../services/api'
+import {
+  appointmentsAPI,
+  patientsAPI,
+  clientsAPI,
+  patientHistoryAPI,
+  servicesAPI,
+  invoicesAPI,
+} from '../../services/api'
 import AddClientModal from './AddClientModal'
 import './Modal.css'
 
@@ -21,9 +28,34 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
     additionalNotes: '',
   })
   
+  const [services, setServices] = useState([])
+  const [selectedServices, setSelectedServices] = useState([]) // { id, name, price } - can add same service multiple times
+  const [serviceToAdd, setServiceToAdd] = useState('') // id of service selected in dropdown
+  const [loadingServices, setLoadingServices] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [suggestedAppointment, setSuggestedAppointment] = useState(null)
+
+  // Fetch services when modal opens
+  useEffect(() => {
+    if (!isOpen) return
+    const fetchServices = async () => {
+      try {
+        setLoadingServices(true)
+        const response = await servicesAPI.list()
+        const data = response.data.results ?? response.data ?? []
+        setServices(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Error loading services:', err)
+        setServices([])
+      } finally {
+        setLoadingServices(false)
+      }
+    }
+    fetchServices()
+    setSelectedServices([])
+    setServiceToAdd('')
+  }, [isOpen])
 
   // Check for scheduled appointments at current time when modal opens
   useEffect(() => {
@@ -172,6 +204,19 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
     }))
   }
 
+  const addService = () => {
+    if (!serviceToAdd) return
+    const service = services.find(s => s.id.toString() === serviceToAdd)
+    if (service) {
+      setSelectedServices(prev => [...prev, { id: service.id, name: service.name, price: service.price }])
+      setServiceToAdd('')
+    }
+  }
+
+  const removeService = (index) => {
+    setSelectedServices(prev => prev.filter((_, i) => i !== index))
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -180,6 +225,13 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
     // Validate patient is selected
     if (!formData.patient) {
       setError('Please select a patient for this visit.')
+      setLoading(false)
+      return
+    }
+
+    // Validate at least one service is added
+    if (selectedServices.length === 0) {
+      setError('Please add at least one service for this visit.')
       setLoading(false)
       return
     }
@@ -222,6 +274,28 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
 
       await patientHistoryAPI.create(patientId, historyData)
 
+      // If services are added, create a draft invoice
+      if (selectedServices.length > 0 && selectedOwner?.id) {
+        const invoiceLines = selectedServices.map(s => ({
+          description: s.name,
+          quantity: 1,
+          unit_price: String(s.price),
+          service: s.id,
+        }))
+        try {
+          await invoicesAPI.create({
+            client: selectedOwner.id,
+            patient: patientId,
+            ...(suggestedAppointment?.id && { appointment: suggestedAppointment.id }),
+            status: 'draft',
+            lines: invoiceLines,
+          })
+        } catch (invErr) {
+          console.error('Error creating invoice:', invErr)
+          // Don't fail the whole operation; visit was saved
+        }
+      }
+
       // If there's a suggested appointment, update its status to "checked_in" or "completed"
       if (suggestedAppointment) {
         try {
@@ -245,6 +319,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
         medicalReceipts: '',
         additionalNotes: '',
       })
+      setSelectedServices([])
       setOwnerSearch('')
       setSelectedOwner(null)
       setSuggestedAppointment(null)
@@ -502,11 +577,123 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
             />
           </div>
 
+          <div
+            className="form-group"
+            style={{
+              marginTop: '1.5rem',
+              paddingTop: '1.5rem',
+              borderTop: '1px solid #e2e8f0',
+            }}
+          >
+            <label>Services *</label>
+            <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.75rem' }}>
+              Add services to bill for this visit. A draft invoice will be created.
+            </p>
+            {loadingServices ? (
+              <div className="loading-text">Loading services...</div>
+            ) : services.length === 0 ? (
+              <div style={{ fontSize: '0.9rem', color: '#718096' }}>
+                No services available in the catalog.
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <select
+                    value={serviceToAdd}
+                    onChange={(e) => setServiceToAdd(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '0.5rem',
+                      fontSize: '1rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    <option value="">Choose a service...</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} – {service.price} PLN
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={addService}
+                    disabled={!serviceToAdd}
+                    style={{ padding: '0.5rem 1rem' }}
+                  >
+                    Add
+                  </button>
+                </div>
+                {selectedServices.length > 0 && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', marginBottom: '0.75rem' }}>
+                      {selectedServices.map((s, index) => (
+                        <div
+                          key={`${s.id}-${index}`}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.5rem 0.75rem',
+                            backgroundColor: '#e6fffa',
+                            borderRadius: '4px',
+                            fontSize: '0.95rem',
+                          }}
+                        >
+                          <span>{s.name} – {s.price} PLN</span>
+                          <button
+                            type="button"
+                            onClick={() => removeService(index)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#c53030',
+                              cursor: 'pointer',
+                              padding: '0.25rem',
+                              fontSize: '1.1rem',
+                              lineHeight: 1,
+                            }}
+                            title="Remove"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div
+                      style={{
+                        padding: '0.75rem 1rem',
+                        backgroundColor: '#f7fafc',
+                        borderRadius: '4px',
+                        borderTop: '2px solid #2f855a',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontWeight: '600',
+                        fontSize: '1.1rem',
+                      }}
+                    >
+                      <span>Visit balance</span>
+                      <span>
+                        {selectedServices
+                          .reduce((sum, s) => sum + parseFloat(s.price) || 0, 0)
+                          .toFixed(2)}{' '}
+                        PLN
+                      </span>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary" disabled={loading}>
+            <button type="submit" className="btn-primary" disabled={loading || loadingServices}>
               {loading ? 'Saving...' : 'Save Visit Details'}
             </button>
           </div>
