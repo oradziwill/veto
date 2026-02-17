@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { inventoryAPI } from '../../services/api'
 import AddInventoryModal from '../modals/AddInventoryModal'
 import './Tabs.css'
 
 const InventoryTab = () => {
+  const { t } = useTranslation()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -21,7 +23,7 @@ const InventoryTab = () => {
       const response = await inventoryAPI.list(params)
       setItems(response.data.results || response.data)
     } catch (err) {
-      setError('Failed to load inventory. Please check your connection.')
+      setError(t('inventory.loadError'))
       console.error('Error fetching inventory:', err)
     } finally {
       setLoading(false)
@@ -40,20 +42,20 @@ const InventoryTab = () => {
 
   const getStatusBadge = (item) => {
     if (item.is_out_of_stock) {
-      return <span className="status-badge out-of-stock">Out of Stock</span>
+      return <span className="status-badge out-of-stock">{t('inventory.outOfStock')}</span>
     }
     if (item.is_low_stock) {
-      return <span className="status-badge low-stock">Low Stock</span>
+      return <span className="status-badge low-stock">{t('inventory.lowStock')}</span>
     }
-    return <span className="status-badge in-stock">In Stock</span>
+    return <span className="status-badge in-stock">{t('inventory.inStock')}</span>
   }
 
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>Inventory</h2>
+        <h2>{t('inventory.title')}</h2>
         <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          + Add Item
+          {t('inventory.addItem')}
         </button>
       </div>
 
@@ -61,22 +63,22 @@ const InventoryTab = () => {
         <div className="inventory-stats">
           <div className="stat-card">
             <div className="stat-value">{stats.total}</div>
-            <div className="stat-label">Total Items</div>
+            <div className="stat-label">{t('inventory.totalItems')}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.lowStock}</div>
-            <div className="stat-label">Low Stock</div>
+            <div className="stat-label">{t('inventory.lowStock')}</div>
           </div>
           <div className="stat-card">
             <div className="stat-value">{stats.outOfStock}</div>
-            <div className="stat-label">Out of Stock</div>
+            <div className="stat-label">{t('inventory.outOfStock')}</div>
           </div>
         </div>
 
         <div className="search-bar">
           <input
             type="text"
-            placeholder="Search inventory items..."
+            placeholder={t('inventory.searchPlaceholder')}
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -86,15 +88,15 @@ const InventoryTab = () => {
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
           >
-            <option value="all">All Categories</option>
-            <option value="medication">Medications</option>
-            <option value="supplies">Supplies</option>
-            <option value="equipment">Equipment</option>
-            <option value="other">Other</option>
+            <option value="all">{t('inventory.allCategories')}</option>
+            <option value="medication">{t('inventory.medications')}</option>
+            <option value="supplies">{t('inventory.supplies')}</option>
+            <option value="equipment">{t('inventory.equipment')}</option>
+            <option value="other">{t('inventory.other')}</option>
           </select>
         </div>
 
-        {loading && <div className="loading-message">Loading inventory...</div>}
+        {loading && <div className="loading-message">{t('inventory.loadingInventory')}</div>}
         {error && <div className="error-message">{error}</div>}
 
         {!loading && !error && (
@@ -102,19 +104,19 @@ const InventoryTab = () => {
             <table>
               <thead>
                 <tr>
-                  <th>Item Name</th>
-                  <th>Category</th>
-                  <th>Stock</th>
-                  <th>Unit</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>{t('inventory.itemName')}</th>
+                  <th>{t('inventory.category')}</th>
+                  <th>{t('inventory.stock')}</th>
+                  <th>{t('inventory.unit')}</th>
+                  <th>{t('inventory.status')}</th>
+                  <th>{t('inventory.actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
                   <tr>
                     <td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>
-                      No inventory items found
+                      {t('inventory.noItemsFound')}
                     </td>
                   </tr>
                 ) : (
@@ -126,7 +128,7 @@ const InventoryTab = () => {
                       <td>{item.unit}</td>
                       <td>{getStatusBadge(item)}</td>
                       <td>
-                        <button className="btn-link">Edit</button>
+                        <button className="btn-link">{t('common.edit')}</button>
                       </td>
                     </tr>
                   ))

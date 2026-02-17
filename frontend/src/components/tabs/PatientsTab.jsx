@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { patientsAPI } from "../../services/api";
 import AddPatientModal from "../modals/AddPatientModal";
 import PatientDetailsModal from "../modals/PatientDetailsModal";
 import "./Tabs.css";
 
 const PatientsTab = () => {
+  const { t } = useTranslation();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,7 +29,7 @@ const PatientsTab = () => {
       const errorMessage =
         err.response?.data?.detail ||
         err.message ||
-        "Failed to load patients. Please try again.";
+        t("patients.loadError");
       setError(errorMessage);
       setPatients([]);
     } finally {
@@ -56,23 +58,23 @@ const PatientsTab = () => {
   };
 
   const calculateAge = (birthDate) => {
-    if (!birthDate) return "Unknown";
+    if (!birthDate) return t("common.unknown");
     const today = new Date();
     const birth = new Date(birthDate);
     const years = today.getFullYear() - birth.getFullYear();
     const months = today.getMonth() - birth.getMonth();
     if (years > 0) {
-      return `${years} year${years !== 1 ? "s" : ""}`;
+      return `${years} ${years !== 1 ? t("patients.years") : t("patients.year")}`;
     }
-    return `${months} month${months !== 1 ? "s" : ""}`;
+    return `${months} ${months !== 1 ? t("patients.months") : t("patients.month")}`;
   };
 
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>Patients</h2>
+        <h2>{t("patients.title")}</h2>
         <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          + Add Patient
+          {t("patients.addPatient")}
         </button>
       </div>
 
@@ -80,14 +82,14 @@ const PatientsTab = () => {
         <div className="search-bar">
           <input
             type="text"
-            placeholder="Search by patient name, owner name, surname, or phone..."
+            placeholder={t("patients.searchPlaceholder")}
             className="search-input"
             value={searchTerm}
             onChange={handleSearch}
           />
         </div>
 
-        {loading && <div className="loading-message">Loading patients...</div>}
+        {loading && <div className="loading-message">{t("patients.loadingPatients")}</div>}
 
         {error && !loading && (
           <div
@@ -107,7 +109,7 @@ const PatientsTab = () => {
 
         <div className="patients-grid">
           {!loading && patients.length === 0 ? (
-            <div className="empty-state">No patients found</div>
+            <div className="empty-state">{t("patients.noPatientsFound")}</div>
           ) : (
             patients.map((patient) => (
               <div key={patient.id} className="patient-card">
@@ -125,15 +127,15 @@ const PatientsTab = () => {
                 </div>
                 <div className="patient-details">
                   <div className="patient-detail-row">
-                    <span className="detail-label">Owner:</span>
+                    <span className="detail-label">{t("patients.owner")}</span>
                     <span className="detail-value">
                       {patient.owner
                         ? `${patient.owner.first_name} ${patient.owner.last_name}`
-                        : "Unknown"}
+                        : t("common.unknown")}
                     </span>
                   </div>
                   <div className="patient-detail-row">
-                    <span className="detail-label">Age:</span>
+                    <span className="detail-label">{t("patients.age")}</span>
                     <span className="detail-value">
                       {calculateAge(patient.birth_date)}
                     </span>
@@ -147,7 +149,7 @@ const PatientsTab = () => {
                       setIsDetailsModalOpen(true);
                     }}
                   >
-                    View Details
+                    {t("patients.viewDetails")}
                   </button>
                 </div>
               </div>

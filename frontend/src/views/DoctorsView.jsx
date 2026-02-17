@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
 import CalendarTab from "../components/tabs/CalendarTab";
@@ -7,11 +8,13 @@ import InventoryTab from "../components/tabs/InventoryTab";
 import AIAssistantTab from "../components/tabs/AIAssistantTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
+import LanguageSwitcher from "../components/LanguageSwitcher";
 import { authAPI } from "../services/api";
 import "../components/tabs/Tabs.css";
 import "./DoctorsView.css";
 
 const DoctorsView = () => {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "patients";
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -55,11 +58,11 @@ const DoctorsView = () => {
   };
 
   const tabs = [
-    { id: "patients", label: "Patients", icon: "🐾" },
-    { id: "visits", label: "Visits", icon: "📋" },
-    { id: "calendar", label: "Calendar", icon: "📅" },
-    { id: "inventory", label: "Inventory", icon: "📦" },
-    { id: "ai-assistant", label: "AI Assistant", icon: "🤖" },
+    { id: "patients", label: t("tabs.patients"), icon: "🐾" },
+    { id: "visits", label: t("tabs.visits"), icon: "📋" },
+    { id: "calendar", label: t("tabs.calendar"), icon: "📅" },
+    { id: "inventory", label: t("tabs.inventory"), icon: "📦" },
+    { id: "ai-assistant", label: t("tabs.aiAssistant"), icon: "🤖" },
   ];
 
   const renderTabContent = () => {
@@ -83,8 +86,9 @@ const DoctorsView = () => {
     <div className="doctors-view">
       <header className="doctors-header">
         <div className="header-content">
-          <h1 className="header-title">Veto Clinic Management</h1>
+          <h1 className="header-title">{t("header.title")}</h1>
           <div className="header-actions">
+            <LanguageSwitcher />
             <button
               onClick={() => setShowStartVisitModal(true)}
               className="start-visit-btn"
@@ -100,7 +104,7 @@ const DoctorsView = () => {
                 boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
               }}
             >
-              Start Visit
+              {t("header.startVisit")}
             </button>
             <div className="header-user">
               <span className="user-name">Dr. Smith</span>

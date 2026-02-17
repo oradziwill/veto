@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   appointmentsAPI,
   patientsAPI,
@@ -26,18 +27,19 @@ const add30Minutes = (datetimeLocalString) => {
 };
 
 const REASON_OPTIONS = [
-  "Routine Checkup",
-  "Vaccination",
-  "Surgery",
-  "Dental Cleaning",
-  "Emergency",
-  "Follow-up",
-  "Grooming",
-  "Behavior Consultation",
-  "Other",
+  { value: "Routine Checkup", key: "reasonRoutineCheckup" },
+  { value: "Vaccination", key: "reasonVaccination" },
+  { value: "Surgery", key: "reasonSurgery" },
+  { value: "Dental Cleaning", key: "reasonDentalCleaning" },
+  { value: "Emergency", key: "reasonEmergency" },
+  { value: "Follow-up", key: "reasonFollowUp" },
+  { value: "Grooming", key: "reasonGrooming" },
+  { value: "Behavior Consultation", key: "reasonBehaviorConsultation" },
+  { value: "Other", key: "reasonOther" },
 ];
 
 const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     patient: "",
     vet: "",
@@ -273,6 +275,22 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
     return reasonText;
   };
 
+  const getReasonDisplayText = (reasonValue) => {
+    if (reasonValue === "Other") return formData.reasonCustom || "";
+    const opt = REASON_OPTIONS.find((r) => r.value === reasonValue);
+    return opt ? t(`addAppointment.${opt.key}`) : reasonValue;
+  };
+
+  const getFormattedReasonDisplay = () => {
+    const selectedPatient = patients.find(p => p.id === parseInt(formData.patient));
+    const patientName = selectedPatient?.name || "";
+    const reasonText = getReasonDisplayText(formData.reason);
+    if (patientName && patientName.trim() && patientName.trim() !== "Unknown" && reasonText) {
+      return `${patientName} - ${reasonText}`;
+    }
+    return reasonText;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -280,25 +298,25 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 
     // Validate owner and patient are selected
     if (!selectedOwner) {
-      setError("Please select an owner for this visit.");
+      setError(t("addAppointment.selectOwnerError"));
       setLoading(false);
       return;
     }
 
     if (!formData.patient) {
-      setError("Please select a patient for this visit.");
+      setError(t("addAppointment.selectPatientError"));
       setLoading(false);
       return;
     }
 
     if (!formData.reason) {
-      setError("Please select a reason for this visit.");
+      setError(t("addAppointment.selectReasonError"));
       setLoading(false);
       return;
     }
 
     if (formData.reason === "Other" && !formData.reasonCustom.trim()) {
-      setError("Please enter a custom reason.");
+      setError(t("addAppointment.customReasonError"));
       setLoading(false);
       return;
     }
@@ -308,7 +326,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
       const selectedStartTime = new Date(formData.starts_at);
       const now = new Date();
       if (selectedStartTime < now) {
-        setError("Cannot schedule a visit in the past. Please select a future date and time.");
+        setError(t("addAppointment.pastTimeError"));
         setLoading(false);
         return;
       }
@@ -317,7 +335,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
     // Validate that the selected time is available
     if (formData.vet && formData.starts_at && availability) {
       if (!isTimeAvailable(formData.starts_at)) {
-        setError("The selected time is not available. Please choose an available time slot.");
+        setError(t("addAppointment.timeNotAvailableError"));
         setLoading(false);
         return;
       }
@@ -341,7 +359,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (err) {
-      let errorMessage = "Failed to create appointment. Please try again.";
+      let errorMessage = t("addAppointment.createError");
       if (err.response?.data?.detail) {
         errorMessage = err.response.data.detail;
       } else if (typeof err.response?.data === "object") {
@@ -370,7 +388,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Schedule New Visit</h2>
+          <h2>{t("addAppointment.title")}</h2>
           <button className="modal-close" onClick={onClose}>
             ×
           </button>
@@ -380,7 +398,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group" style={{ position: 'relative' }}>
-            <label htmlFor="owner">Owner *</label>
+            <label htmlFor="owner">{t("addAppointment.owner")}</label>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
@@ -388,7 +406,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 name="owner"
                 value={ownerSearch}
                 onChange={handleOwnerSearchChange}
-                placeholder="Search for owner by name, phone, or email..."
+                placeholder={t("addAppointment.ownerSearchPlaceholder")}
                 style={{ 
                   width: '100%',
                   padding: '0.5rem',
@@ -414,7 +432,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                   fontSize: '0.85rem',
                   color: '#718096'
                 }}>
-                  Searching...
+                  {t("common.searching")}
                 </div>
               )}
               {showOwnerDropdown && ownerSearchResults.length > 0 && (
@@ -462,7 +480,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
             {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#718096' }}>
-                No owners found. Create a new one below.
+                {t("addAppointment.noOwnersFound")}
               </div>
             )}
             <div style={{ marginTop: '0.75rem' }}>
@@ -472,7 +490,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 onClick={() => setShowClientModal(true)}
                 style={{ fontSize: '0.9rem', padding: '0.5rem 1rem' }}
               >
-                + Create New Owner
+                {t("addAppointment.createNewOwner")}
               </button>
             </div>
             {selectedOwner && (
@@ -483,22 +501,22 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 borderRadius: '4px',
                 fontSize: '0.9rem'
               }}>
-                Selected: <strong>{selectedOwner.first_name} {selectedOwner.last_name}</strong>
+                {t("addAppointment.selectedLabel")} <strong>{selectedOwner.first_name} {selectedOwner.last_name}</strong>
               </div>
             )}
           </div>
 
           <div className="form-group">
-            <label htmlFor="patient">Patient *</label>
+            <label htmlFor="patient">{t("addAppointment.patient")}</label>
             {loadingPatients ? (
-              <div className="loading-text">Loading patients...</div>
+              <div className="loading-text">{t("patients.loadingPatients")}</div>
             ) : !selectedOwner ? (
               <div style={{ padding: '0.5rem', color: '#718096', fontSize: '0.9rem' }}>
-                Please select an owner first
+                {t("addAppointment.selectOwnerFirst")}
               </div>
             ) : patients.length === 0 ? (
               <div style={{ padding: '0.5rem', color: '#718096', fontSize: '0.9rem' }}>
-                No patients found for this owner
+                {t("addAppointment.noPatientsForOwner")}
               </div>
             ) : (
               <select
@@ -508,7 +526,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 onChange={handleChange}
                 required
               >
-                <option value="">Select Patient</option>
+                <option value="">{t("addAppointment.selectPatient")}</option>
                 {patients.map((patient) => (
                   <option key={patient.id} value={patient.id}>
                     {patient.name} ({patient.species})
@@ -519,7 +537,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="vet">Veterinarian *</label>
+            <label htmlFor="vet">{t("addAppointment.vet")}</label>
             <select
               id="vet"
               name="vet"
@@ -527,7 +545,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
               onChange={handleChange}
               required
             >
-              <option value="">Select Veterinarian</option>
+              <option value="">{t("addAppointment.selectVet")}</option>
               {vets.map((vet) => (
                 <option key={vet.id} value={vet.id}>
                   {vet.first_name && vet.last_name
@@ -540,7 +558,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="starts_at">Start Time *</label>
+              <label htmlFor="starts_at">{t("addAppointment.startTime")}</label>
               <input
                 type="datetime-local"
                 id="starts_at"
@@ -570,7 +588,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 if (selectedTime < now) {
                   return (
                     <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
-                      <span style={{ color: '#ef4444' }}>✗ Cannot schedule in the past</span>
+                      <span style={{ color: '#ef4444' }}>✗ {t("addAppointment.cannotScheduleInPast")}</span>
                     </div>
                   );
                 }
@@ -578,7 +596,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
               })()}
               {loadingAvailability && (
                 <div style={{ fontSize: '0.85rem', color: '#718096', marginTop: '0.25rem' }}>
-                  Checking availability...
+                  {t("addAppointment.loadingAvailability")}
                 </div>
               )}
               {formData.vet && formData.starts_at && availability && (() => {
@@ -589,12 +607,12 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 return (
                   <div style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
                     {isTimeAvailable(formData.starts_at) ? (
-                      <span style={{ color: '#10b981' }}>✓ Time slot is available</span>
+                      <span style={{ color: '#10b981' }}>✓ {t("addAppointment.timeSlotAvailable")}</span>
                     ) : (
                       <span style={{ color: '#ef4444' }}>
-                        ✗ Time slot is not available. {availability.free && availability.free.length > 0 
-                          ? 'Please select an available time.'
-                          : availability.closed_reason || 'No available slots for this date.'}
+                        ✗ {t("addAppointment.timeSlotNotAvailable")} {availability.free && availability.free.length > 0 
+                          ? t("addAppointment.selectAvailableTime")
+                          : availability.closed_reason || t("addAppointment.noAvailableSlots")}
                       </span>
                     )}
                   </div>
@@ -602,7 +620,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
               })()}
             </div>
             <div className="form-group">
-              <label htmlFor="ends_at">End Time *</label>
+              <label htmlFor="ends_at">{t("addAppointment.endTime")}</label>
               <input
                 type="datetime-local"
                 id="ends_at"
@@ -616,7 +634,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="reason">Reason for Visit *</label>
+            <label htmlFor="reason">{t("addAppointment.reasonForVisit")}</label>
             <select
               id="reason"
               name="reason"
@@ -624,10 +642,10 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
               onChange={handleChange}
               required
             >
-              <option value="">Select Reason</option>
-              {REASON_OPTIONS.map((reason) => (
-                <option key={reason} value={reason}>
-                  {reason}
+              <option value="">{t("addAppointment.selectReason")}</option>
+              {REASON_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {t(`addAppointment.${r.key}`)}
                 </option>
               ))}
             </select>
@@ -638,7 +656,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 name="reasonCustom"
                 value={formData.reasonCustom}
                 onChange={handleChange}
-                placeholder="Enter custom reason..."
+                placeholder={t("addAppointment.customReasonPlaceholder")}
                 required
                 style={{ marginTop: '0.5rem', width: '100%', padding: '0.5rem' }}
               />
@@ -652,32 +670,32 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 fontSize: '0.85rem',
                 color: '#374151'
               }}>
-                Visit will be saved as: <strong>{getFormattedReason()}</strong>
+                {t("addAppointment.visitWillBeSavedAs")} <strong>{getFormattedReasonDisplay()}</strong>
               </div>
             )}
           </div>
 
           <div className="form-group">
-            <label htmlFor="status">Status</label>
+            <label htmlFor="status">{t("addAppointment.status")}</label>
             <select
               id="status"
               name="status"
               value={formData.status}
               onChange={handleChange}
             >
-              <option value="scheduled">Scheduled</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="checked_in">Checked-in</option>
-              <option value="completed">Completed</option>
+              <option value="scheduled">{t("addAppointment.statusScheduled")}</option>
+              <option value="confirmed">{t("addAppointment.statusConfirmed")}</option>
+              <option value="checked_in">{t("addAppointment.statusCheckedIn")}</option>
+              <option value="completed">{t("addAppointment.statusCompleted")}</option>
             </select>
           </div>
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? "Scheduling..." : "Schedule Visit"}
+              {loading ? t("addAppointment.scheduling") : t("addAppointment.scheduleVisit")}
             </button>
           </div>
         </form>

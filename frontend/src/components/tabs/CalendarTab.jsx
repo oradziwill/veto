@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { appointmentsAPI, availabilityAPI } from '../../services/api'
 import './Tabs.css'
 
 const CalendarTab = () => {
+  const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [availabilityByDay, setAvailabilityByDay] = useState({}) // { 'YYYY-MM-DD': { free: [], busy: [] } }
 
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const days = [t('calendar.sun'), t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), t('calendar.thu'), t('calendar.fri'), t('calendar.sat')]
   const hours = Array.from({ length: 12 }, (_, i) => i + 8) // 8 AM to 7 PM
 
   const getWeekStart = (date) => {
@@ -83,7 +85,8 @@ const CalendarTab = () => {
   }, [currentDate])
 
   const weekDates = getWeekDates(currentDate)
-  const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
+  const monthName = currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
 
   const getAppointmentsForCell = (date, hour) => {
     return appointments.filter(apt => {
@@ -118,7 +121,7 @@ const CalendarTab = () => {
 
   const formatTime = (dateString) => {
     const date = new Date(dateString)
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: false })
+    return date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit', hour12: false })
   }
 
   const getCellStatus = (date, hour) => {
@@ -179,16 +182,16 @@ const CalendarTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>Calendar</h2>
+        <h2>{t('calendar.title')}</h2>
         <div className="calendar-controls">
-          <button className="btn-secondary" onClick={() => navigateWeek(-1)}>← Previous</button>
+          <button className="btn-secondary" onClick={() => navigateWeek(-1)}>{t('calendar.previous')}</button>
           <span className="calendar-month">{monthName}</span>
-          <button className="btn-secondary" onClick={() => navigateWeek(1)}>Next →</button>
+          <button className="btn-secondary" onClick={() => navigateWeek(1)}>{t('calendar.next')}</button>
         </div>
       </div>
 
       <div className="tab-content-wrapper">
-        {loading && <div className="loading-message">Loading calendar...</div>}
+        {loading && <div className="loading-message">{t('calendar.loadingCalendar')}</div>}
         <div className="calendar-view">
           <div className="calendar-grid">
             <div className="calendar-header">
@@ -213,11 +216,11 @@ const CalendarTab = () => {
                       <div 
                         key={`${dayIdx}-${hour}`} 
                         className={`calendar-cell calendar-cell-${cellStatus}`}
-                        title={cellStatus === 'unavailable' ? 'Not available' : cellStatus === 'busy' ? 'Busy' : 'Available'}
+                        title={cellStatus === 'unavailable' ? t('calendar.notAvailable') : cellStatus === 'busy' ? t('calendar.busy') : t('calendar.available')}
                       >
                         {cellAppointments.map((apt) => {
                           // Format the reason display (remove "Unknown -" prefix if present)
-                          let displayReason = apt.reason || 'Visit'
+                          let displayReason = apt.reason || t('visits.visit')
                           if (displayReason.startsWith('Unknown - ')) {
                             displayReason = displayReason.replace('Unknown - ', '')
                           }

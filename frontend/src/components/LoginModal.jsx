@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { authAPI } from '../services/api'
 import './modals/Modal.css'
 
 const LoginModal = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useTranslation()
   const [formData, setFormData] = useState({
     username: 'drsmith',
     password: 'password123',
@@ -30,7 +32,7 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
       onSuccess()
       onClose()
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.')
+      setError(err.response?.data?.detail || t('login.loginFailed'))
       console.error('Error logging in:', err)
     } finally {
       setLoading(false)
@@ -43,7 +45,7 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Login Required</h2>
+          <h2>{t('login.title')}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -51,7 +53,7 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
-            <label htmlFor="username">Username *</label>
+            <label htmlFor="username">{t('login.username')}</label>
             <input
               type="text"
               id="username"
@@ -63,7 +65,7 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Password *</label>
+            <label htmlFor="password">{t('login.password')}</label>
             <input
               type="password"
               id="password"
@@ -75,17 +77,17 @@ const LoginModal = ({ isOpen, onClose, onSuccess }) => {
           </div>
 
           <div className="help-text" style={{ marginBottom: '1rem' }}>
-            <strong>Default credentials:</strong><br />
+            <strong>{t('login.defaultCredentials')}</strong><br />
             Username: drsmith<br />
             Password: password123
           </div>
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? t('login.loggingIn') : t('login.login')}
             </button>
           </div>
         </form>

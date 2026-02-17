@@ -1,15 +1,27 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import "./Tabs.css";
 
 const AIAssistantTab = () => {
+  const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState([
     {
       id: 1,
       type: "assistant",
-      content:
-        "Hello! I'm your AI assistant. How can I help you today? I can assist with diagnosis suggestions, treatment recommendations, drug interactions, and general veterinary questions.",
+      content: t("aiAssistant.greeting"),
     },
   ]);
+
+  // Update greeting when language changes
+  useEffect(() => {
+    setMessages((prev) =>
+      prev.map((m, i) =>
+        i === 0 && m.type === "assistant"
+          ? { ...m, content: t("aiAssistant.greeting") }
+          : m
+      )
+    );
+  }, [i18n.language]);
   const [inputValue, setInputValue] = useState("");
 
   const handleSend = () => {
@@ -46,9 +58,9 @@ const AIAssistantTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>AI Assistant</h2>
+        <h2>{t("aiAssistant.title")}</h2>
         <div className="ai-info">
-          <span className="ai-status">🟢 Online</span>
+          <span className="ai-status">{t("aiAssistant.online")}</span>
         </div>
       </div>
 
@@ -73,25 +85,25 @@ const AIAssistantTab = () => {
           <div className="chat-input-container">
             <textarea
               className="chat-input"
-              placeholder="Ask me anything about veterinary care, diagnoses, treatments..."
+              placeholder={t("aiAssistant.placeholder")}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
               rows={3}
             />
             <button className="btn-primary send-button" onClick={handleSend}>
-              Send
+              {t("aiAssistant.send")}
             </button>
           </div>
         </div>
 
         <div className="ai-suggestions">
-          <h3>Quick Suggestions</h3>
+          <h3>{t("aiAssistant.quickSuggestions")}</h3>
           <div className="suggestion-chips">
-            <button className="suggestion-chip">Diagnosis help</button>
-            <button className="suggestion-chip">Drug interactions</button>
-            <button className="suggestion-chip">Treatment options</button>
-            <button className="suggestion-chip">Dosage calculator</button>
+            <button className="suggestion-chip">{t("aiAssistant.diagnosisHelp")}</button>
+            <button className="suggestion-chip">{t("aiAssistant.drugInteractions")}</button>
+            <button className="suggestion-chip">{t("aiAssistant.treatmentOptions")}</button>
+            <button className="suggestion-chip">{t("aiAssistant.dosageCalculator")}</button>
           </div>
         </div>
       </div>

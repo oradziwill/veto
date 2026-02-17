@@ -1,8 +1,10 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { clientsAPI, authAPI } from "../../services/api";
 import "./Modal.css";
 
 const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -61,9 +63,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     // Ensure authentication before making the API call
     const isAuthenticated = await ensureAuthenticated();
     if (!isAuthenticated) {
-      setError(
-        "Unable to authenticate. Please check your connection and try again."
-      );
+        setError(t("addClient.authError"));
       setLoading(false);
       return;
     }
@@ -113,12 +113,11 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
           return;
         } catch (authErr) {
           console.error("Auto-login retry failed:", authErr);
-          setError("Authentication failed. Please refresh the page.");
+          setError(t("addClient.authError"));
         }
       } else {
         setError(
-          err.response?.data?.detail ||
-            "Failed to create client. Please try again."
+          err.response?.data?.detail || t("addClient.createError")
         );
       }
       console.error("Error creating client:", err);
@@ -133,7 +132,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Add New Client</h2>
+          <h2>{t("addClient.title")}</h2>
           <button className="modal-close" onClick={onClose}>
             ×
           </button>
@@ -144,7 +143,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="first_name">First Name *</label>
+              <label htmlFor="first_name">{t("addClient.firstName")}</label>
               <input
                 type="text"
                 id="first_name"
@@ -156,7 +155,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="last_name">Last Name *</label>
+              <label htmlFor="last_name">{t("addClient.lastName")}</label>
               <input
                 type="text"
                 id="last_name"
@@ -170,7 +169,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="phone">Phone</label>
+              <label htmlFor="phone">{t("addClient.phone")}</label>
               <input
                 type="tel"
                 id="phone"
@@ -181,7 +180,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">{t("addClient.email")}</label>
               <input
                 type="email"
                 id="email"
@@ -207,12 +206,12 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
                 color: "#2d3748",
               }}
             >
-              Address Information
+              {t("addClient.addressInfo")}
             </h3>
 
             <div className="form-row">
               <div className="form-group" style={{ flex: 2 }}>
-                <label htmlFor="street">Street</label>
+                <label htmlFor="street">{t("addClient.street")}</label>
                 <input
                   type="text"
                   id="street"
@@ -223,7 +222,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group" style={{ flex: 1 }}>
-                <label htmlFor="house_number">House Number</label>
+                <label htmlFor="house_number">{t("addClient.houseNumber")}</label>
                 <input
                   type="text"
                   id="house_number"
@@ -234,7 +233,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group" style={{ flex: 1 }}>
-                <label htmlFor="apartment">Apartment</label>
+                <label htmlFor="apartment">{t("addClient.apartment")}</label>
                 <input
                   type="text"
                   id="apartment"
@@ -247,7 +246,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="city">City</label>
+                <label htmlFor="city">{t("addClient.city")}</label>
                 <input
                   type="text"
                   id="city"
@@ -258,7 +257,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group">
-                <label htmlFor="postal_code">Postal Code</label>
+                <label htmlFor="postal_code">{t("addClient.postalCode")}</label>
                 <input
                   type="text"
                   id="postal_code"
@@ -269,7 +268,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group">
-                <label htmlFor="country">Country</label>
+                <label htmlFor="country">{t("addClient.country")}</label>
                 <input
                   type="text"
                   id="country"
@@ -285,10 +284,10 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? "Creating..." : "Create Client"}
+              {loading ? t("addClient.creating") : t("addClient.createClient")}
             </button>
           </div>
         </form>
