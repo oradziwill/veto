@@ -28,7 +28,10 @@ class PatientHistoryForPatientSerializer(serializers.ModelSerializer):
 
     def get_created_by_name(self, obj):
         if obj.created_by:
-            return f"{obj.created_by.first_name or ''} {obj.created_by.last_name or ''}".strip() or obj.created_by.username
+            return (
+                f"{obj.created_by.first_name or ''} {obj.created_by.last_name or ''}".strip()
+                or obj.created_by.username
+            )
         return None
 
     def get_appointment(self, obj):
