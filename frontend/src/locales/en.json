@@ -289,9 +289,19 @@
     "analyzingHistory": "Analyzing patient history and records",
     "aiSummaryError": "Unable to generate AI summary",
     "ownerInfo": "Owner Information",
+    "ownerName": "Name",
+    "email": "Email",
+    "phone": "Phone",
     "visitHistory": "Visit History",
-    "noVisitHistory": "No visit history",
-    "loadHistoryError": "Failed to load visit history."
+    "loadingVisitHistory": "Loading visit history...",
+    "noVisitHistory": "No visit history for this patient.",
+    "loadHistoryError": "Failed to load visit history.",
+    "visitDate": "Visit Date",
+    "recordedBy": "Recorded by",
+    "appointment": "Appointment",
+    "notesLabel": "Notes",
+    "receiptSummary": "Receipt Summary",
+    "close": "Close"
   },
   "visitDetails": {
     "title": "Visit Details",
