@@ -134,9 +134,11 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
       months += 12
     }
     if (years > 0) {
-      return `${years} year${years !== 1 ? 's' : ''}${months > 0 ? `, ${months} month${months !== 1 ? 's' : ''}` : ''}`
+      const y = years === 1 ? t('patients.year') : t('patients.years')
+      const m = months > 0 ? (months === 1 ? t('patients.month') : t('patients.months')) : ''
+      return months > 0 ? `${years} ${y}, ${months} ${m}` : `${years} ${y}`
     }
-    return `${months} month${months !== 1 ? 's' : ''}`
+    return months === 1 ? t('patients.month') : `${months} ${t('patients.months')}`
   }
 
   if (!isOpen || !patient) return null
@@ -158,31 +160,31 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Name
+                  {t('patientDetails.name')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.name || 'N/A'}</div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Species
+                  {t('patientDetails.species')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.species || 'N/A'}</div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Breed
+                  {t('patientDetails.breed')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.breed || 'N/A'}</div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Sex
+                  {t('patientDetails.sex')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.sex || 'N/A'}</div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Birth Date
+                  {t('patientDetails.birthDate')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>
                   {patient.birth_date ? formatDateOnly(patient.birth_date) : 'N/A'}
@@ -190,14 +192,14 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Age
+                  {t('patientDetails.age')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{calculateAge(patient.birth_date)}</div>
               </div>
               {patient.microchip_no && (
                 <div>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                    Microchip Number
+                    {t('patientDetails.microchipNumber')}
                   </label>
                   <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.microchip_no}</div>
                 </div>
@@ -206,7 +208,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
             {patient.allergies && (
               <div style={{ marginTop: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Allergies
+                  {t('patientDetails.allergies')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', padding: '0.75rem', backgroundColor: '#fff5f5', borderRadius: '6px', border: '1px solid #fed7d7' }}>
                   {patient.allergies}
@@ -216,7 +218,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
             {patient.notes && (
               <div style={{ marginTop: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                  Notes
+                  {t('patientDetails.notes')}
                 </label>
                 <div style={{ fontSize: '1rem', color: '#2d3748', padding: '0.75rem', backgroundColor: '#f7fafc', borderRadius: '6px', border: '1px solid #e2e8f0', whiteSpace: 'pre-wrap' }}>
                   {patient.notes}
@@ -252,7 +254,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                       setAiSummaryCached(response.data.cached || false)
                       hasFetchedAISummaryRef.current = true
                     } catch (err) {
-                      setAiSummaryError(err.response?.data?.error || 'Failed to generate AI summary.')
+                      setAiSummaryError(err.response?.data?.error || t('patientDetails.aiSummaryError'))
                       hasFetchedAISummaryRef.current = false
                     } finally {
                       setLoadingAISummary(false)
@@ -297,12 +299,12 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
           {patient.owner && (
             <div style={{ marginBottom: '2rem', paddingTop: '1.5rem', borderTop: '2px solid #e2e8f0' }}>
               <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600', color: '#2d3748' }}>
-                Owner Information
+                {t('patientDetails.ownerInfo')}
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                    Name
+                    {t('patientDetails.ownerName')}
                   </label>
                   <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>
                     {patient.owner.first_name} {patient.owner.last_name}
@@ -311,7 +313,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 {patient.owner.email && (
                   <div>
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                      Email
+                      {t('patientDetails.email')}
                     </label>
                     <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.owner.email}</div>
                   </div>
@@ -319,7 +321,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 {patient.owner.phone && (
                   <div>
                     <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                      Phone
+                      {t('patientDetails.phone')}
                     </label>
                     <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.owner.phone}</div>
                   </div>
@@ -331,11 +333,11 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
           {/* Visit History Section */}
           <div style={{ paddingTop: '1.5rem', borderTop: '2px solid #e2e8f0' }}>
             <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem', fontWeight: '600', color: '#2d3748' }}>
-              Visit History
+              {t('patientDetails.visitHistory')}
             </h3>
 
             {loadingHistory && (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#718096' }}>Loading visit history...</div>
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#718096' }}>{t('patientDetails.loadingVisitHistory')}</div>
             )}
 
             {error && (
@@ -346,7 +348,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
 
             {!loadingHistory && !error && history.length === 0 && (
               <div style={{ padding: '2rem', textAlign: 'center', color: '#718096', backgroundColor: '#f7fafc', borderRadius: '6px' }}>
-                No visit history available for this patient.
+                {t('patientDetails.noVisitHistory')}
               </div>
             )}
 
@@ -365,24 +367,24 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
                       <div>
                         <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#2d3748', marginBottom: '0.25rem' }}>
-                          Visit Date: {formatDate(entry.visit_date || entry.created_at)}
+                          {t('patientDetails.visitDate')}: {formatDate(entry.visit_date || entry.created_at)}
                         </div>
                         {entry.created_by_name && (
                           <div style={{ fontSize: '0.8125rem', color: '#718096' }}>
-                            Recorded by: {entry.created_by_name}
+                            {t('patientDetails.recordedBy')}: {entry.created_by_name}
                           </div>
                         )}
                       </div>
                       {entry.appointment && (
                         <div style={{ fontSize: '0.8125rem', color: '#718096', padding: '0.25rem 0.75rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #cbd5e0' }}>
-                          Appointment #{entry.appointment}
+                          {t('patientDetails.appointment')} #{entry.appointment}
                         </div>
                       )}
                     </div>
                     {entry.note && (
                       <div style={{ marginBottom: '0.75rem' }}>
                         <div style={{ fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.5rem' }}>
-                          Notes:
+                          {t('patientDetails.notesLabel')}:
                         </div>
                         <div
                           style={{
@@ -402,7 +404,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                     {entry.receipt_summary && (
                       <div>
                         <div style={{ fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
-                          Receipt Summary:
+                          {t('patientDetails.receiptSummary')}:
                         </div>
                         <div style={{ fontSize: '0.9375rem', color: '#2d3748', fontWeight: '500' }}>
                           {entry.receipt_summary}
@@ -418,7 +420,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
 
         <div className="modal-actions" style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e2e8f0' }}>
           <button type="button" className="btn-primary" onClick={onClose}>
-            Close
+            {t('patientDetails.close')}
           </button>
         </div>
       </div>

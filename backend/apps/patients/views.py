@@ -12,12 +12,12 @@ from rest_framework.response import Response
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin
 from apps.clients.models import ClientClinic
 from apps.medical.models import MedicalRecord, PatientHistoryEntry
-from apps.medical.serializers import (
-    PatientHistoryEntryReadSerializer,
-    PatientHistoryEntryWriteSerializer,
-)
 from apps.patients.models import Patient
-from apps.patients.serializers import PatientReadSerializer, PatientWriteSerializer
+from apps.patients.serializers import (
+    PatientHistoryForPatientSerializer,
+    PatientReadSerializer,
+    PatientWriteSerializer,
+)
 from apps.scheduling.models import Appointment
 
 
@@ -111,36 +111,32 @@ class PatientViewSet(viewsets.ModelViewSet):
             qs = (
                 PatientHistoryEntry.objects.filter(
                     clinic_id=user.clinic_id,
-                    patient_id=patient.id,
+                    record__patient_id=patient.id,
                 )
-                .select_related("appointment", "created_by")
+                .select_related("record", "created_by")
                 .order_by("-created_at")
             )
-            return Response(PatientHistoryEntryReadSerializer(qs, many=True).data)
+            return Response(PatientHistoryForPatientSerializer(qs, many=True).data)
 
         # POST requires doctor or clinic admin
         if not IsDoctorOrAdmin().has_permission(request, self):
             raise PermissionDenied("Only doctors and clinic admins can add history notes.")
 
-        serializer = PatientHistoryEntryWriteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        note = request.data.get("note", "")
+        if not note:
+            raise ValidationError({"note": "Note is required."})
 
-        appointment = serializer.validated_data.get("appointment")
-
-        if appointment is not None:
-            # Enforce tenant + patient match
-            # (This prevents your earlier: "appointment from another clinic")
-            if appointment.clinic_id != user.clinic_id:
-                raise PermissionDenied("You cannot attach an appointment from another clinic.")
-            if appointment.patient_id != patient.id:
-                raise PermissionDenied("You cannot attach an appointment for a different patient.")
+        # PatientHistoryEntry uses record (MedicalRecord), not patient_id. Get or create MedicalRecord.
+        record, _ = MedicalRecord.objects.get_or_create(
+            clinic_id=user.clinic_id,
+            patient_id=patient.id,
+            defaults={"created_by": user},
+        )
 
         entry = PatientHistoryEntry.objects.create(
             clinic_id=user.clinic_id,
-            patient_id=patient.id,
-            appointment=appointment,
-            note=serializer.validated_data["note"],
-            receipt_summary=serializer.validated_data.get("receipt_summary", ""),
+            record=record,
+            note=note,
             created_by=user,
         )
 
@@ -149,7 +145,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         patient.ai_summary_updated_at = None
         patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
 
-        return Response(PatientHistoryEntryReadSerializer(entry).data, status=201)
+        return Response(PatientHistoryForPatientSerializer(entry).data, status=201)
 
     @action(detail=True, methods=["get"], url_path="ai-summary")
     def ai_summary(self, request, pk=None):
@@ -182,7 +178,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             # Check if there are any history entries created after the summary was updated
             has_new_history = PatientHistoryEntry.objects.filter(
                 clinic_id=user.clinic_id,
-                patient_id=patient.id,
+                record__patient_id=patient.id,
                 created_at__gt=patient.ai_summary_updated_at,
             ).exists()
 
@@ -201,9 +197,9 @@ class PatientViewSet(viewsets.ModelViewSet):
         history_entries = (
             PatientHistoryEntry.objects.filter(
                 clinic_id=user.clinic_id,
-                patient_id=patient.id,
+                record__patient_id=patient.id,
             )
-            .select_related("appointment", "created_by")
+            .select_related("record", "created_by")
             .order_by("-created_at")
         )
 
@@ -212,10 +208,8 @@ class PatientViewSet(viewsets.ModelViewSet):
             history_item = {
                 "date": str(entry.created_at.date()),
                 "note": entry.note,
-                "receipt_summary": entry.receipt_summary or "",
+                "receipt_summary": "",
             }
-            if entry.appointment:
-                history_item["appointment_reason"] = entry.appointment.reason or ""
             history_data.append(history_item)
 
         # Collect appointments
@@ -235,12 +229,13 @@ class PatientViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        # Collect medical records (SOAP notes)
+        # Collect medical records (SOAP notes) - MedicalRecord has patient, not appointment
         medical_records = (
             MedicalRecord.objects.filter(
-                appointment__patient_id=patient.id, appointment__clinic_id=user.clinic_id
+                clinic_id=user.clinic_id,
+                patient_id=patient.id,
             )
-            .select_related("appointment", "created_by")
+            .select_related("created_by")
             .order_by("-created_at")
         )
 
@@ -249,12 +244,12 @@ class PatientViewSet(viewsets.ModelViewSet):
             medical_records_data.append(
                 {
                     "date": str(record.created_at.date()),
-                    "subjective": record.subjective or "",
-                    "objective": record.objective or "",
-                    "assessment": record.assessment or "",
-                    "plan": record.plan or "",
-                    "weight_kg": float(record.weight_kg) if record.weight_kg else None,
-                    "temperature_c": float(record.temperature_c) if record.temperature_c else None,
+                    "subjective": "",
+                    "objective": "",
+                    "assessment": record.ai_summary or "",
+                    "plan": "",
+                    "weight_kg": None,
+                    "temperature_c": None,
                 }
             )
 

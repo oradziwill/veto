@@ -289,9 +289,19 @@
     "analyzingHistory": "Analiza historii i dokumentacji pacjenta",
     "aiSummaryError": "Nie udało się wygenerować podsumowania AI",
     "ownerInfo": "Dane właściciela",
+    "ownerName": "Imię",
+    "email": "E-mail",
+    "phone": "Telefon",
     "visitHistory": "Historia wizyt",
-    "noVisitHistory": "Brak historii wizyt",
-    "loadHistoryError": "Nie udało się załadować historii wizyt."
+    "loadingVisitHistory": "Ładowanie historii wizyt...",
+    "noVisitHistory": "Brak historii wizyt dla tego pacjenta.",
+    "loadHistoryError": "Nie udało się załadować historii wizyt.",
+    "visitDate": "Data wizyty",
+    "recordedBy": "Zapisano przez",
+    "appointment": "Wizyta",
+    "notesLabel": "Notatki",
+    "receiptSummary": "Podsumowanie paragonu",
+    "close": "Zamknij"
   },
   "visitDetails": {
     "title": "Szczegóły wizyty",
