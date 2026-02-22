@@ -7,6 +7,7 @@ import {
   vetsAPI,
   clientsAPI,
   availabilityAPI,
+  roomsAPI,
 } from "../../services/api";
 import AddClientModal from "./AddClientModal";
 import "./Modal.css";
@@ -43,6 +44,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     patient: "",
     vet: "",
+    room: "",
     starts_at: "",
     ends_at: "",
     reason: "",
@@ -56,6 +58,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
   const [patients, setPatients] = useState([]);
   const [loadingPatients, setLoadingPatients] = useState(false);
   const [vets, setVets] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchingClients, setSearchingClients] = useState(false);
@@ -71,6 +74,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
     setFormData({
       patient: "",
       vet: "",
+      room: "",
       starts_at: "",
       ends_at: "",
       reason: "",
@@ -85,11 +89,13 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 
     const loadData = async () => {
       try {
-        const [vetsRes, userRes] = await Promise.all([
+        const [vetsRes, userRes, roomsRes] = await Promise.all([
           vetsAPI.list(),
           authAPI.me(),
+          roomsAPI.list(),
         ]);
         setVets(vetsRes.data.results || vetsRes.data);
+        setRooms(roomsRes.data.results || roomsRes.data || []);
         const user = userRes.data;
         setCurrentUser(user);
         if (user.id) {
@@ -103,8 +109,14 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
     loadData();
 
     const now = new Date();
-    const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
-    nextHour.setMinutes(0, 0, 0);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const nextHour = new Date(today);
+    nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+    // Jeśli następna pełna godzina wypada jutro (np. 23:45), ustaw dziś 8:00
+    if (nextHour.getDate() !== today.getDate()) {
+      nextHour.setTime(today.getTime());
+      nextHour.setHours(8, 0, 0, 0);
+    }
     const startTime = formatDateTimeLocal(nextHour);
     setFormData((prev) => ({
       ...prev,
@@ -350,8 +362,9 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
         ends_at: new Date(formData.ends_at).toISOString(),
         patient: parseInt(formData.patient),
         vet: parseInt(formData.vet) || currentUser?.id || null,
+        room: formData.room ? parseInt(formData.room, 10) : null,
       };
-      
+
       // Remove reasonCustom from data (it's not part of the API)
       delete appointmentData.reasonCustom;
       
@@ -551,6 +564,23 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                   {vet.first_name && vet.last_name
                     ? `${vet.first_name} ${vet.last_name}`
                     : vet.username}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="room">{t("addAppointment.room")}</label>
+            <select
+              id="room"
+              name="room"
+              value={formData.room}
+              onChange={handleChange}
+            >
+              <option value="">{t("addAppointment.noRoom")}</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {t('rooms.' + room.name, { defaultValue: room.name })}
                 </option>
               ))}
             </select>

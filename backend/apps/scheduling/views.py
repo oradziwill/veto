@@ -14,12 +14,13 @@ from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.medical.models import ClinicalExam
 from apps.medical.serializers import ClinicalExamReadSerializer, ClinicalExamWriteSerializer
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment, HospitalStay
+from apps.scheduling.models import Appointment, HospitalStay, Room
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
     AppointmentWriteSerializer,
     HospitalStayReadSerializer,
     HospitalStayWriteSerializer,
+    RoomSerializer,
 )
 from apps.scheduling.services.availability import compute_availability
 
@@ -37,7 +38,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         qs = (
             Appointment.objects.filter(clinic_id=user.clinic_id)
-            .select_related("clinic", "patient", "vet")
+            .select_related("clinic", "patient", "vet", "room")
             .order_by("starts_at")
         )
 
@@ -227,6 +228,18 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         return Response(HospitalStayReadSerializer(stay).data)
 
 
+class RoomViewSet(viewsets.ReadOnlyModelViewSet):
+    """List rooms for the user's clinic (for dropdowns and calendar). Manage rooms in Django admin."""
+
+    permission_classes = [IsAuthenticated, HasClinic]
+    serializer_class = RoomSerializer
+
+    def get_queryset(self):
+        return Room.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
+            "display_order", "name"
+        )
+
+
 class AvailabilityView(APIView):
     """
     Read-only endpoint returning available time slots for a given date.
@@ -261,6 +274,9 @@ class AvailabilityView(APIView):
         vet = request.query_params.get("vet")
         vet_id = int(vet) if vet else None
 
+        room = request.query_params.get("room")
+        room_id = int(room) if room else None
+
         slot = request.query_params.get("slot")
         slot_minutes = int(slot) if slot else None
 
@@ -269,6 +285,7 @@ class AvailabilityView(APIView):
             clinic_id=user.clinic_id,
             date_str=date_str,
             vet_id=vet_id,
+            room_id=room_id,
             slot_minutes=slot_minutes,
         )
 
@@ -286,6 +303,7 @@ class AvailabilityView(APIView):
                 "timezone": data["timezone"],
                 "clinic_id": user.clinic_id,
                 "vet_id": vet_id,
+                "room_id": room_id,
                 "slot_minutes": data["slot_minutes"],
                 "closed_reason": data.get("closed_reason"),
                 "workday": dump_interval(work_bounds) if work_bounds else None,
@@ -294,3 +312,62 @@ class AvailabilityView(APIView):
                 "free": [dump_interval(i) for i in data["free_slots"]],
             }
         )
+
+
+class AvailabilityRoomsView(APIView):
+    """
+    GET /availability/rooms/?date=YYYY-MM-DD
+    Returns availability per room for the given date (for calendar room view).
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic]
+
+    def get(self, request):
+        user = request.user
+        date_str = request.query_params.get("date")
+        if not date_str:
+            return Response(
+                {"detail": "Missing required query param: date=YYYY-MM-DD"},
+                status=400,
+            )
+        try:
+            parse_date(date_str)
+        except ValueError:
+            return Response(
+                {"detail": "Invalid date. Use YYYY-MM-DD."},
+                status=400,
+            )
+
+        rooms = Room.objects.filter(clinic_id=user.clinic_id).order_by(
+            "display_order", "name"
+        )
+        slot_minutes = 30
+        result = []
+
+        def dump_interval(interval):
+            return {"start": interval.start.isoformat(), "end": interval.end.isoformat()}
+
+        for room in rooms:
+            data = compute_availability(
+                clinic_id=user.clinic_id,
+                date_str=date_str,
+                vet_id=None,
+                room_id=room.id,
+                slot_minutes=slot_minutes,
+            )
+            result.append(
+                {
+                    "id": room.id,
+                    "name": room.name,
+                    "busy": [dump_interval(i) for i in data["busy_merged"]],
+                    "free": [dump_interval(i) for i in data["free_slots"]],
+                    "workday": (
+                        dump_interval(data["work_bounds"])
+                        if data.get("work_bounds")
+                        else None
+                    ),
+                    "closed_reason": data.get("closed_reason"),
+                }
+            )
+
+        return Response({"date": date_str, "rooms": result})

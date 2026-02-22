@@ -60,8 +60,18 @@
     "checked_in": "Zgłoszona",
     "confirmed": "Potwierdzona"
   },
+  "rooms": {
+    "Room 1": "Sala 1",
+    "Room 2": "Sala 2",
+    "RTG room": "Sala RTG",
+    "Surgery": "Blok operacyjny"
+  },
   "calendar": {
     "title": "Kalendarz",
+    "viewWeek": "Tydzień",
+    "viewRoom": "Według sal",
+    "room": "Sala",
+    "appointments": "wizyt",
     "previous": "← Wstecz",
     "next": "Dalej →",
     "loadingCalendar": "Ładowanie kalendarza...",
@@ -219,6 +229,8 @@
     "selectOwner": "Wybierz właściciela",
     "selectPatient": "Wybierz pacjenta",
     "selectVet": "Wybierz lekarza",
+    "room": "Sala",
+    "noRoom": "Bez sali",
     "ownerSearchPlaceholder": "Szukaj właściciela po imieniu, telefonie lub e-mailu...",
     "noOwnersFound": "Nie znaleziono właścicieli. Utwórz nowego poniżej.",
     "createNewOwner": "+ Utwórz nowego właściciela",
@@ -310,6 +322,7 @@
     "patient": "Pacjent",
     "owner": "Właściciel",
     "vet": "Lekarz weterynarii",
+    "room": "Sala",
     "status": "Status",
     "internalNotes": "Uwagi wewnętrzne"
   }

@@ -16,7 +16,7 @@ from apps.clients.models import Client, ClientClinic
 from apps.inventory.models import InventoryItem
 from apps.labs.models import Lab, LabTest
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment
+from apps.scheduling.models import Appointment, Room
 from apps.tenancy.models import Clinic
 
 
@@ -39,6 +39,26 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"✓ Created clinic: {clinic.name}"))
         else:
             self.stdout.write(f"→ Clinic already exists: {clinic.name}")
+
+        # Create example rooms
+        example_rooms = [
+            ("Room 1", 0),
+            ("Room 2", 1),
+            ("RTG room", 2),
+            ("Surgery", 3),
+        ]
+        for name, order in example_rooms:
+            room, created = Room.objects.get_or_create(
+                clinic=clinic,
+                name=name,
+                defaults={"display_order": order},
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"✓ Created room: {room.name}"))
+            else:
+                room.display_order = order
+                room.save(update_fields=["display_order"])
+        self.stdout.write(f"→ Rooms ready: {', '.join(r[0] for r in example_rooms)}")
 
         # Create Doctor
         vet, created = User.objects.get_or_create(

@@ -60,8 +60,18 @@
     "checked_in": "Checked In",
     "confirmed": "Confirmed"
   },
+  "rooms": {
+    "Room 1": "Room 1",
+    "Room 2": "Room 2",
+    "RTG room": "RTG room",
+    "Surgery": "Surgery"
+  },
   "calendar": {
     "title": "Calendar",
+    "viewWeek": "Week",
+    "viewRoom": "By room",
+    "room": "Room",
+    "appointments": "appointments",
     "previous": "← Previous",
     "next": "Next →",
     "loadingCalendar": "Loading calendar...",
@@ -219,6 +229,8 @@
     "selectOwner": "Select owner",
     "selectPatient": "Select Patient",
     "selectVet": "Select Veterinarian",
+    "room": "Room",
+    "noRoom": "No room",
     "ownerSearchPlaceholder": "Search for owner by name, phone, or email...",
     "noOwnersFound": "No owners found. Create a new one below.",
     "createNewOwner": "+ Create New Owner",
@@ -310,6 +322,7 @@
     "patient": "Patient",
     "owner": "Owner",
     "vet": "Veterinarian",
+    "room": "Room",
     "status": "Status",
     "internalNotes": "Internal notes"
   }

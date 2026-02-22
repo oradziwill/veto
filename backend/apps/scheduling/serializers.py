@@ -2,12 +2,19 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.patients.serializers import PatientReadSerializer, VetMiniSerializer
-from apps.scheduling.models import Appointment, HospitalStay
+from apps.scheduling.models import Appointment, HospitalStay, Room
+
+
+class RoomSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Room
+        fields = ["id", "name", "display_order"]
 
 
 class AppointmentReadSerializer(serializers.ModelSerializer):
     patient = PatientReadSerializer(read_only=True)
     vet = VetMiniSerializer(read_only=True)
+    room = RoomSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Appointment
@@ -21,6 +28,7 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
             "id",
             "patient",
             "vet",
+            "room",
             "visit_type",
             "starts_at",
             "ends_at",

@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { appointmentsAPI, availabilityAPI } from '../../services/api'
+import { appointmentsAPI, availabilityAPI, roomsAPI } from '../../services/api'
 import VisitDetailsModal from '../modals/VisitDetailsModal'
 import './Tabs.css'
 
 const CalendarTab = () => {
   const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState([])
+  const [rooms, setRooms] = useState([])
+  const [viewMode, setViewMode] = useState('week') // 'week' | 'room'
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [availabilityByDay, setAvailabilityByDay] = useState({}) // { 'YYYY-MM-DD': { free: [], busy: [] } }
+  const [availabilityByRoomByDay, setAvailabilityByRoomByDay] = useState({}) // { 'YYYY-MM-DD': { rooms: [...] } }
 
   const days = [t('calendar.sun'), t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), t('calendar.thu'), t('calendar.fri'), t('calendar.sat')]
   const hours = Array.from({ length: 12 }, (_, i) => i + 8) // 8 AM to 7 PM
@@ -67,9 +70,8 @@ const CalendarTab = () => {
       const weekDates = getWeekDates(currentDate)
       const availabilityMap = {}
       
-      // Fetch availability for each day in the week (without vet to get clinic-level availability)
       const promises = weekDates.map(async (date) => {
-        const dateStr = date.toISOString().split('T')[0] // YYYY-MM-DD format
+        const dateStr = date.toISOString().split('T')[0]
         try {
           const response = await availabilityAPI.get({ date: dateStr, slot_minutes: 30 })
           availabilityMap[dateStr] = response.data
@@ -83,13 +85,50 @@ const CalendarTab = () => {
       setAvailabilityByDay(availabilityMap)
     }
 
+    const fetchRoomsAndRoomAvailability = async () => {
+      try {
+        const roomsRes = await roomsAPI.list()
+        setRooms(roomsRes.data.results || roomsRes.data || [])
+      } catch (err) {
+        console.error('Error fetching rooms:', err)
+        setRooms([])
+      }
+      const weekDates = getWeekDates(currentDate)
+      const roomAvailabilityMap = {}
+      await Promise.all(weekDates.map(async (date) => {
+        const dateStr = date.toISOString().split('T')[0]
+        try {
+          const response = await availabilityAPI.rooms({ date: dateStr })
+          roomAvailabilityMap[dateStr] = response.data
+        } catch (err) {
+          console.error(`Error fetching room availability for ${dateStr}:`, err)
+          roomAvailabilityMap[dateStr] = { rooms: [] }
+        }
+      }))
+      setAvailabilityByRoomByDay(roomAvailabilityMap)
+    }
+
     fetchAppointments()
     fetchAvailabilityForWeek()
+    fetchRoomsAndRoomAvailability()
   }, [currentDate])
 
   const weekDates = getWeekDates(currentDate)
   const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
   const monthName = currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
+
+  const getAppointmentsForRoomAndDay = (roomId, date) => {
+    return appointments.filter((apt) => {
+      const aptDate = new Date(apt.starts_at)
+      const sameDay =
+        aptDate.getDate() === date.getDate() &&
+        aptDate.getMonth() === date.getMonth() &&
+        aptDate.getFullYear() === date.getFullYear()
+      if (!sameDay) return false
+      const aptRoomId = apt.room?.id ?? null
+      return aptRoomId === roomId
+    })
+  }
 
   const getAppointmentsForCell = (date, hour) => {
     return appointments.filter(apt => {
@@ -186,7 +225,25 @@ const CalendarTab = () => {
     <div className="tab-container">
       <div className="tab-header">
         <h2>{t('calendar.title')}</h2>
-        <div className="calendar-controls">
+        <div className="calendar-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.25rem' }}>
+            <button
+              type="button"
+              className={viewMode === 'week' ? 'btn-primary' : 'btn-secondary'}
+              onClick={() => setViewMode('week')}
+              style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem' }}
+            >
+              {t('calendar.viewWeek')}
+            </button>
+            <button
+              type="button"
+              className={viewMode === 'room' ? 'btn-primary' : 'btn-secondary'}
+              onClick={() => setViewMode('room')}
+              style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem' }}
+            >
+              {t('calendar.viewRoom')}
+            </button>
+          </div>
           <button className="btn-secondary" onClick={() => navigateWeek(-1)}>{t('calendar.previous')}</button>
           <span className="calendar-month">{monthName}</span>
           <button className="btn-secondary" onClick={() => navigateWeek(1)}>{t('calendar.next')}</button>
@@ -195,72 +252,145 @@ const CalendarTab = () => {
 
       <div className="tab-content-wrapper">
         {loading && <div className="loading-message">{t('calendar.loadingCalendar')}</div>}
-        <div className="calendar-view">
-          <div className="calendar-grid">
-            <div className="calendar-header">
-              <div className="time-column"></div>
+        {viewMode === 'room' ? (
+          <div className="calendar-view">
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '120px repeat(7, 1fr)',
+                gap: '1px',
+                backgroundColor: '#e2e8f0',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                overflow: 'hidden',
+              }}
+            >
+              <div style={{ padding: '0.5rem', background: '#edf2f7', fontWeight: 600 }}>{t('calendar.room')}</div>
               {weekDates.map((date, idx) => (
-                <div key={idx} className="day-header">
-                  <div className="day-name">{days[date.getDay()]}</div>
-                  <div className="day-number">{date.getDate()}</div>
+                <div key={idx} style={{ padding: '0.5rem', background: '#edf2f7', fontWeight: 600, textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.75rem' }}>{days[date.getDay()]}</div>
+                  <div>{date.getDate()}</div>
                 </div>
               ))}
-            </div>
-
-            <div className="calendar-body">
-              {hours.map((hour) => (
-                <div key={hour} className="calendar-row">
-                  <div className="time-slot">{hour}:00</div>
+              {rooms.map((room) => (
+                <React.Fragment key={room.id}>
+                  <div style={{ padding: '0.5rem', background: '#f7fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 500 }}>
+                    {t('rooms.' + room.name, { defaultValue: room.name })}
+                  </div>
                   {weekDates.map((date, dayIdx) => {
-                    const cellAppointments = getAppointmentsForCell(date, hour)
-                    const cellStatus = getCellStatus(date, hour)
-                    
+                    const cellApts = getAppointmentsForRoomAndDay(room.id, date)
+                    const dateStr = date.toISOString().split('T')[0]
+                    const dayData = availabilityByRoomByDay[dateStr]
+                    const roomData = room.id && dayData?.rooms ? dayData.rooms.find((r) => r.id === room.id) : null
                     return (
-                      <div 
-                        key={`${dayIdx}-${hour}`} 
-                        className={`calendar-cell calendar-cell-${cellStatus}`}
-                        title={cellStatus === 'unavailable' ? t('calendar.notAvailable') : cellStatus === 'busy' ? t('calendar.busy') : t('calendar.available')}
+                      <div
+                        key={`${room.id ?? 'u'}-${dayIdx}`}
+                        style={{
+                          padding: '0.5rem',
+                          minHeight: '80px',
+                          backgroundColor: roomData?.closed_reason ? '#fef2f2' : '#fff',
+                          borderBottom: '1px solid #e2e8f0',
+                        }}
+                        title={roomData?.closed_reason || (cellApts.length ? `${cellApts.length} ${t('calendar.appointments')}` : t('calendar.available'))}
                       >
-                        {cellAppointments.map((apt) => {
-                          // Format the reason display (remove "Unknown -" prefix if present)
+                        {cellApts.map((apt) => {
                           let displayReason = apt.reason || t('visits.visit')
-                          if (displayReason.startsWith('Unknown - ')) {
-                            displayReason = displayReason.replace('Unknown - ', '')
-                          }
-                          
+                          if (displayReason.startsWith('Unknown - ')) displayReason = displayReason.replace('Unknown - ', '')
                           return (
                             <div
                               key={apt.id}
                               className="calendar-event"
                               role="button"
                               tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedAppointment(apt)
-                                setIsDetailsModalOpen(true)
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault()
-                                  setSelectedAppointment(apt)
-                                  setIsDetailsModalOpen(true)
-                                }
-                              }}
-                              style={{ cursor: 'pointer' }}
+                              onClick={(e) => { e.stopPropagation(); setSelectedAppointment(apt); setIsDetailsModalOpen(true) }}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedAppointment(apt); setIsDetailsModalOpen(true) } }}
+                              style={{ cursor: 'pointer', marginBottom: '0.25rem' }}
                             >
                               <span className="event-time">{formatTime(apt.starts_at)}</span>
                               <span className="event-title">{displayReason}</span>
                             </div>
                           )
                         })}
+                        {roomData?.closed_reason && cellApts.length === 0 && (
+                          <span style={{ fontSize: '0.75rem', color: '#718096' }}>{roomData.closed_reason}</span>
+                        )}
                       </div>
                     )
                   })}
-                </div>
+                </React.Fragment>
               ))}
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="calendar-view">
+            <div className="calendar-grid">
+              <div className="calendar-header">
+                <div className="time-column"></div>
+                {weekDates.map((date, idx) => (
+                  <div key={idx} className="day-header">
+                    <div className="day-name">{days[date.getDay()]}</div>
+                    <div className="day-number">{date.getDate()}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="calendar-body">
+                {hours.map((hour) => (
+                  <div key={hour} className="calendar-row">
+                    <div className="time-slot">{hour}:00</div>
+                    {weekDates.map((date, dayIdx) => {
+                      const cellAppointments = getAppointmentsForCell(date, hour)
+                      const cellStatus = getCellStatus(date, hour)
+                      
+                      return (
+                        <div 
+                          key={`${dayIdx}-${hour}`} 
+                          className={`calendar-cell calendar-cell-${cellStatus}`}
+                          title={cellStatus === 'unavailable' ? t('calendar.notAvailable') : cellStatus === 'busy' ? t('calendar.busy') : t('calendar.available')}
+                        >
+                          {cellAppointments.map((apt) => {
+                            let displayReason = apt.reason || t('visits.visit')
+                            if (displayReason.startsWith('Unknown - ')) {
+                              displayReason = displayReason.replace('Unknown - ', '')
+                            }
+                            
+                            return (
+                              <div
+                                key={apt.id}
+                                className="calendar-event"
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedAppointment(apt)
+                                  setIsDetailsModalOpen(true)
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    setSelectedAppointment(apt)
+                                    setIsDetailsModalOpen(true)
+                                  }
+                                }}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <span className="event-time">{formatTime(apt.starts_at)}</span>
+                                <span className="event-title">{displayReason}</span>
+                                {apt.room && (
+                                  <span className="event-room" style={{ fontSize: '0.7rem', opacity: 0.9 }}>{t('rooms.' + apt.room.name, { defaultValue: apt.room.name })}</span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <VisitDetailsModal
