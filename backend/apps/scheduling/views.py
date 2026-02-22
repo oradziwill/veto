@@ -338,9 +338,7 @@ class AvailabilityRoomsView(APIView):
                 status=400,
             )
 
-        rooms = Room.objects.filter(clinic_id=user.clinic_id).order_by(
-            "display_order", "name"
-        )
+        rooms = Room.objects.filter(clinic_id=user.clinic_id).order_by("display_order", "name")
         slot_minutes = 30
         result = []
 
@@ -362,9 +360,7 @@ class AvailabilityRoomsView(APIView):
                     "busy": [dump_interval(i) for i in data["busy_merged"]],
                     "free": [dump_interval(i) for i in data["free_slots"]],
                     "workday": (
-                        dump_interval(data["work_bounds"])
-                        if data.get("work_bounds")
-                        else None
+                        dump_interval(data["work_bounds"]) if data.get("work_bounds") else None
                     ),
                     "closed_reason": data.get("closed_reason"),
                 }

@@ -18,12 +18,16 @@ class Room(models.Model):
         related_name="rooms",
     )
     name = models.CharField(max_length=64)
-    display_order = models.PositiveSmallIntegerField(default=0, help_text="Order in lists (lower first)")
+    display_order = models.PositiveSmallIntegerField(
+        default=0, help_text="Order in lists (lower first)"
+    )
 
     class Meta:
         ordering = ["display_order", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["clinic", "name"], name="scheduling_room_clinic_name_uniq"),
+            models.UniqueConstraint(
+                fields=["clinic", "name"], name="scheduling_room_clinic_name_uniq"
+            ),
         ]
 
     def __str__(self) -> str:
