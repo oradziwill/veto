@@ -128,6 +128,11 @@ export const vetsAPI = {
 
 export const availabilityAPI = {
   get: (params) => api.get("/availability/", { params }),
+  rooms: (params) => api.get("/availability/rooms/", { params }),
+};
+
+export const roomsAPI = {
+  list: (params) => api.get("/rooms/", { params }),
 };
 
 export const patientHistoryAPI = {

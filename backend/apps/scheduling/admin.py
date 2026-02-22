@@ -1,8 +1,16 @@
 from django.contrib import admin
 
-from .models import Appointment
+from .models import Appointment, Room
 from .models_exceptions import VetAvailabilityException
 from .models_working_hours import VetWorkingHours
+
+
+@admin.register(Room)
+class RoomAdmin(admin.ModelAdmin):
+    list_display = ("clinic", "name", "display_order")
+    list_filter = ("clinic",)
+    search_fields = ("name",)
+    ordering = ("clinic", "display_order", "name")
 
 
 @admin.register(VetWorkingHours)
@@ -22,6 +30,6 @@ class VetAvailabilityExceptionAdmin(admin.ModelAdmin):
 
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
-    list_display = ("clinic", "vet", "patient", "starts_at", "ends_at", "status")
+    list_display = ("clinic", "vet", "patient", "room", "starts_at", "ends_at", "status")
     list_filter = ("clinic", "status", "vet")
     search_fields = ("patient__name", "vet__username")

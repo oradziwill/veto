@@ -112,6 +112,15 @@ const VisitDetailsModal = ({ isOpen, onClose, appointment }) => {
             <div>{vetName}</div>
           </div>
 
+          {appointment?.room && (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ fontSize: '0.9rem', color: '#718096', marginBottom: '0.25rem' }}>
+                {t('visitDetails.room')}
+              </div>
+              <div>{t('rooms.' + appointment.room.name, { defaultValue: appointment.room.name })}</div>
+            </div>
+          )}
+
           <div style={{ marginBottom: '1.25rem' }}>
             <div style={{ fontSize: '0.9rem', color: '#718096', marginBottom: '0.25rem' }}>
               {t('visitDetails.status')}
