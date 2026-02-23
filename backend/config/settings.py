@@ -36,7 +36,8 @@ SECRET_KEY = "django-insecure-!xlvc@w2#_0bajgy^wd)56y6xj_l8@(kmknbc_t0qy03-6*z1&
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+_allowed = os.getenv("ALLOWED_HOSTS")
+ALLOWED_HOSTS = [x.strip() for x in _allowed.split(",") if x.strip()] if _allowed else []
 
 
 # Application definition
@@ -149,6 +150,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:5173",
+    "http://localhost:5174",
 ]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

@@ -6,6 +6,35 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def deduplicate_inventoryitem_sku(apps, schema_editor):
+    """Ensure (clinic_id, sku) is unique before adding UniqueConstraint."""
+    InventoryItem = apps.get_model("inventory", "InventoryItem")
+    from django.db.models import Count
+
+    dupes = (
+        InventoryItem.objects.values("clinic_id", "sku")
+        .annotate(n=Count("id"))
+        .filter(n__gt=1)
+    )
+    for row in dupes:
+        clinic_id, sku = row["clinic_id"], row["sku"]
+        items = list(
+            InventoryItem.objects.filter(clinic_id=clinic_id, sku=sku).order_by("id")
+        )
+        base_sku = (sku or "").strip() or "mig"
+        for i, item in enumerate(items):
+            if i == 0:
+                continue
+            # Make SKU unique; keep under 64 chars
+            new_sku = f"{base_sku}_mig{item.id}"[:64]
+            item.sku = new_sku
+            item.save(update_fields=["sku"])
+
+
+def noop(apps, schema_editor):
+    pass
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -15,6 +44,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(deduplicate_inventoryitem_sku, noop),
         migrations.CreateModel(
             name="InventoryMovement",
             fields=[
