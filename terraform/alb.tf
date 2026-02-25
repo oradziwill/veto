@@ -14,7 +14,7 @@ resource "aws_lb_target_group" "backend" {
   target_type = "ip"
 
   health_check {
-    path                = "/api/health/"
+    path                = "/health/"
     interval            = 30
     timeout             = 5
     healthy_threshold   = 2
@@ -55,7 +55,7 @@ resource "aws_lb_listener_rule" "api" {
 
   condition {
     path_pattern {
-      values = ["/api/*", "/admin/*"]
+      values = ["/api/*", "/admin/*", "/health/"]
     }
   }
 
