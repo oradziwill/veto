@@ -14,9 +14,7 @@ services:
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend
     volumes:
       - ./backend:/app
-    command: >
-      sh -c "python manage.py migrate &&
-             python manage.py runserver 0.0.0.0:8000"
+    command: python manage.py runserver 0.0.0.0:8000
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), timeout=2)"]
       interval: 10s
