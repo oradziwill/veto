@@ -77,22 +77,50 @@ jobs:
         id: env
         run: echo "ENV=${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_OUTPUT
 
+      # Backend: fetch current task definition → inject new image → deploy
+      - name: Download backend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition veto-${{ steps.env.outputs.ENV }}-backend \
+            --query taskDefinition \
+            --output json > backend-task-definition.json
+
+      - name: Render backend task definition with new image
+        id: render-backend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: backend-task-definition.json
+          container-name: backend
+          image: ${{ env.ECR_BACKEND_REPO }}:${{ steps.tag.outputs.IMAGE_TAG }}
+
       - name: Deploy backend to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
-          task-definition: veto-${{ steps.env.outputs.ENV }}-backend
+          task-definition: ${{ steps.render-backend.outputs.task-definition }}
           service: veto-${{ steps.env.outputs.ENV }}-backend
           cluster: veto-${{ steps.env.outputs.ENV }}-cluster
-          image: ${{ env.ECR_BACKEND_REPO }}:${{ steps.tag.outputs.IMAGE_TAG }}
-          container-name: backend
           wait-for-service-stability: true
+
+      # Frontend: fetch current task definition → inject new image → deploy
+      - name: Download frontend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition veto-${{ steps.env.outputs.ENV }}-frontend \
+            --query taskDefinition \
+            --output json > frontend-task-definition.json
+
+      - name: Render frontend task definition with new image
+        id: render-frontend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: frontend-task-definition.json
+          container-name: frontend
+          image: ${{ env.ECR_FRONTEND_REPO }}:${{ steps.tag.outputs.IMAGE_TAG }}
 
       - name: Deploy frontend to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
-          task-definition: veto-${{ steps.env.outputs.ENV }}-frontend
+          task-definition: ${{ steps.render-frontend.outputs.task-definition }}
           service: veto-${{ steps.env.outputs.ENV }}-frontend
           cluster: veto-${{ steps.env.outputs.ENV }}-cluster
-          image: ${{ env.ECR_FRONTEND_REPO }}:${{ steps.tag.outputs.IMAGE_TAG }}
-          container-name: frontend
           wait-for-service-stability: true
