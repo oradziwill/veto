@@ -39,7 +39,7 @@ resource "aws_ecs_task_definition" "backend" {
 
     environment = [
       { name = "DJANGO_SETTINGS_MODULE", value = "config.settings_production" },
-      { name = "ALLOWED_HOSTS",          value = aws_lb.main.dns_name },
+      { name = "ALLOWED_HOSTS",          value = "${aws_lb.main.dns_name},localhost,127.0.0.1,*" },
       { name = "CSRF_TRUSTED_ORIGINS",   value = "http://${aws_lb.main.dns_name}" },
       { name = "RDS_HOSTNAME",           value = aws_db_instance.main.address },
       { name = "RDS_PORT",               value = tostring(aws_db_instance.main.port) },
