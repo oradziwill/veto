@@ -123,6 +123,8 @@ resource "aws_ecs_service" "backend" {
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
 
+  enable_execute_command = true
+
   depends_on = [aws_lb_listener_rule.api]
 
   lifecycle {
@@ -152,6 +154,8 @@ resource "aws_ecs_service" "frontend" {
 
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
+
+  enable_execute_command = true
 
   depends_on = [aws_lb_listener.http]
 
