@@ -100,6 +100,7 @@ jobs:
           service: veto-${{ steps.env.outputs.ENV }}-backend
           cluster: veto-${{ steps.env.outputs.ENV }}-cluster
           wait-for-service-stability: true
+          wait-for-minutes: 20
 
       # Frontend: fetch current task definition → inject new image → deploy
       - name: Download frontend task definition
@@ -124,3 +125,4 @@ jobs:
           service: veto-${{ steps.env.outputs.ENV }}-frontend
           cluster: veto-${{ steps.env.outputs.ENV }}-cluster
           wait-for-service-stability: true
+          wait-for-minutes: 20
