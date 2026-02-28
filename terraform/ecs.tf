@@ -45,6 +45,8 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "RDS_PORT",               value = tostring(aws_db_instance.main.port) },
       { name = "RDS_DB_NAME",            value = aws_db_instance.main.db_name },
       { name = "RDS_USERNAME",           value = aws_db_instance.main.username },
+      # Disable until HTTPS is configured on the ALB
+      { name = "SECURE_SSL_REDIRECT",    value = "False" },
     ]
 
     secrets = [

@@ -14,7 +14,8 @@
   "header": {
     "title": "Veto Clinic",
     "startVisit": "Start Visit",
-    "language": "Language"
+    "language": "Language",
+    "logout": "Logout"
   },
   "tabs": {
     "patients": "Patients",
