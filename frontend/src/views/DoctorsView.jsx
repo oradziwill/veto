@@ -138,7 +138,7 @@ const DoctorsView = () => {
         </nav>
 
         <main className="doctors-main">
-          <div className="tab-content">{renderTabContent()}</div>
+          <div className="tab-content">{isAuthenticated ? renderTabContent() : null}</div>
         </main>
       </div>
 
