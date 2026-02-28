@@ -17,41 +17,33 @@ const DoctorsView = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "patients";
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    !!localStorage.getItem("access_token")
+  );
+  const [currentUser, setCurrentUser] = useState(null);
+  const [showLoginModal, setShowLoginModal] = useState(
+    !localStorage.getItem("access_token")
+  );
   const [showStartVisitModal, setShowStartVisitModal] = useState(false);
-  // For development: always show as authenticated for Dr. Smith
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
 
-  // Auto-login on mount for development
+  // Listen for token expiry events dispatched by the API interceptor
   useEffect(() => {
-    const ensureAuth = async () => {
-      const token = localStorage.getItem("access_token");
-      if (token) {
-        try {
-          await authAPI.me();
-          setIsAuthenticated(true);
-          return; // Token is valid, we're done
-        } catch (err) {
-          // Token invalid, clear it
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-        }
-      }
-
-      // Try auto-login with default credentials
-      try {
-        const response = await authAPI.login("drsmith", "password123");
-        localStorage.setItem("access_token", response.data.access);
-        localStorage.setItem("refresh_token", response.data.refresh);
-        setIsAuthenticated(true);
-      } catch (err) {
-        console.error("Auto-login failed:", err);
-        // Still set as authenticated for development - API interceptor will handle retries
-        setIsAuthenticated(true);
-      }
+    const handleUnauthorized = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setShowLoginModal(true);
     };
-    ensureAuth();
+    window.addEventListener("auth:logout", handleUnauthorized);
+    return () => window.removeEventListener("auth:logout", handleUnauthorized);
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setShowLoginModal(true);
+  };
 
   const handleTabChange = (tabId) => {
     setSearchParams({ tab: tabId });
@@ -107,8 +99,25 @@ const DoctorsView = () => {
               {t("header.startVisit")}
             </button>
             <div className="header-user">
-              <span className="user-name">Dr. Smith</span>
-              <div className="user-avatar">DS</div>
+              <span className="user-name">{currentUser || "—"}</span>
+              <div className="user-avatar">
+                {currentUser ? currentUser.slice(0, 2).toUpperCase() : "?"}
+              </div>
+              <button
+                onClick={handleLogout}
+                style={{
+                  padding: "0.5rem 1rem",
+                  fontSize: "0.875rem",
+                  fontWeight: "600",
+                  background: "transparent",
+                  color: "white",
+                  border: "1px solid rgba(255,255,255,0.6)",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                }}
+              >
+                {t("header.logout")}
+              </button>
             </div>
           </div>
         </div>
@@ -135,9 +144,11 @@ const DoctorsView = () => {
 
       <LoginModal
         isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        onSuccess={() => {
+        isRequired={!isAuthenticated}
+        onClose={() => isAuthenticated && setShowLoginModal(false)}
+        onSuccess={(username) => {
           setIsAuthenticated(true);
+          setCurrentUser(username);
           setShowLoginModal(false);
         }}
       />

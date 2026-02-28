@@ -4,22 +4,6 @@ import axios from "axios";
 // The vite.config.js proxies /api/* to http://localhost:8000/api/*
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
-// Helper to auto-login for development
-const autoLogin = async () => {
-  try {
-    const response = await axios.post(`${API_BASE_URL}/auth/token/`, {
-      username: "drsmith",
-      password: "password123",
-    });
-    localStorage.setItem("access_token", response.data.access);
-    localStorage.setItem("refresh_token", response.data.refresh);
-    return response.data.access;
-  } catch (err) {
-    console.error("Auto-login failed:", err);
-    return null;
-  }
-};
-
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -40,7 +24,7 @@ api.interceptors.request.use((config) => {
 // Handle errors globally
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     // Log connection errors for debugging
     if (
       error.code === "ERR_NETWORK" ||
@@ -55,16 +39,11 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401) {
-      // Clear invalid token
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
-
-      // Auto-login for development (try to auto-login as drsmith)
-      const token = await autoLogin();
-      if (token && error.config) {
-        // Retry the original request with the new token
-        error.config.headers.Authorization = `Bearer ${token}`;
-        return api.request(error.config);
+      // Notify the app to show login (skip for login requests themselves)
+      if (!error.config?.url?.includes("/auth/token/")) {
+        window.dispatchEvent(new CustomEvent("auth:logout"));
       }
     }
     return Promise.reject(error);

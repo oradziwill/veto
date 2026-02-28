@@ -12,6 +12,10 @@
   padding: 1rem;
 }
 
+.modal-overlay--login {
+  background: linear-gradient(135deg, #276749 0%, #2f855a 50%, #38a169 100%);
+}
+
 .modal-content {
   background: white;
   border-radius: 12px;
