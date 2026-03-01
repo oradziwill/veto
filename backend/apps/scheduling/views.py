@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date as date_type
 
 from django.core.exceptions import PermissionDenied
+from django.db import models
 from django.utils.dateparse import parse_date
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -14,13 +15,15 @@ from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.medical.models import ClinicalExam
 from apps.medical.serializers import ClinicalExamReadSerializer, ClinicalExamWriteSerializer
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment, HospitalStay, Room
+from apps.scheduling.models import Appointment, HospitalStay, Room, WaitingQueueEntry
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
     AppointmentWriteSerializer,
     HospitalStayReadSerializer,
     HospitalStayWriteSerializer,
     RoomSerializer,
+    WaitingQueueEntryReadSerializer,
+    WaitingQueueEntryWriteSerializer,
 )
 from apps.scheduling.services.availability import compute_availability
 
@@ -367,3 +370,125 @@ class AvailabilityRoomsView(APIView):
             )
 
         return Response({"date": date_str, "rooms": result})
+
+
+class WaitingQueueViewSet(viewsets.ModelViewSet):
+    """
+    Walk-in patient queue. Receptionist/doctor adds patients; doctor calls them.
+    List returns only active entries (waiting or in_progress).
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+
+    def get_queryset(self):
+        return (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=self.request.user.clinic_id,
+                status__in=[WaitingQueueEntry.Status.WAITING, WaitingQueueEntry.Status.IN_PROGRESS],
+            )
+            .select_related("patient", "patient__owner", "called_by")
+            .order_by("position", "arrived_at")
+        )
+
+    def get_serializer_class(self):
+        if self.action in ("list", "retrieve"):
+            return WaitingQueueEntryReadSerializer
+        return WaitingQueueEntryWriteSerializer
+
+    def perform_create(self, serializer):
+        clinic_id = self.request.user.clinic_id
+        max_pos = (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=clinic_id,
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
+            ).aggregate(m=models.Max("position"))["m"]
+            or 0
+        )
+        serializer.save(clinic_id=clinic_id, position=max_pos + 1)
+
+    @action(detail=True, methods=["post"], url_path="move-up")
+    def move_up(self, request, pk=None):
+        entry = self.get_object()
+        above = (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=entry.clinic_id,
+                status__in=[WaitingQueueEntry.Status.WAITING, WaitingQueueEntry.Status.IN_PROGRESS],
+                position__lt=entry.position,
+            )
+            .order_by("-position")
+            .first()
+        )
+        if above:
+            entry.position, above.position = above.position, entry.position
+            entry.save(update_fields=["position"])
+            above.save(update_fields=["position"])
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="move-down")
+    def move_down(self, request, pk=None):
+        entry = self.get_object()
+        below = (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=entry.clinic_id,
+                status__in=[WaitingQueueEntry.Status.WAITING, WaitingQueueEntry.Status.IN_PROGRESS],
+                position__gt=entry.position,
+            )
+            .order_by("position")
+            .first()
+        )
+        if below:
+            entry.position, below.position = below.position, entry.position
+            entry.save(update_fields=["position"])
+            below.save(update_fields=["position"])
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="call")
+    def call(self, request, pk=None):
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can call a patient.")
+        entry = self.get_object()
+        if entry.status != WaitingQueueEntry.Status.WAITING:
+            return Response({"detail": "Entry is not in waiting status."}, status=400)
+
+        already_active = WaitingQueueEntry.objects.filter(
+            clinic_id=entry.clinic_id,
+            called_by=request.user,
+            status=WaitingQueueEntry.Status.IN_PROGRESS,
+        ).exists()
+        if already_active:
+            return Response(
+                {
+                    "detail": "You already have a patient in progress. Close the current visit first."
+                },
+                status=409,
+            )
+
+        entry.status = WaitingQueueEntry.Status.IN_PROGRESS
+        entry.called_by = request.user
+        entry.save(update_fields=["status", "called_by"])
+
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="requeue")
+    def requeue(self, request, pk=None):
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can requeue a patient.")
+        entry = self.get_object()
+        if entry.status != WaitingQueueEntry.Status.IN_PROGRESS:
+            return Response({"detail": "Entry is not in progress."}, status=400)
+        entry.status = WaitingQueueEntry.Status.WAITING
+        entry.called_by = None
+        entry.save(update_fields=["status", "called_by"])
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="done")
+    def done(self, request, pk=None):
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can mark a visit as done.")
+        entry = self.get_object()
+        entry.status = WaitingQueueEntry.Status.DONE
+        entry.save(update_fields=["status"])
+        return Response(status=204)

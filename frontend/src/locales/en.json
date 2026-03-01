@@ -9,7 +9,9 @@
     "searching": "Searching...",
     "selected": "Selected",
     "unknown": "Unknown",
-    "retry": "Retry"
+    "retry": "Retry",
+    "saving": "Saving...",
+    "error": "An error occurred"
   },
   "header": {
     "title": "Veto Clinic",
@@ -21,8 +23,11 @@
     "patients": "Patients",
     "visits": "Visits",
     "calendar": "Calendar",
+    "waitingRoom": "Waiting Room",
     "inventory": "Inventory",
-    "aiAssistant": "AI Assistant"
+    "aiAssistant": "AI Assistant",
+    "activeVisit": "Visit",
+    "newVisit": "New Visit"
   },
   "patients": {
     "title": "Patients",
@@ -79,6 +84,8 @@
     "notAvailable": "Not available",
     "busy": "Busy",
     "available": "Available",
+    "allDoctors": "All doctors",
+    "doctor": "Doctor:",
     "sun": "Sun",
     "mon": "Mon",
     "tue": "Tue",
@@ -86,6 +93,24 @@
     "thu": "Thu",
     "fri": "Fri",
     "sat": "Sat"
+  },
+  "waitingRoom": {
+    "title": "Waiting Room",
+    "addPatient": "+ Add Patient",
+    "addToQueue": "Add to Queue",
+    "waiting": "Waiting",
+    "inProgress": "In Progress",
+    "callPatient": "Call",
+    "patientLeft": "Left",
+    "arrivedAt": "Arrived",
+    "complaint": "Complaint",
+    "complaintPlaceholder": "Describe reason for visit",
+    "urgent": "Urgent",
+    "empty": "No patients waiting",
+    "moveUp": "↑",
+    "moveDown": "↓",
+    "dismiss": "Finish",
+    "closeCurrentFirst": "Close the current visit to call another patient"
   },
   "inventory": {
     "title": "Inventory",

@@ -9,7 +9,9 @@
     "searching": "Szukanie...",
     "selected": "Wybrano",
     "unknown": "Nieznany",
-    "retry": "Ponów"
+    "retry": "Ponów",
+    "saving": "Zapisywanie...",
+    "error": "Wystąpił błąd"
   },
   "header": {
     "title": "Veto Clinic",
@@ -21,8 +23,11 @@
     "patients": "Pacjenci",
     "visits": "Wizyty",
     "calendar": "Kalendarz",
+    "waitingRoom": "Poczekalnia",
     "inventory": "Magazyn",
-    "aiAssistant": "Asystent AI"
+    "aiAssistant": "Asystent AI",
+    "activeVisit": "Wizyta",
+    "newVisit": "Nowa wizyta"
   },
   "patients": {
     "title": "Pacjenci",
@@ -79,6 +84,8 @@
     "notAvailable": "Niedostępne",
     "busy": "Zajęte",
     "available": "Dostępne",
+    "allDoctors": "Wszyscy lekarze",
+    "doctor": "Lekarz:",
     "sun": "Nd",
     "mon": "Pn",
     "tue": "Wt",
@@ -86,6 +93,24 @@
     "thu": "Cz",
     "fri": "Pt",
     "sat": "Sb"
+  },
+  "waitingRoom": {
+    "title": "Poczekalnia",
+    "addPatient": "+ Dodaj pacjenta",
+    "addToQueue": "Dodaj do kolejki",
+    "waiting": "Oczekuje",
+    "inProgress": "W trakcie",
+    "callPatient": "Przyjmij",
+    "patientLeft": "Wyszedł",
+    "arrivedAt": "Przybycie",
+    "complaint": "Zgłoszenie",
+    "complaintPlaceholder": "Opisz powód wizyty",
+    "urgent": "Pilny",
+    "empty": "Brak pacjentów w poczekalni",
+    "moveUp": "↑",
+    "moveDown": "↓",
+    "dismiss": "Zakończ",
+    "closeCurrentFirst": "Zamknij aktualną wizytę aby przyjąć kolejnego pacjenta"
   },
   "inventory": {
     "title": "Magazyn",
