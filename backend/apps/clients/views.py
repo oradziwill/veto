@@ -24,8 +24,12 @@ class ClientViewSet(viewsets.ModelViewSet):
             )
             if len(parts) >= 2:
                 # Also match "Firstname Lastname" and "Lastname Firstname" as combined query
-                base_q |= Q(first_name__icontains=parts[0], last_name__icontains=" ".join(parts[1:]))
-                base_q |= Q(first_name__icontains=" ".join(parts[1:]), last_name__icontains=parts[0])
+                base_q |= Q(
+                    first_name__icontains=parts[0], last_name__icontains=" ".join(parts[1:])
+                )
+                base_q |= Q(
+                    first_name__icontains=" ".join(parts[1:]), last_name__icontains=parts[0]
+                )
             qs = qs.filter(base_q)
 
         in_my_clinic = self.request.query_params.get("in_my_clinic")
