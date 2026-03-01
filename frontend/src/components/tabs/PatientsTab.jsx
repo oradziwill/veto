@@ -111,7 +111,6 @@ const PatientsTab = () => {
 
         {error && !loading && (
           <div
-            className="error-message"
             style={{
               padding: "1rem",
               backgroundColor: "#fff5f5",
@@ -119,9 +118,19 @@ const PatientsTab = () => {
               border: "1px solid #fed7d7",
               color: "#c53030",
               marginBottom: "1rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
             }}
           >
-            {error}
+            <span>{error}</span>
+            <button
+              className="btn-secondary"
+              onClick={() => fetchPatients(searchTerm)}
+            >
+              {t("common.retry")}
+            </button>
           </div>
         )}
 
