@@ -5,7 +5,7 @@ import VisitDetailsModal from '../modals/VisitDetailsModal'
 import AddAppointmentModal from '../modals/AddAppointmentModal'
 import './Tabs.css'
 
-const CalendarTab = () => {
+const CalendarTab = ({ vets = null, vetId = null, onVetChange = null }) => {
   const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState([])
   const [rooms, setRooms] = useState([])
@@ -66,7 +66,8 @@ const CalendarTab = () => {
       weekEnd.setHours(23, 59, 59, 999)
 
       // Fetch all appointments (backend doesn't support date range, so we fetch all and filter client-side)
-      const response = await appointmentsAPI.list()
+      const params = vetId ? { vet: vetId } : {}
+      const response = await appointmentsAPI.list(params)
       let allAppointments = response.data.results || response.data || []
       
       // Filter appointments to the week range
@@ -92,7 +93,9 @@ const CalendarTab = () => {
       const promises = weekDates.map(async (date) => {
         const dateStr = date.toISOString().split('T')[0]
         try {
-          const response = await availabilityAPI.get({ date: dateStr, slot_minutes: 30 })
+          const availParams = { date: dateStr, slot_minutes: 30 }
+          if (vetId) availParams.vet = vetId
+          const response = await availabilityAPI.get(availParams)
           availabilityMap[dateStr] = response.data
         } catch (err) {
           console.error(`Error fetching availability for ${dateStr}:`, err)
@@ -130,7 +133,7 @@ const CalendarTab = () => {
     fetchAppointments()
     fetchAvailabilityForWeek()
     fetchRoomsAndRoomAvailability()
-  }, [currentDate])
+  }, [currentDate, vetId])
 
   const weekDates = getWeekDates(currentDate)
   const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
@@ -250,6 +253,21 @@ const CalendarTab = () => {
       </div>
 
       <div className="calendar-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap', padding: '0 0 1rem 0' }}>
+        {vets && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: 'auto' }}>
+            <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#4a5568' }}>{t('calendar.doctor')}</label>
+            <select
+              value={vetId || ''}
+              onChange={e => onVetChange(e.target.value ? Number(e.target.value) : null)}
+              style={{ padding: '0.35rem 0.6rem', fontSize: '0.875rem', border: '1px solid #e2e8f0', borderRadius: '6px', background: 'white' }}
+            >
+              <option value="">{t('calendar.allDoctors')}</option>
+              {vets.map(v => (
+                <option key={v.id} value={v.id}>{v.first_name} {v.last_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '0.25rem' }}>
           <button
             type="button"

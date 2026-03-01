@@ -115,6 +115,18 @@ export const roomsAPI = {
   list: (params) => api.get("/rooms/", { params }),
 };
 
+export const queueAPI = {
+  list: (params) => api.get("/queue/", { params }),
+  add: (data) => api.post("/queue/", data),
+  update: (id, data) => api.patch(`/queue/${id}/`, data),
+  remove: (id) => api.delete(`/queue/${id}/`),
+  moveUp: (id) => api.post(`/queue/${id}/move-up/`),
+  moveDown: (id) => api.post(`/queue/${id}/move-down/`),
+  call: (id) => api.post(`/queue/${id}/call/`),
+  requeue: (id) => api.post(`/queue/${id}/requeue/`),
+  done: (id) => api.post(`/queue/${id}/done/`),
+};
+
 export const patientHistoryAPI = {
   list: (patientId) => api.get(`/patients/${patientId}/history/`),
   create: (patientId, data) =>

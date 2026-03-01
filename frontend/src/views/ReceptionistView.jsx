@@ -4,12 +4,9 @@ import { useTranslation } from "react-i18next";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
 import CalendarTab from "../components/tabs/CalendarTab";
-import InventoryTab from "../components/tabs/InventoryTab";
-import AIAssistantTab from "../components/tabs/AIAssistantTab";
 import WaitingRoomTab from "../components/tabs/WaitingRoomTab";
 import LoginModal from "../components/LoginModal";
-import StartVisitModal from "../components/modals/StartVisitModal";
-import { authAPI, queueAPI } from "../services/api";
+import { authAPI, vetsAPI } from "../services/api";
 import "../components/tabs/Tabs.css";
 import "./DoctorsView.css";
 
@@ -18,7 +15,7 @@ const LANGUAGES = [
   { code: "en", label: "English", flag: "🇬🇧" },
 ];
 
-const DoctorsView = () => {
+const ReceptionistView = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,39 +24,46 @@ const DoctorsView = () => {
     !!localStorage.getItem("access_token")
   );
   const [currentUser, setCurrentUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(
     !localStorage.getItem("access_token")
   );
-  const [headerVisitActive, setHeaderVisitActive] = useState(false);
-  const [calledQueueEntry, setCalledQueueEntry] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [vets, setVets] = useState([]);
+  const [selectedVetId, setSelectedVetId] = useState(null);
   const userMenuRef = useRef(null);
 
-  // Fetch user info from /api/me/ so it persists across page reloads
   const fetchCurrentUser = () => {
-    authAPI.me().then((res) => {
-      const { username, first_name, last_name, role } = res.data;
-      if (role === "receptionist") {
-        navigate("/receptionist", { replace: true });
-        return;
-      }
-      const displayName =
-        first_name && last_name ? `${first_name} ${last_name}` : username;
-      setCurrentUser(displayName);
-      setUserRole(role);
-    }).catch(() => {
-      // 401 handled by interceptor (dispatches auth:logout)
-    });
+    authAPI
+      .me()
+      .then((res) => {
+        const { username, first_name, last_name, role } = res.data;
+        if (role === "doctor" || role === "admin") {
+          navigate("/doctors", { replace: true });
+          return;
+        }
+        const displayName =
+          first_name && last_name ? `${first_name} ${last_name}` : username;
+        setCurrentUser(displayName);
+      })
+      .catch(() => {});
+  };
+
+  const fetchVets = () => {
+    vetsAPI
+      .list()
+      .then((res) => {
+        setVets(res.data.results || res.data || []);
+      })
+      .catch(() => {});
   };
 
   useEffect(() => {
     if (localStorage.getItem("access_token")) {
       fetchCurrentUser();
+      fetchVets();
     }
   }, []);
 
-  // Listen for token expiry events dispatched by the API interceptor
   useEffect(() => {
     const handleUnauthorized = () => {
       setIsAuthenticated(false);
@@ -71,7 +75,6 @@ const DoctorsView = () => {
     return () => window.removeEventListener("auth:logout", handleUnauthorized);
   }, []);
 
-  // Close user menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
@@ -96,49 +99,45 @@ const DoctorsView = () => {
   };
 
   const avatarInitials = currentUser
-    ? currentUser.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+    ? currentUser
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
     : null;
 
   const tabs = [
-    { id: "patients", label: t("tabs.patients"), icon: "🐾" },
-    { id: "visits", label: t("tabs.visits"), icon: "📋" },
     { id: "calendar", label: t("tabs.calendar"), icon: "📅" },
     { id: "waiting-room", label: t("tabs.waitingRoom"), icon: "🏥" },
-    { id: "inventory", label: t("tabs.inventory"), icon: "📦" },
-    { id: "ai-assistant", label: t("tabs.aiAssistant"), icon: "🤖" },
-    ...(calledQueueEntry
-      ? [{ id: "active-visit", label: calledQueueEntry.patient?.name || t("tabs.activeVisit"), icon: "🩺" }]
-      : []),
-    ...(headerVisitActive
-      ? [{ id: "new-visit", label: t("tabs.newVisit"), icon: "➕" }]
-      : []),
+    { id: "patients", label: t("tabs.patients"), icon: "🐾" },
+    { id: "visits", label: t("tabs.visits"), icon: "📋" },
   ];
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case "calendar":
+        return (
+          <CalendarTab
+            vets={vets}
+            vetId={selectedVetId}
+            onVetChange={setSelectedVetId}
+          />
+        );
+      case "waiting-room":
+        return <WaitingRoomTab userRole="receptionist" />;
       case "patients":
         return <PatientsTab />;
       case "visits":
         return <VisitsTab />;
-      case "calendar":
-        return <CalendarTab />;
-      case "waiting-room":
+      default:
         return (
-          <WaitingRoomTab
-            userRole={userRole}
-            hasActiveVisit={!!calledQueueEntry}
-            onCallPatient={(entry) => {
-              setCalledQueueEntry(entry);
-              setSearchParams({ tab: "active-visit" });
-            }}
+          <CalendarTab
+            vets={vets}
+            vetId={selectedVetId}
+            onVetChange={setSelectedVetId}
           />
         );
-      case "inventory":
-        return <InventoryTab />;
-      case "ai-assistant":
-        return <AIAssistantTab />;
-      default:
-        return <PatientsTab />;
     }
   };
 
@@ -150,28 +149,6 @@ const DoctorsView = () => {
         <div className="header-content">
           <h1 className="header-title">{t("header.title")}</h1>
           <div className="header-actions">
-            <button
-              onClick={() => {
-                setHeaderVisitActive(true);
-                setSearchParams({ tab: "new-visit" });
-              }}
-              className="start-visit-btn"
-              style={{
-                padding: "0.75rem 1.5rem",
-                fontSize: "1rem",
-                fontWeight: "600",
-                background: "white",
-                color: "#2f855a",
-                border: "2px solid white",
-                borderRadius: "8px",
-                cursor: "pointer",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-              }}
-            >
-              {t("header.startVisit")}
-            </button>
-
-            {/* User avatar + settings dropdown */}
             <div
               ref={userMenuRef}
               className="header-user"
@@ -215,7 +192,6 @@ const DoctorsView = () => {
                     overflow: "hidden",
                   }}
                 >
-                  {/* User info */}
                   {currentUser && (
                     <div
                       style={{
@@ -236,7 +212,6 @@ const DoctorsView = () => {
                     </div>
                   )}
 
-                  {/* Language */}
                   <div
                     style={{
                       padding: "0.75rem 1rem",
@@ -289,7 +264,6 @@ const DoctorsView = () => {
                     </div>
                   </div>
 
-                  {/* Logout */}
                   <button
                     onClick={handleLogout}
                     style={{
@@ -328,57 +302,9 @@ const DoctorsView = () => {
         </nav>
 
         <main className="doctors-main">
-          {/* Regular tab content — hidden when on a visit tab */}
-          <div
-            className="tab-content"
-            style={["active-visit", "new-visit"].includes(activeTab) ? { display: "none" } : undefined}
-          >
-            {isAuthenticated && !["active-visit", "new-visit"].includes(activeTab) ? renderTabContent() : null}
+          <div className="tab-content">
+            {isAuthenticated ? renderTabContent() : null}
           </div>
-
-          {/* Queue visit form — always mounted while calledQueueEntry is set */}
-          {calledQueueEntry && (
-            <div style={activeTab !== "active-visit" ? { display: "none" } : { overflowY: "auto", height: "100%" }}>
-              <StartVisitModal
-                standalone
-                isOpen={true}
-                initialPatient={calledQueueEntry.patient}
-                initialChiefComplaint={calledQueueEntry.chief_complaint}
-                onClose={async () => {
-                  if (calledQueueEntry?.id) {
-                    try { await queueAPI.requeue(calledQueueEntry.id); } catch (_) {}
-                  }
-                  setCalledQueueEntry(null);
-                  setSearchParams({ tab: "waiting-room" });
-                }}
-                onSuccess={async () => {
-                  if (calledQueueEntry?.id) {
-                    try { await queueAPI.done(calledQueueEntry.id); } catch (_) {}
-                  }
-                  setCalledQueueEntry(null);
-                  setSearchParams({ tab: "waiting-room" });
-                }}
-              />
-            </div>
-          )}
-
-          {/* Header "Rozpocznij wizytę" form — always mounted while headerVisitActive */}
-          {headerVisitActive && (
-            <div style={activeTab !== "new-visit" ? { display: "none" } : { overflowY: "auto", height: "100%" }}>
-              <StartVisitModal
-                standalone
-                isOpen={true}
-                onClose={() => {
-                  setHeaderVisitActive(false);
-                  setSearchParams({ tab: "calendar" });
-                }}
-                onSuccess={() => {
-                  setHeaderVisitActive(false);
-                  setSearchParams({ tab: "visits" });
-                }}
-              />
-            </div>
-          )}
         </main>
       </div>
 
@@ -390,11 +316,11 @@ const DoctorsView = () => {
           setIsAuthenticated(true);
           setShowLoginModal(false);
           fetchCurrentUser();
+          fetchVets();
         }}
       />
-
     </div>
   );
 };
 
-export default DoctorsView;
+export default ReceptionistView;

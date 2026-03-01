@@ -7,12 +7,14 @@ from .views import (
     AvailabilityView,
     HospitalStayViewSet,
     RoomViewSet,
+    WaitingQueueViewSet,
 )
 
 router = DefaultRouter()
 router.register(r"appointments", AppointmentViewSet, basename="appointments")
 router.register(r"hospital-stays", HospitalStayViewSet, basename="hospital-stays")
 router.register(r"rooms", RoomViewSet, basename="rooms")
+router.register(r"queue", WaitingQueueViewSet, basename="queue")
 
 urlpatterns = [
     path("", include(router.urls)),

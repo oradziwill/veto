@@ -197,5 +197,56 @@ class HospitalStay(models.Model):
         return f"HospitalStay {self.patient} @ {self.clinic} ({self.status})"
 
 
+class WaitingQueueEntry(models.Model):
+    """Walk-in patient queue. Receptionist/doctor adds patients; doctor calls them."""
+
+    class Status(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        IN_PROGRESS = "in_progress", "In Progress"
+        DONE = "done", "Done"
+        LEFT = "left", "Left"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name="queue_entries",
+    )
+    patient = models.ForeignKey(
+        Patient,
+        on_delete=models.PROTECT,
+        related_name="queue_entries",
+    )
+    chief_complaint = models.CharField(max_length=255, blank=True)
+    is_urgent = models.BooleanField(default=False)
+    position = models.PositiveIntegerField()
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.WAITING,
+    )
+    arrived_at = models.DateTimeField(auto_now_add=True)
+    called_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="called_patients",
+    )
+    appointment = models.OneToOneField(
+        "Appointment",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="queue_entry",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["position", "arrived_at"]
+
+    def __str__(self) -> str:
+        return f"Queue#{self.position} {self.patient} @ {self.clinic} ({self.status})"
+
+
 # Register additional scheduling models kept in separate modules
 from .models_working_hours import VetWorkingHours  # noqa: E402,F401

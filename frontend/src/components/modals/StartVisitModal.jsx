@@ -13,7 +13,7 @@ import './Modal.css'
 
 import { translateSpecies } from '../../utils/species'
 
-const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
+const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, initialChiefComplaint = '', standalone = false }) => {
   const { t } = useTranslation()
   const [ownerSearch, setOwnerSearch] = useState('')
   const [ownerSearchResults, setOwnerSearchResults] = useState([])
@@ -61,42 +61,72 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
     setServiceToAdd('')
   }, [isOpen])
 
-  // Check for scheduled appointments at current time when modal opens
+  // On open: pre-fill from queue entry OR check for scheduled appointment
   useEffect(() => {
     if (!isOpen) return
+
+    if (initialPatient) {
+      // Pre-fill from waiting room queue entry
+      setSuggestedAppointment(null)
+      setError(null)
+      setOwnerSearchResults([])
+      setShowOwnerDropdown(false)
+
+      const owner = initialPatient.owner
+      if (owner) {
+        setSelectedOwner(owner)
+        setOwnerSearch(`${owner.first_name} ${owner.last_name}`)
+        loadPatientsForOwner(owner.id)
+      }
+      setFormData({
+        patient: initialPatient.id.toString(),
+        visitNotes: initialChiefComplaint || '',
+        medication: '',
+        medicalReceipts: '',
+        additionalNotes: '',
+      })
+      return
+    }
+
+    // Default: reset form and check for scheduled appointment
+    setFormData({
+      patient: '',
+      visitNotes: '',
+      medication: '',
+      medicalReceipts: '',
+      additionalNotes: '',
+    })
+    setOwnerSearch('')
+    setSelectedOwner(null)
+    setOwnerSearchResults([])
+    setShowOwnerDropdown(false)
+    setPatients([])
+    setError(null)
+    setSuggestedAppointment(null)
 
     const checkCurrentAppointment = async () => {
       try {
         const now = new Date()
-        // Check appointments within the next 30 minutes
         const futureTime = new Date(now.getTime() + 30 * 60 * 1000)
-        
+
         const response = await appointmentsAPI.list()
         const allAppointments = response.data.results || response.data || []
-        
-        // Find appointments that are scheduled for now (within 30 min window)
+
         const currentAppointment = allAppointments.find(apt => {
           const aptStart = new Date(apt.starts_at)
           const aptEnd = new Date(apt.ends_at || apt.starts_at)
-          // Appointment is "current" if it started within the last 30 min or starts within next 30 min
           return aptStart <= futureTime && aptEnd >= now && apt.status !== 'cancelled'
         })
 
         if (currentAppointment) {
           setSuggestedAppointment(currentAppointment)
-          // Pre-populate owner and patient
-          if (currentAppointment.patient) {
+          if (currentAppointment.patient?.owner) {
             const patient = currentAppointment.patient
-            if (patient.owner) {
-              setSelectedOwner(patient.owner)
-              setOwnerSearch(`${patient.owner.first_name} ${patient.owner.last_name}`)
-              setFormData(prev => ({ ...prev, patient: patient.id.toString() }))
-              // Load patients for this owner
-              loadPatientsForOwner(patient.owner.id)
-            }
+            setSelectedOwner(patient.owner)
+            setOwnerSearch(`${patient.owner.first_name} ${patient.owner.last_name}`)
+            setFormData(prev => ({ ...prev, patient: patient.id.toString() }))
+            loadPatientsForOwner(patient.owner.id)
           }
-        } else {
-          setSuggestedAppointment(null)
         }
       } catch (err) {
         console.error('Error checking current appointment:', err)
@@ -104,24 +134,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
     }
 
     checkCurrentAppointment()
-
-    // Reset form when modal opens (unless we have a suggested appointment)
-    if (!suggestedAppointment) {
-      setFormData({
-        patient: '',
-        visitNotes: '',
-        medication: '',
-        medicalReceipts: '',
-        additionalNotes: '',
-      })
-      setOwnerSearch('')
-      setSelectedOwner(null)
-      setOwnerSearchResults([])
-      setShowOwnerDropdown(false)
-      setPatients([])
-      setError(null)
-    }
-  }, [isOpen])
+  }, [isOpen, initialPatient, initialChiefComplaint])
 
   const loadPatientsForOwner = async (ownerId) => {
     try {
@@ -358,11 +371,19 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
     }
   }
 
-  if (!isOpen) return null
+  if (!standalone && !isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px' }}>
+    <div
+      className={standalone ? undefined : 'modal-overlay'}
+      onClick={standalone ? undefined : onClose}
+      style={standalone ? { padding: '1.5rem', maxWidth: '700px', margin: '0 auto' } : undefined}
+    >
+      <div
+        className={standalone ? undefined : 'modal-content'}
+        onClick={standalone ? undefined : (e) => e.stopPropagation()}
+        style={standalone ? undefined : { maxWidth: '700px' }}
+      >
         <div className="modal-header">
           <h2>{t('startVisit.title')}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
