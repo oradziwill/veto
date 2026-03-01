@@ -180,11 +180,12 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
               <input
                 type="text"
                 id="owner"
-                name="owner"
+                name="owner_search_8374923"
                 value={ownerSearch}
                 onChange={handleOwnerSearchChange}
                 placeholder={t('addPatient.ownerSearchPlaceholder')}
-                style={{ 
+                autoComplete="new-password"
+                style={{
                   width: '100%',
                   padding: '0.5rem',
                   fontSize: '1rem',
@@ -256,7 +257,7 @@ const AddPatientModal = ({ isOpen, onClose, onSuccess }) => {
                 </div>
               )}
             </div>
-            {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && (
+            {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && !selectedOwner && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#718096' }}>
                 {t('addPatient.noOwnersFound')}
               </div>

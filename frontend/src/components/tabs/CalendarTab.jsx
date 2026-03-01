@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { appointmentsAPI, availabilityAPI, roomsAPI } from '../../services/api'
 import VisitDetailsModal from '../modals/VisitDetailsModal'
+import AddAppointmentModal from '../modals/AddAppointmentModal'
 import './Tabs.css'
 
 const CalendarTab = () => {
@@ -11,6 +12,8 @@ const CalendarTab = () => {
   const [viewMode, setViewMode] = useState('week') // 'week' | 'room'
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+  const [isStartVisitModalOpen, setIsStartVisitModalOpen] = useState(false)
+  const [clickedSlotTime, setClickedSlotTime] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
   const [availabilityByDay, setAvailabilityByDay] = useState({}) // { 'YYYY-MM-DD': { free: [], busy: [] } }
@@ -18,6 +21,22 @@ const CalendarTab = () => {
 
   const days = [t('calendar.sun'), t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), t('calendar.thu'), t('calendar.fri'), t('calendar.sat')]
   const hours = Array.from({ length: 12 }, (_, i) => i + 8) // 8 AM to 7 PM
+
+  const formatDateTimeLocal = (date) => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const h = String(date.getHours()).padStart(2, '0')
+    const min = String(date.getMinutes()).padStart(2, '0')
+    return `${y}-${m}-${d}T${h}:${min}`
+  }
+
+  const handleCellClick = (date, hour) => {
+    const slotDate = new Date(date)
+    slotDate.setHours(hour, 0, 0, 0)
+    setClickedSlotTime(formatDateTimeLocal(slotDate))
+    setIsStartVisitModalOpen(true)
+  }
 
   const getWeekStart = (date) => {
     const d = new Date(date)
@@ -225,29 +244,33 @@ const CalendarTab = () => {
     <div className="tab-container">
       <div className="tab-header">
         <h2>{t('calendar.title')}</h2>
-        <div className="calendar-controls" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
-            <button
-              type="button"
-              className={viewMode === 'week' ? 'btn-primary' : 'btn-secondary'}
-              onClick={() => setViewMode('week')}
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem' }}
-            >
-              {t('calendar.viewWeek')}
-            </button>
-            <button
-              type="button"
-              className={viewMode === 'room' ? 'btn-primary' : 'btn-secondary'}
-              onClick={() => setViewMode('room')}
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem' }}
-            >
-              {t('calendar.viewRoom')}
-            </button>
-          </div>
-          <button className="btn-secondary" onClick={() => navigateWeek(-1)}>{t('calendar.previous')}</button>
-          <span className="calendar-month">{monthName}</span>
-          <button className="btn-secondary" onClick={() => navigateWeek(1)}>{t('calendar.next')}</button>
+        <button className="btn-primary" onClick={() => setIsStartVisitModalOpen(true)}>
+          {t('visits.newVisit')}
+        </button>
+      </div>
+
+      <div className="calendar-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap', padding: '0 0 1rem 0' }}>
+        <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <button
+            type="button"
+            className={viewMode === 'week' ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setViewMode('week')}
+            style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem' }}
+          >
+            {t('calendar.viewWeek')}
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'room' ? 'btn-primary' : 'btn-secondary'}
+            onClick={() => setViewMode('room')}
+            style={{ padding: '0.35rem 0.75rem', fontSize: '0.875rem' }}
+          >
+            {t('calendar.viewRoom')}
+          </button>
         </div>
+        <button className="btn-secondary" onClick={() => navigateWeek(-1)}>{t('calendar.previous')}</button>
+        <span className="calendar-month">{monthName}</span>
+        <button className="btn-secondary" onClick={() => navigateWeek(1)}>{t('calendar.next')}</button>
       </div>
 
       <div className="tab-content-wrapper">
@@ -343,10 +366,12 @@ const CalendarTab = () => {
                       const cellStatus = getCellStatus(date, hour)
                       
                       return (
-                        <div 
-                          key={`${dayIdx}-${hour}`} 
+                        <div
+                          key={`${dayIdx}-${hour}`}
                           className={`calendar-cell calendar-cell-${cellStatus}`}
                           title={cellStatus === 'unavailable' ? t('calendar.notAvailable') : cellStatus === 'busy' ? t('calendar.busy') : t('calendar.available')}
+                          onClick={() => handleCellClick(date, hour)}
+                          style={{ cursor: 'pointer' }}
                         >
                           {cellAppointments.map((apt) => {
                             let displayReason = apt.reason || t('visits.visit')
@@ -400,6 +425,17 @@ const CalendarTab = () => {
           setSelectedAppointment(null)
         }}
         appointment={selectedAppointment}
+      />
+
+      <AddAppointmentModal
+        isOpen={isStartVisitModalOpen}
+        initialStartsAt={clickedSlotTime}
+        onClose={() => { setIsStartVisitModalOpen(false); setClickedSlotTime(null) }}
+        onSuccess={() => {
+          setIsStartVisitModalOpen(false)
+          setClickedSlotTime(null)
+          fetchAppointments()
+        }}
       />
     </div>
   )

@@ -11,6 +11,8 @@ import {
 import AddClientModal from './AddClientModal'
 import './Modal.css'
 
+import { translateSpecies } from '../../utils/species'
+
 const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
   const { t } = useTranslation()
   const [ownerSearch, setOwnerSearch] = useState('')
@@ -391,10 +393,11 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
               <input
                 type="text"
                 id="owner"
-                name="owner"
+                name="owner_search_8374923"
                 value={ownerSearch}
                 onChange={handleOwnerSearchChange}
                 placeholder={t('startVisit.ownerSearchPlaceholder')}
+                autoComplete="new-password"
                 style={{
                   width: '100%',
                   padding: '0.5rem',
@@ -466,7 +469,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                 </div>
               )}
             </div>
-            {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && (
+            {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && !selectedOwner && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#718096' }}>
                 {t('startVisit.noOwnersFound')}
               </div>
@@ -517,7 +520,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess }) => {
                 <option value="">{t('startVisit.selectPatient')}</option>
                 {patients.map((patient) => (
                   <option key={patient.id} value={patient.id}>
-                    {patient.name} ({patient.species})
+                    {patient.name} ({translateSpecies(patient.species, t)})
                   </option>
                 ))}
               </select>

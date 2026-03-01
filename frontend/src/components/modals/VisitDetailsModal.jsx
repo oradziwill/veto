@@ -1,5 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { translateSpecies } from '../../utils/species'
 import './Modal.css'
 
 const VisitDetailsModal = ({ isOpen, onClose, appointment }) => {
@@ -87,7 +88,7 @@ const VisitDetailsModal = ({ isOpen, onClose, appointment }) => {
             <div style={{ fontWeight: 500 }}>
               {appointment?.patient?.name || t('common.unknown')}
               {appointment?.patient?.species && (
-                <span style={{ color: '#718096', fontWeight: 400 }}> ({appointment.patient.species})</span>
+                <span style={{ color: '#718096', fontWeight: 400 }}> ({translateSpecies(appointment.patient.species, t)})</span>
               )}
             </div>
           </div>

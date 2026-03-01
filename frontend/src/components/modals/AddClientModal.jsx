@@ -15,7 +15,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     apartment: "",
     city: "",
     postal_code: "",
-    country: "PL",
+    country: "Polska",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -84,7 +84,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
         apartment: "",
         city: "",
         postal_code: "",
-        country: "PL",
+        country: "Polska",
       });
     } catch (err) {
       // Handle authentication errors - try to auto-login and retry once more
@@ -108,7 +108,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
             apartment: "",
             city: "",
             postal_code: "",
-            country: "PL",
+            country: "Polska",
           });
           return;
         } catch (authErr) {
@@ -269,15 +269,46 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
               <div className="form-group">
                 <label htmlFor="country">{t("addClient.country")}</label>
-                <input
-                  type="text"
+                <select
                   id="country"
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
-                  placeholder="PL"
-                  maxLength="2"
-                />
+                >
+                  <option value="Polska">Polska</option>
+                  <option value="Austria">Austria</option>
+                  <option value="Belgia">Belgia</option>
+                  <option value="Białoruś">Białoruś</option>
+                  <option value="Bułgaria">Bułgaria</option>
+                  <option value="Chorwacja">Chorwacja</option>
+                  <option value="Czechy">Czechy</option>
+                  <option value="Dania">Dania</option>
+                  <option value="Estonia">Estonia</option>
+                  <option value="Finlandia">Finlandia</option>
+                  <option value="Francja">Francja</option>
+                  <option value="Grecja">Grecja</option>
+                  <option value="Hiszpania">Hiszpania</option>
+                  <option value="Irlandia">Irlandia</option>
+                  <option value="Kanada">Kanada</option>
+                  <option value="Litwa">Litwa</option>
+                  <option value="Luksemburg">Luksemburg</option>
+                  <option value="Łotwa">Łotwa</option>
+                  <option value="Niemcy">Niemcy</option>
+                  <option value="Niderlandy">Niderlandy</option>
+                  <option value="Norwegia">Norwegia</option>
+                  <option value="Portugalia">Portugalia</option>
+                  <option value="Rumunia">Rumunia</option>
+                  <option value="Słowacja">Słowacja</option>
+                  <option value="Słowenia">Słowenia</option>
+                  <option value="Stany Zjednoczone">Stany Zjednoczone</option>
+                  <option value="Szwajcaria">Szwajcaria</option>
+                  <option value="Szwecja">Szwecja</option>
+                  <option value="Ukraina">Ukraina</option>
+                  <option value="Węgry">Węgry</option>
+                  <option value="Wielka Brytania">Wielka Brytania</option>
+                  <option value="Włochy">Włochy</option>
+                  <option value="Inne">Inne</option>
+                </select>
               </div>
             </div>
           </div>

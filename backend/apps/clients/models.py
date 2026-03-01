@@ -21,7 +21,7 @@ class Client(models.Model):
     apartment = models.CharField(max_length=32, blank=True)
     city = models.CharField(max_length=120, blank=True)
     postal_code = models.CharField(max_length=32, blank=True)
-    country = models.CharField(max_length=2, blank=True, default="PL")
+    country = models.CharField(max_length=100, blank=True, default="Polska")
 
     created_at = models.DateTimeField(auto_now_add=True)
 

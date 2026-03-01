@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { patientsAPI } from "../../services/api";
+import { translateSpecies } from "../../utils/species";
 import AddPatientModal from "../modals/AddPatientModal";
 import PatientDetailsModal from "../modals/PatientDetailsModal";
 import "./Tabs.css";
@@ -147,7 +148,7 @@ const PatientsTab = () => {
                   <div className="patient-name-section">
                     <h3>{patient.name}</h3>
                     <p className="patient-species">
-                      {patient.species}{" "}
+                      {translateSpecies(patient.species, t)}{" "}
                       {patient.breed ? `• ${patient.breed}` : ""}
                     </p>
                   </div>

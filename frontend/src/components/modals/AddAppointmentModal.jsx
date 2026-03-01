@@ -27,6 +27,8 @@ const add30Minutes = (datetimeLocalString) => {
   return formatDateTimeLocal(date);
 };
 
+import { translateSpecies } from "../../utils/species";
+
 const REASON_OPTIONS = [
   { value: "Routine Checkup", key: "reasonRoutineCheckup" },
   { value: "Vaccination", key: "reasonVaccination" },
@@ -39,7 +41,7 @@ const REASON_OPTIONS = [
   { value: "Other", key: "reasonOther" },
 ];
 
-const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
+const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt }) => {
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     patient: "",
@@ -108,16 +110,20 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
 
     loadData();
 
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const nextHour = new Date(today);
-    nextHour.setHours(now.getHours() + 1, 0, 0, 0);
-    // Jeśli następna pełna godzina wypada jutro (np. 23:45), ustaw dziś 8:00
-    if (nextHour.getDate() !== today.getDate()) {
-      nextHour.setTime(today.getTime());
-      nextHour.setHours(8, 0, 0, 0);
+    let startTime;
+    if (initialStartsAt) {
+      startTime = initialStartsAt;
+    } else {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const nextHour = new Date(today);
+      nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+      if (nextHour.getDate() !== today.getDate()) {
+        nextHour.setTime(today.getTime());
+        nextHour.setHours(8, 0, 0, 0);
+      }
+      startTime = formatDateTimeLocal(nextHour);
     }
-    const startTime = formatDateTimeLocal(nextHour);
     setFormData((prev) => ({
       ...prev,
       starts_at: startTime,
@@ -416,11 +422,12 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
               <input
                 type="text"
                 id="owner"
-                name="owner"
+                name="owner_search_8374923"
                 value={ownerSearch}
                 onChange={handleOwnerSearchChange}
                 placeholder={t("addAppointment.ownerSearchPlaceholder")}
-                style={{ 
+                autoComplete="new-password"
+                style={{
                   width: '100%',
                   padding: '0.5rem',
                   fontSize: '1rem',
@@ -491,7 +498,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 </div>
               )}
             </div>
-            {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && (
+            {ownerSearch.trim().length >= 2 && ownerSearchResults.length === 0 && !searchingClients && !selectedOwner && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#718096' }}>
                 {t("addAppointment.noOwnersFound")}
               </div>
@@ -542,7 +549,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess }) => {
                 <option value="">{t("addAppointment.selectPatient")}</option>
                 {patients.map((patient) => (
                   <option key={patient.id} value={patient.id}>
-                    {patient.name} ({patient.species})
+                    {patient.name} ({translateSpecies(patient.species, t)})
                   </option>
                 ))}
               </select>

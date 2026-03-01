@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { patientHistoryAPI, patientAISummaryAPI } from '../../services/api'
+import { translateSpecies } from '../../utils/species'
 import './Modal.css'
 
 const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
@@ -168,7 +169,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient }) => {
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
                   {t('patientDetails.species')}
                 </label>
-                <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.species || 'N/A'}</div>
+                <div style={{ fontSize: '1rem', color: '#2d3748', fontWeight: '500' }}>{patient.species ? translateSpecies(patient.species, t) : 'N/A'}</div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>
