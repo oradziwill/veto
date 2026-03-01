@@ -52,7 +52,7 @@ api.interceptors.response.use(
 
 // API endpoints
 export const patientsAPI = {
-  list: (params) => api.get("/patients/", { params }),
+  list: (params, options = {}) => api.get("/patients/", { params, ...options }),
   get: (id) => api.get(`/patients/${id}/`),
   create: (data) => api.post("/patients/", data),
   update: (id, data) => api.put(`/patients/${id}/`, data),

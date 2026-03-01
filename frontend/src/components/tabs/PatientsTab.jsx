@@ -14,17 +14,28 @@ const PatientsTab = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const abortControllerRef = React.useRef(null);
 
   const fetchPatients = async (search = "") => {
+    // Cancel any in-flight request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setLoading(true);
       setError(null);
       const params = search ? { search } : {};
-      const response = await patientsAPI.list(params);
+      const response = await patientsAPI.list(params, { signal: controller.signal });
       // Handle both paginated and non-paginated responses
       const patientsData = response.data.results || response.data || [];
       setPatients(Array.isArray(patientsData) ? patientsData : []);
     } catch (err) {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
+        return; // Ignore cancellations — a newer request is already in flight
+      }
       console.error("Error fetching patients:", err);
       const errorMessage =
         err.response?.data?.detail ||
@@ -33,12 +44,19 @@ const PatientsTab = () => {
       setError(errorMessage);
       setPatients([]);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     fetchPatients();
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
   const handleSearch = (e) => {
