@@ -8,8 +8,6 @@ import InventoryTab from "../components/tabs/InventoryTab";
 import AIAssistantTab from "../components/tabs/AIAssistantTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
-import LanguageSwitcher from "../components/LanguageSwitcher";
-import { authAPI } from "../services/api";
 import "../components/tabs/Tabs.css";
 import "./DoctorsView.css";
 
@@ -80,7 +78,6 @@ const DoctorsView = () => {
         <div className="header-content">
           <h1 className="header-title">{t("header.title")}</h1>
           <div className="header-actions">
-            <LanguageSwitcher />
             <button
               onClick={() => setShowStartVisitModal(true)}
               className="start-visit-btn"
@@ -99,10 +96,14 @@ const DoctorsView = () => {
               {t("header.startVisit")}
             </button>
             <div className="header-user">
-              <span className="user-name">{currentUser || "—"}</span>
-              <div className="user-avatar">
-                {currentUser ? currentUser.slice(0, 2).toUpperCase() : "?"}
-              </div>
+              {currentUser && (
+                <>
+                  <span className="user-name">{currentUser}</span>
+                  <div className="user-avatar">
+                    {currentUser.slice(0, 2).toUpperCase()}
+                  </div>
+                </>
+              )}
               <button
                 onClick={handleLogout}
                 style={{
