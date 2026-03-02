@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { translateSpecies } from '../../utils/species'
 import './Modal.css'
 
-const VisitDetailsModal = ({ isOpen, onClose, appointment }) => {
+const STARTABLE_STATUSES = ['scheduled', 'confirmed', 'checked_in']
+
+const VisitDetailsModal = ({ isOpen, onClose, appointment, onStartVisit }) => {
   const { t, i18n } = useTranslation()
   const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
 
@@ -137,6 +139,27 @@ const VisitDetailsModal = ({ isOpen, onClose, appointment }) => {
                 {t('visitDetails.internalNotes')}
               </div>
               <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem' }}>{appointment.internal_notes}</div>
+            </div>
+          )}
+
+          {onStartVisit && STARTABLE_STATUSES.includes(appointment?.status) && (
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <button
+                onClick={() => { onStartVisit(appointment); onClose(); }}
+                style={{
+                  width: '100%',
+                  padding: '0.65rem 1rem',
+                  background: '#2f855a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                }}
+              >
+                {t('header.startVisit')}
+              </button>
             </div>
           )}
         </div>

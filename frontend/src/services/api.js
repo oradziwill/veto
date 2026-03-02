@@ -138,7 +138,7 @@ export const patientAISummaryAPI = {
 };
 
 export const servicesAPI = {
-  list: (params) => api.get("/billing/services/", { params }),
+  list: (params, options = {}) => api.get("/billing/services/", { params, ...options }),
   get: (id) => api.get(`/billing/services/${id}/`),
 };
 

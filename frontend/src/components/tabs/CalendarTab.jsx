@@ -5,7 +5,7 @@ import VisitDetailsModal from '../modals/VisitDetailsModal'
 import AddAppointmentModal from '../modals/AddAppointmentModal'
 import './Tabs.css'
 
-const CalendarTab = ({ vets = null, vetId = null, onVetChange = null }) => {
+const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVisit = null }) => {
   const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState([])
   const [rooms, setRooms] = useState([])
@@ -443,6 +443,7 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null }) => {
           setSelectedAppointment(null)
         }}
         appointment={selectedAppointment}
+        onStartVisit={onStartVisit}
       />
 
       <AddAppointmentModal

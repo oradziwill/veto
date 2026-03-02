@@ -32,6 +32,7 @@ const DoctorsView = () => {
     !localStorage.getItem("access_token")
   );
   const [headerVisitActive, setHeaderVisitActive] = useState(false);
+  const [headerVisitInitialPatient, setHeaderVisitInitialPatient] = useState(null);
   const [calledQueueEntry, setCalledQueueEntry] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
@@ -121,7 +122,15 @@ const DoctorsView = () => {
       case "visits":
         return <VisitsTab />;
       case "calendar":
-        return <CalendarTab />;
+        return (
+          <CalendarTab
+            onStartVisit={(appointment) => {
+              setHeaderVisitInitialPatient(appointment?.patient || null);
+              setHeaderVisitActive(true);
+              setSearchParams({ tab: "new-visit" });
+            }}
+          />
+        );
       case "waiting-room":
         return (
           <WaitingRoomTab
@@ -368,12 +377,15 @@ const DoctorsView = () => {
               <StartVisitModal
                 standalone
                 isOpen={true}
+                initialPatient={headerVisitInitialPatient}
                 onClose={() => {
                   setHeaderVisitActive(false);
+                  setHeaderVisitInitialPatient(null);
                   setSearchParams({ tab: "calendar" });
                 }}
                 onSuccess={() => {
                   setHeaderVisitActive(false);
+                  setHeaderVisitInitialPatient(null);
                   setSearchParams({ tab: "visits" });
                 }}
               />

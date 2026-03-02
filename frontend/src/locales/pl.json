@@ -184,6 +184,7 @@
     "chooseService": "Wybierz usługę...",
     "noServicesAvailable": "Brak usług w katalogu.",
     "loadingServices": "Ładowanie usług...",
+    "servicesLoadError": "Nie udało się załadować usług.",
     "visitBalance": "Saldo wizyty",
     "saveVisitDetails": "Zapisz szczegóły wizyty",
     "saving": "Zapisywanie...",
