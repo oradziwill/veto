@@ -315,6 +315,7 @@ const ReceptionistView = () => {
         onSuccess={() => {
           setIsAuthenticated(true);
           setShowLoginModal(false);
+          setSearchParams({ tab: "calendar" });
           fetchCurrentUser();
           fetchVets();
         }}
