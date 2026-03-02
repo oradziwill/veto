@@ -101,7 +101,7 @@
     "waiting": "Oczekuje",
     "inProgress": "W trakcie",
     "callPatient": "Przyjmij",
-    "patientLeft": "Wyszedł",
+    "patientLeft": "Zakończ",
     "arrivedAt": "Przybycie",
     "complaint": "Zgłoszenie",
     "complaintPlaceholder": "Opisz powód wizyty",
@@ -207,7 +207,10 @@
     "createClient": "Utwórz klienta",
     "creating": "Tworzenie...",
     "authError": "Uwierzytelnienie nie powiodło się. Sprawdź połączenie.",
-    "createError": "Nie udało się utworzyć klienta. Spróbuj ponownie."
+    "createError": "Nie udało się utworzyć klienta. Spróbuj ponownie.",
+    "duplicateWarning": "Znaleziono podobnego klienta. Czy chcesz użyć istniejącego?",
+    "useExisting": "Użyj istniejącego",
+    "createAnyway": "Utwórz mimo to"
   },
   "addPatient": {
     "title": "Dodaj nowego pacjenta",

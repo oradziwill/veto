@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { clientsAPI, authAPI } from "../../services/api";
 import "./Modal.css";
@@ -19,6 +19,16 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [duplicates, setDuplicates] = useState([]);
+  const [skipDuplicateCheck, setSkipDuplicateCheck] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setDuplicates([]);
+      setSkipDuplicateCheck(false);
+      setError(null);
+    }
+  }, [isOpen]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -55,10 +65,41 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
+  const findDuplicates = async () => {
+    const first = formData.first_name.trim();
+    const last = formData.last_name.trim();
+    if (!first || !last) return [];
+    try {
+      const res = await clientsAPI.list({ q: `${first} ${last}`, in_my_clinic: true });
+      const results = res.data.results || res.data || [];
+      return results.filter((client) => {
+        const nameMatch =
+          client.first_name.toLowerCase() === first.toLowerCase() &&
+          client.last_name.toLowerCase() === last.toLowerCase();
+        if (!nameMatch) return false;
+        const userPhone = formData.phone.trim().replace(/\s/g, "");
+        const clientPhone = (client.phone || "").replace(/\s/g, "");
+        if (userPhone && clientPhone) return userPhone === clientPhone;
+        return true; // name matches and no phone to compare
+      });
+    } catch {
+      return [];
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (!skipDuplicateCheck) {
+      const dupes = await findDuplicates();
+      if (dupes.length > 0) {
+        setDuplicates(dupes);
+        setLoading(false);
+        return;
+      }
+    }
 
     // Ensure authentication before making the API call
     const isAuthenticated = await ensureAuthenticated();
@@ -86,6 +127,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
         postal_code: "",
         country: "Polska",
       });
+      setSkipDuplicateCheck(false);
     } catch (err) {
       // Handle authentication errors - try to auto-login and retry once more
       if (err.response?.status === 401) {
@@ -140,6 +182,86 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
         <form onSubmit={handleSubmit} className="modal-form">
           {error && <div className="error-message">{error}</div>}
+
+          {duplicates.length > 0 && (
+            <div style={{
+              background: "#fffbeb",
+              border: "1px solid #f6e05e",
+              borderLeft: "4px solid #d69e2e",
+              borderRadius: "8px",
+              padding: "1rem",
+              marginBottom: "1rem",
+            }}>
+              <div style={{ fontWeight: "600", color: "#744210", marginBottom: "0.5rem" }}>
+                {t("addClient.duplicateWarning")}
+              </div>
+              {duplicates.map((d) => (
+                <div key={d.id} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "0.5rem",
+                  padding: "0.4rem 0",
+                  borderBottom: "1px solid #fef08a",
+                }}>
+                  <span style={{ color: "#92400e", fontSize: "0.95rem" }}>
+                    {d.first_name} {d.last_name}
+                    {d.phone && <span style={{ color: "#a16207", marginLeft: "0.5rem" }}>· {d.phone}</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { onSuccess(d); onClose(); }}
+                    style={{
+                      padding: "0.3rem 0.75rem",
+                      background: "#2f855a",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      fontWeight: "600",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t("addClient.useExisting")}
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => { setSkipDuplicateCheck(true); setDuplicates([]); }}
+                  style={{
+                    padding: "0.4rem 0.9rem",
+                    background: "white",
+                    border: "1px solid #d69e2e",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    color: "#744210",
+                    fontWeight: "500",
+                  }}
+                >
+                  {t("addClient.createAnyway")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDuplicates([])}
+                  style={{
+                    padding: "0.4rem 0.9rem",
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    color: "#4a5568",
+                  }}
+                >
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="form-row">
             <div className="form-group">

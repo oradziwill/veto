@@ -101,7 +101,7 @@
     "waiting": "Waiting",
     "inProgress": "In Progress",
     "callPatient": "Call",
-    "patientLeft": "Left",
+    "patientLeft": "Finish",
     "arrivedAt": "Arrived",
     "complaint": "Complaint",
     "complaintPlaceholder": "Describe reason for visit",
@@ -207,7 +207,10 @@
     "createClient": "Create Client",
     "creating": "Creating...",
     "authError": "Unable to authenticate. Please check your connection and try again.",
-    "createError": "Failed to create client. Please try again."
+    "createError": "Failed to create client. Please try again.",
+    "duplicateWarning": "A similar client was found. Would you like to use the existing one?",
+    "useExisting": "Use existing",
+    "createAnyway": "Create anyway"
   },
   "addPatient": {
     "title": "Add New Patient",
