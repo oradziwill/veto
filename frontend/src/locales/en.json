@@ -184,6 +184,7 @@
     "chooseService": "Choose a service...",
     "noServicesAvailable": "No services available in the catalog.",
     "loadingServices": "Loading services...",
+    "servicesLoadError": "Failed to load services.",
     "visitBalance": "Visit balance",
     "saveVisitDetails": "Save Visit Details",
     "saving": "Saving...",
