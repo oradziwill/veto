@@ -37,36 +37,36 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
   const [serviceToAdd, setServiceToAdd] = useState('') // id of service selected in dropdown
   const [loadingServices, setLoadingServices] = useState(false)
   const [servicesError, setServicesError] = useState(false)
+  const [servicesFetchKey, setServicesFetchKey] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [suggestedAppointment, setSuggestedAppointment] = useState(null)
 
-  const loadServices = async (signal) => {
-    setLoadingServices(true)
-    setServicesError(false)
-    try {
-      const response = await servicesAPI.list(undefined, { signal })
-      const data = response.data.results ?? response.data ?? []
-      setServices(Array.isArray(data) ? data : [])
-    } catch (err) {
-      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') return
-      console.error('Error loading services:', err)
-      setServicesError(true)
-      setServices([])
-    } finally {
-      setLoadingServices(false)
-    }
-  }
-
-  // Fetch services when modal opens; abort in-flight request on unmount
+  // Fetch services when modal opens
   useEffect(() => {
     if (!isOpen) return
-    const controller = new AbortController()
-    loadServices(controller.signal)
+    let cancelled = false
+    setLoadingServices(true)
+    setServicesError(false)
     setSelectedServices([])
     setServiceToAdd('')
-    return () => controller.abort()
-  }, [isOpen])
+    servicesAPI.list()
+      .then(response => {
+        if (cancelled) return
+        const data = response.data.results ?? response.data ?? []
+        setServices(Array.isArray(data) ? data : [])
+      })
+      .catch(err => {
+        if (cancelled) return
+        console.error('Error loading services:', err)
+        setServicesError(true)
+        setServices([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingServices(false)
+      })
+    return () => { cancelled = true }
+  }, [isOpen, servicesFetchKey])
 
   // On open: pre-fill from queue entry OR check for scheduled appointment
   useEffect(() => {
@@ -629,7 +629,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
                 <span style={{ fontSize: '0.9rem', color: '#c53030' }}>{t('startVisit.servicesLoadError')}</span>
                 <button
                   type="button"
-                  onClick={() => { const c = new AbortController(); loadServices(c.signal) }}
+                  onClick={() => setServicesFetchKey(k => k + 1)}
                   style={{
                     padding: '0.3rem 0.75rem',
                     fontSize: '0.85rem',

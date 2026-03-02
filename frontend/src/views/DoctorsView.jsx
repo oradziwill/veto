@@ -22,7 +22,6 @@ const DoctorsView = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "calendar";
   const [isAuthenticated, setIsAuthenticated] = useState(
     !!localStorage.getItem("access_token")
   );
@@ -36,6 +35,14 @@ const DoctorsView = () => {
   const [calledQueueEntry, setCalledQueueEntry] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
+
+  const rawTab = searchParams.get("tab");
+  // Fall back to calendar if a visit tab is in the URL but the visit state is gone (stale URL)
+  const activeTab =
+    (rawTab === "active-visit" && !calledQueueEntry) ||
+    (rawTab === "new-visit" && !headerVisitActive)
+      ? "calendar"
+      : rawTab || "calendar";
 
   // Fetch user info from /api/me/ so it persists across page reloads
   const fetchCurrentUser = () => {
@@ -401,6 +408,7 @@ const DoctorsView = () => {
         onSuccess={() => {
           setIsAuthenticated(true);
           setShowLoginModal(false);
+          setSearchParams({ tab: "calendar" });
           fetchCurrentUser();
         }}
       />
