@@ -14,7 +14,7 @@ services:
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend
     volumes:
       - ./backend:/app
-    command: python manage.py runserver 0.0.0.0:8000
+    command: sh -c "python manage.py seed_data && python manage.py runserver 0.0.0.0:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), timeout=2)"]
       interval: 10s
@@ -30,6 +30,7 @@ services:
       - "5174:3000"
     environment:
       - VITE_API_PROXY_TARGET=http://backend:8000
+      - BACKEND_URL=http://backend:8000
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
