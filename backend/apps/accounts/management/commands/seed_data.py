@@ -124,6 +124,12 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"→ Clinic admin user already exists: {admin_user.username}")
 
+        # Link any existing users that have no clinic (e.g. Django superusers created via createsuperuser)
+        unlinked = User.objects.filter(clinic__isnull=True)
+        count = unlinked.update(clinic=clinic)
+        if count:
+            self.stdout.write(self.style.SUCCESS(f"✓ Linked {count} existing user(s) to clinic"))
+
         # Create Clients
         clients_data = [
             {

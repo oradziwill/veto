@@ -69,6 +69,9 @@ DATABASES = {
         "HOST": RDS_HOSTNAME,
         "PORT": os.getenv("RDS_PORT", "5432"),
         "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+        "OPTIONS": {
+            "connect_timeout": 10,
+        },
     }
 }
 
