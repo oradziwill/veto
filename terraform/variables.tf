@@ -24,6 +24,10 @@ variable "db_password" {
   description = "RDS master password (store in Secrets Manager, pass via TF_VAR_db_password)"
   type        = string
   sensitive   = true
+  validation {
+    condition     = length(trimspace(var.db_password)) > 0
+    error_message = "db_password must be provided (use -var-file=secrets.tfvars or TF_VAR_db_password)."
+  }
 }
 
 variable "db_instance_class" {
@@ -73,6 +77,10 @@ variable "django_secret_key" {
   description = "Django SECRET_KEY (store in Secrets Manager, pass via TF_VAR_django_secret_key)"
   type        = string
   sensitive   = true
+  validation {
+    condition     = length(trimspace(var.django_secret_key)) > 0
+    error_message = "django_secret_key must be provided (use -var-file=secrets.tfvars or TF_VAR_django_secret_key)."
+  }
 }
 
 variable "cors_allowed_origins" {
