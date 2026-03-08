@@ -87,8 +87,8 @@ resource "aws_ecs_task_definition" "frontend" {
     }]
 
     environment = [
-      # nginx proxies /api/ to the ALB, which routes it to the backend service
-      { name = "BACKEND_URL", value = "http://${aws_lb.main.dns_name}" }
+      # nginx proxies /api/ to the backend service via service discovery
+      { name = "BACKEND_URL", value = "http://backend.${aws_service_discovery_private_dns_namespace.main.name}:8000" }
     ]
 
     logConfiguration = {
@@ -120,6 +120,10 @@ resource "aws_ecs_service" "backend" {
     target_group_arn = aws_lb_target_group.backend.arn
     container_name   = "backend"
     container_port   = 8000
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.backend.arn
   }
 
   deployment_minimum_healthy_percent = 50
