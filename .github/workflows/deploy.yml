@@ -95,6 +95,11 @@ jobs:
 
       - name: Run database migrations
         run: |
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://${{ steps.render-backend.outputs.task-definition }} \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+
           NETWORK=$(aws ecs describe-services \
             --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
             --services veto-${{ steps.env.outputs.ENV }}-backend \
@@ -103,7 +108,7 @@ jobs:
 
           TASK_ARN=$(aws ecs run-task \
             --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
-            --task-definition ${{ steps.render-backend.outputs.task-definition }} \
+            --task-definition "$TASK_DEF_ARN" \
             --launch-type FARGATE \
             --network-configuration "$NETWORK" \
             --overrides '{"containerOverrides":[{"name":"backend","command":["python","manage.py","migrate","--no-input"]}]}' \
