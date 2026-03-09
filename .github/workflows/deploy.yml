@@ -93,6 +93,36 @@ jobs:
           container-name: backend
           image: ${{ env.ECR_BACKEND_REPO }}:${{ steps.tag.outputs.IMAGE_TAG }}
 
+      - name: Run database migrations
+        run: |
+          NETWORK=$(aws ecs describe-services \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --services veto-${{ steps.env.outputs.ENV }}-backend \
+            --query "services[0].networkConfiguration" \
+            --output json)
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --task-definition ${{ steps.render-backend.outputs.task-definition }} \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK" \
+            --overrides '{"containerOverrides":[{"name":"backend","command":["python","manage.py","migrate","--no-input"]}]}' \
+            --query "tasks[0].taskArn" \
+            --output text)
+
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --tasks "$TASK_ARN"
+
+          EXIT=$(aws ecs describe-tasks \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --tasks "$TASK_ARN" \
+            --query "tasks[0].containers[0].exitCode" \
+            --output text)
+          echo "Migration exit code: $EXIT"
+          test "$EXIT" = "0"
+
       - name: Deploy backend to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
