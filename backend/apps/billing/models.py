@@ -96,7 +96,9 @@ class Invoice(models.Model):
 
     # KSeF integration
     ksef_number = models.CharField(max_length=128, null=True, blank=True)
-    ksef_status = models.CharField(max_length=20, null=True, blank=True)  # pending/accepted/rejected/error
+    ksef_status = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # pending/accepted/rejected/error
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

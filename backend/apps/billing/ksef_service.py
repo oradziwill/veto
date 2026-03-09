@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # ── Environment helper ─────────────────────────────────────────────────────────
 
+
 def _get_environment():
     try:
         from ksef2 import Environment
@@ -41,11 +42,13 @@ def _get_environment():
 
 # ── Public exception ───────────────────────────────────────────────────────────
 
+
 class KSeFError(Exception):
     pass
 
 
 # ── Main submission function ───────────────────────────────────────────────────
+
 
 def submit_invoice(invoice, xml_bytes: bytes) -> str:
     """
@@ -65,9 +68,7 @@ def submit_invoice(invoice, xml_bytes: bytes) -> str:
     clinic = invoice.clinic
     nip = getattr(clinic, "nip", "") or ""
     if not nip:
-        raise KSeFError(
-            "Clinic NIP is not configured. Please set it in the admin panel."
-        )
+        raise KSeFError("Clinic NIP is not configured. Please set it in the admin panel.")
 
     env = _get_environment()
     client = Client(env)

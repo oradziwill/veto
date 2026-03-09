@@ -128,6 +128,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice = self.get_object()
         xml_bytes = build_fa3_xml(invoice)
         from django.http import HttpResponse
+
         return HttpResponse(xml_bytes, content_type="application/xml; charset=utf-8")
 
     @action(detail=True, methods=["get", "post"], url_path="payments")

@@ -47,9 +47,12 @@ def build_fa3_xml(invoice) -> bytes:
 
     # ── Naglowek ──────────────────────────────────────────────────────────────
     header = _sub(root, "Naglowek")
-    kod = _sub(header, "KodFormularza", "FA", kodSystemowy="FA (3)", wersjaSchemy="1-0E")  # noqa: F841
+    kod = _sub(
+        header, "KodFormularza", "FA", kodSystemowy="FA (3)", wersjaSchemy="1-0E"
+    )  # noqa: F841
     _sub(header, "WariantFormularza", "3")
     from django.utils.timezone import now as tz_now
+
     _sub(header, "DataWytworzeniaFa", tz_now().strftime("%Y-%m-%dT%H:%M:%S.000+01:00"))
     _sub(header, "SystemInfo", SYSTEM_INFO)
 
@@ -88,11 +91,15 @@ def build_fa3_xml(invoice) -> bytes:
     fa = _sub(root, "Fa")
     _sub(fa, "KodWaluty", invoice.currency or "PLN")
 
-    issue_date = (invoice.created_at.date() if invoice.created_at else __import__("datetime").date.today())
+    issue_date = (
+        invoice.created_at.date() if invoice.created_at else __import__("datetime").date.today()
+    )
     _sub(fa, "P_1", str(issue_date))
     _sub(fa, "P_1M", "Polska")
 
-    inv_number = invoice.invoice_number or f"FV/{issue_date.year}/{issue_date.month:02d}/{invoice.id:04d}"
+    inv_number = (
+        invoice.invoice_number or f"FV/{issue_date.year}/{issue_date.month:02d}/{invoice.id:04d}"
+    )
     _sub(fa, "P_2", inv_number)
 
     # Service period — use issue date if no specific range
@@ -120,7 +127,11 @@ def build_fa3_xml(invoice) -> bytes:
 
         net_by_rate[line.vat_rate] += net
         numeric = _vat_numeric(line.vat_rate)
-        vat_by_rate[line.vat_rate] += (net * numeric / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if numeric else Decimal("0")
+        vat_by_rate[line.vat_rate] += (
+            (net * numeric / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if numeric
+            else Decimal("0")
+        )
 
     # ── Tax totals ─────────────────────────────────────────────────────────────
     # FA3 uses P_13_1 / P_14_1 for 23%, P_13_2 / P_14_2 for 8%, P_13_3 for 5%, etc.
@@ -140,15 +151,15 @@ def build_fa3_xml(invoice) -> bytes:
 
     # ── Adnotacje (mandatory annotation block) ─────────────────────────────────
     ann = _sub(fa, "Adnotacje")
-    _sub(ann, "P_16", "2")   # no self-billing
-    _sub(ann, "P_17", "2")   # no cash accounting
-    _sub(ann, "P_18", "2")   # not self-issued
+    _sub(ann, "P_16", "2")  # no self-billing
+    _sub(ann, "P_17", "2")  # no cash accounting
+    _sub(ann, "P_18", "2")  # not self-issued
     _sub(ann, "P_18A", "2")  # structured invoice (sent via KSeF)
     zwolnienie = _sub(ann, "Zwolnienie")
     _sub(zwolnienie, "P_19N", "1")  # no VAT exemption article
     nst = _sub(ann, "NoweSrodkiTransportu")
-    _sub(nst, "P_22N", "1")         # not new transport
-    _sub(ann, "P_23", "2")          # not simplified
+    _sub(nst, "P_22N", "1")  # not new transport
+    _sub(ann, "P_23", "2")  # not simplified
     pmarzy = _sub(ann, "PMarzy")
     _sub(pmarzy, "P_PMarzy_2N", "1")  # no margin
 
