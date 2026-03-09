@@ -123,5 +123,4 @@ jobs:
           task-definition: ${{ steps.render-frontend.outputs.task-definition }}
           service: veto-${{ steps.env.outputs.ENV }}-frontend
           cluster: veto-${{ steps.env.outputs.ENV }}-cluster
-          wait-for-service-stability: true
-          wait-for-minutes: 20
+          wait-for-service-stability: false
