@@ -361,6 +361,7 @@
     "total": "Total",
     "balanceDue": "Balance Due",
     "created": "Created",
+    "ksefError": "KSeF submission failed.",
     "status": {
       "label": "Status",
       "draft": "Draft",
@@ -368,7 +369,41 @@
       "paid": "Paid",
       "overdue": "Overdue",
       "cancelled": "Cancelled"
+    },
+    "ksef": {
+      "submit": "Send to KSeF",
+      "accepted": "KSeF ✓",
+      "pending": "KSeF pending",
+      "error": "KSeF error",
+      "rejected": "KSeF rejected"
     }
+  },
+  "createInvoice": {
+    "title": "New Invoice",
+    "newInvoice": "+ New Invoice",
+    "client": "Client",
+    "clientPlaceholder": "Search by name, phone...",
+    "patient": "Patient",
+    "noPatient": "No patient",
+    "dueDate": "Due Date",
+    "currency": "Currency",
+    "status": "Status",
+    "lineItems": "Line Items",
+    "description": "Description",
+    "service": "Service",
+    "qty": "Qty",
+    "unit": "Unit",
+    "unitPrice": "Unit Price (net)",
+    "vatRate": "VAT",
+    "total": "Net Total",
+    "grandTotal": "Grand Total",
+    "addLine": "Add line",
+    "customLine": "— Custom —",
+    "descriptionPlaceholder": "Item description...",
+    "create": "Create Invoice",
+    "selectClientError": "Please select a client.",
+    "addLineError": "Please add at least one line item with a description and price.",
+    "createError": "Failed to create invoice. Please try again."
   },
   "visitDetails": {
     "title": "Visit Details",

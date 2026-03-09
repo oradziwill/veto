@@ -11,6 +11,11 @@ class Clinic(models.Model):
     phone = models.CharField(max_length=64, blank=True)
     email = models.EmailField(blank=True)
 
+    # Polish tax identifier (10 digits, no dashes)
+    nip = models.CharField(max_length=10, blank=True)
+    # KSeF token for invoice submission (stored encrypted in production)
+    ksef_token = models.CharField(max_length=512, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):

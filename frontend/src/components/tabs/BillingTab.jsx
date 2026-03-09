@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { invoicesAPI } from '../../services/api'
+import CreateInvoiceModal from '../modals/CreateInvoiceModal'
 import './Tabs.css'
+
+const KSEF_STATUS_COLORS = {
+  accepted: { background: '#f0fff4', color: '#276749' },
+  pending:  { background: '#fffbeb', color: '#b7791f' },
+  error:    { background: '#fff5f5', color: '#c53030' },
+  rejected: { background: '#fff5f5', color: '#c53030' },
+}
 
 const STATUS_COLORS = {
   draft:     { background: '#edf2f7', color: '#4a5568' },
@@ -17,6 +25,21 @@ const BillingTab = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [ksefSubmitting, setKsefSubmitting] = useState({})
+
+  const handleSubmitKsef = async (invoiceId) => {
+    setKsefSubmitting(prev => ({ ...prev, [invoiceId]: true }))
+    try {
+      const res = await invoicesAPI.submitKsef(invoiceId)
+      setInvoices(prev => prev.map(inv => inv.id === invoiceId ? res.data : inv))
+    } catch (err) {
+      const msg = err.response?.data?.detail || t('billing.ksefError')
+      alert(msg)
+    } finally {
+      setKsefSubmitting(prev => ({ ...prev, [invoiceId]: false }))
+    }
+  }
 
   const fetchInvoices = async (status = '') => {
     try {
@@ -63,6 +86,9 @@ const BillingTab = () => {
     <div className="tab-container">
       <div className="tab-header">
         <h2>{t('billing.title')}</h2>
+        <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+          {t('createInvoice.newInvoice')}
+        </button>
       </div>
 
       <div className="tab-content-wrapper">
@@ -112,18 +138,22 @@ const BillingTab = () => {
                   <th>{t('billing.total')}</th>
                   <th>{t('billing.balanceDue')}</th>
                   <th>{t('billing.created')}</th>
+                  <th>KSeF</th>
                 </tr>
               </thead>
               <tbody>
                 {invoices.length === 0 ? (
                   <tr>
-                    <td colSpan="8" style={{ textAlign: 'center', padding: '2rem' }}>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '2rem' }}>
                       {t('billing.noInvoices')}
                     </td>
                   </tr>
                 ) : (
                   invoices.map((invoice) => {
                     const colors = STATUS_COLORS[invoice.status] || STATUS_COLORS.draft
+                    const ksefColors = KSEF_STATUS_COLORS[invoice.ksef_status] || null
+                    const canSubmit = !invoice.ksef_status || invoice.ksef_status === 'error'
+                    const isSubmitting = ksefSubmitting[invoice.id]
                     return (
                       <tr key={invoice.id}>
                         <td>{invoice.id}</td>
@@ -138,6 +168,23 @@ const BillingTab = () => {
                         <td>{invoice.total} {invoice.currency}</td>
                         <td>{invoice.balance_due} {invoice.currency}</td>
                         <td>{formatDate(invoice.created_at)}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          {invoice.ksef_status && ksefColors ? (
+                            <span className="status-badge" style={ksefColors}>
+                              {t(`billing.ksef.${invoice.ksef_status}`)}
+                            </span>
+                          ) : null}
+                          {canSubmit && (
+                            <button
+                              className="btn-link"
+                              style={{ marginLeft: invoice.ksef_status ? '0.4rem' : 0, fontSize: '0.8rem' }}
+                              disabled={isSubmitting}
+                              onClick={() => handleSubmitKsef(invoice.id)}
+                            >
+                              {isSubmitting ? '…' : t('billing.ksef.submit')}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     )
                   })
@@ -147,6 +194,12 @@ const BillingTab = () => {
           </div>
         )}
       </div>
+
+      <CreateInvoiceModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={() => fetchInvoices(statusFilter)}
+      />
     </div>
   )
 }

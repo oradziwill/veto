@@ -361,6 +361,7 @@
     "total": "Kwota",
     "balanceDue": "Do zapłaty",
     "created": "Utworzona",
+    "ksefError": "Wysyłka do KSeF nie powiodła się.",
     "status": {
       "label": "Status",
       "draft": "Szkic",
@@ -368,7 +369,41 @@
       "paid": "Opłacona",
       "overdue": "Zaległa",
       "cancelled": "Anulowana"
+    },
+    "ksef": {
+      "submit": "Wyślij do KSeF",
+      "accepted": "KSeF ✓",
+      "pending": "KSeF w toku",
+      "error": "Błąd KSeF",
+      "rejected": "KSeF odrzucony"
     }
+  },
+  "createInvoice": {
+    "title": "Nowa faktura",
+    "newInvoice": "+ Nowa faktura",
+    "client": "Klient",
+    "clientPlaceholder": "Szukaj po nazwisku, telefonie...",
+    "patient": "Pacjent",
+    "noPatient": "Bez pacjenta",
+    "dueDate": "Termin płatności",
+    "currency": "Waluta",
+    "status": "Status",
+    "lineItems": "Pozycje",
+    "description": "Opis",
+    "service": "Usługa",
+    "qty": "Ilość",
+    "unit": "J.m.",
+    "unitPrice": "Cena netto",
+    "vatRate": "VAT",
+    "total": "Suma netto",
+    "grandTotal": "Łącznie (netto)",
+    "addLine": "Dodaj pozycję",
+    "customLine": "— Własna —",
+    "descriptionPlaceholder": "Opis pozycji...",
+    "create": "Utwórz fakturę",
+    "selectClientError": "Wybierz klienta.",
+    "addLineError": "Dodaj co najmniej jedną pozycję z opisem i ceną.",
+    "createError": "Nie udało się utworzyć faktury. Spróbuj ponownie."
   },
   "visitDetails": {
     "title": "Szczegóły wizyty",

@@ -91,6 +91,15 @@ class Invoice(models.Model):
     due_date = models.DateField(null=True, blank=True)
     currency = models.CharField(max_length=3, default="PLN")
 
+    # Human-readable invoice number (e.g. FV/2026/03/0001)
+    invoice_number = models.CharField(max_length=64, blank=True)
+
+    # KSeF integration
+    ksef_number = models.CharField(max_length=128, null=True, blank=True)
+    ksef_status = models.CharField(
+        max_length=20, null=True, blank=True
+    )  # pending/accepted/rejected/error
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -127,6 +136,13 @@ class Invoice(models.Model):
         )
 
     @property
+    def total_gross(self) -> Decimal:
+        return sum(
+            (line.line_gross for line in self.lines.all()),
+            Decimal("0"),
+        )
+
+    @property
     def balance_due(self) -> Decimal:
         return self.total - self.amount_paid
 
@@ -136,14 +152,29 @@ class InvoiceLine(models.Model):
     Single line on an invoice (service, product, or custom charge).
     """
 
+    class VatRate(models.TextChoices):
+        RATE_23 = "23", "23%"
+        RATE_8 = "8", "8%"
+        RATE_5 = "5", "5%"
+        RATE_0 = "0", "0%"
+        EXEMPT = "zw", "Zwolniony (zw)"
+        REVERSE = "oo", "Odwrotne obciążenie (oo)"
+        OUT_OF_SCOPE = "np", "Poza VAT (np)"
+
     invoice = models.ForeignKey(
         Invoice,
         on_delete=models.CASCADE,
         related_name="lines",
     )
     description = models.CharField(max_length=255)
-    quantity = models.PositiveIntegerField(default=1)
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, default=Decimal("1"))
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    vat_rate = models.CharField(
+        max_length=4,
+        choices=VatRate.choices,
+        default=VatRate.RATE_8,
+    )
+    unit = models.CharField(max_length=20, default="usł")
 
     service = models.ForeignKey(
         Service,
@@ -168,7 +199,21 @@ class InvoiceLine(models.Model):
 
     @property
     def line_total(self) -> Decimal:
-        return self.quantity * self.unit_price
+        """Net total (before VAT)."""
+        return (self.quantity * self.unit_price).quantize(Decimal("0.01"))
+
+    @property
+    def line_vat_amount(self) -> Decimal:
+        """VAT amount for this line."""
+        try:
+            rate = Decimal(self.vat_rate)
+        except Exception:
+            return Decimal("0")
+        return (self.line_total * rate / 100).quantize(Decimal("0.01"))
+
+    @property
+    def line_gross(self) -> Decimal:
+        return self.line_total + self.line_vat_amount
 
 
 class Payment(models.Model):
