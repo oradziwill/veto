@@ -99,8 +99,7 @@ jobs:
           task-definition: ${{ steps.render-backend.outputs.task-definition }}
           service: veto-${{ steps.env.outputs.ENV }}-backend
           cluster: veto-${{ steps.env.outputs.ENV }}-cluster
-          wait-for-service-stability: true
-          wait-for-minutes: 20
+          wait-for-service-stability: false
 
       # Frontend: fetch current task definition → inject new image → deploy
       - name: Download frontend task definition
