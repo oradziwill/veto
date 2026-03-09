@@ -200,7 +200,7 @@ class InvoiceLine(models.Model):
     @property
     def line_total(self) -> Decimal:
         """Net total (before VAT)."""
-        return self.quantity * self.unit_price
+        return (self.quantity * self.unit_price).quantize(Decimal("0.01"))
 
     @property
     def line_vat_amount(self) -> Decimal:
