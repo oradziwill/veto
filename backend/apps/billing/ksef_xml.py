@@ -47,9 +47,7 @@ def build_fa3_xml(invoice) -> bytes:
 
     # ── Naglowek ──────────────────────────────────────────────────────────────
     header = _sub(root, "Naglowek")
-    kod = _sub(
-        header, "KodFormularza", "FA", kodSystemowy="FA (3)", wersjaSchemy="1-0E"
-    )  # noqa: F841
+    _sub(header, "KodFormularza", "FA", kodSystemowy="FA (3)", wersjaSchemy="1-0E")
     _sub(header, "WariantFormularza", "3")
     from django.utils.timezone import now as tz_now
 
