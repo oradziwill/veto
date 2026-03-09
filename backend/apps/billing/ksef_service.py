@@ -83,6 +83,7 @@ def submit_invoice(invoice, xml_bytes: bytes) -> str:
                     "KSEF_CERT_PATH and KSEF_CERT_KEY_PATH must be set in Django settings for non-test environments."
                 )
             from pathlib import Path
+
             from ksef2.core.xades import load_certificate_from_pem, load_private_key_from_pem
 
             cert = load_certificate_from_pem(Path(cert_path).read_bytes())

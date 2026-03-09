@@ -9,7 +9,8 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
 
-from .ksef_service import KSeFError, submit_invoice as ksef_submit
+from .ksef_service import KSeFError
+from .ksef_service import submit_invoice as ksef_submit
 from .ksef_xml import build_fa3_xml
 from .models import Invoice, Payment, Service
 from .serializers import (

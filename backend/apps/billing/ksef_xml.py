@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
-from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.dom.minidom import parseString
+from xml.etree.ElementTree import Element, SubElement, tostring
 
 FA3_NS = "http://crd.gov.pl/wzor/2023/06/29/12648/"
 SYSTEM_INFO = "VetoClinic"
