@@ -9,6 +9,8 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
 
+from .ksef_service import KSeFError, submit_invoice as ksef_submit
+from .ksef_xml import build_fa3_xml
 from .models import Invoice, Payment, Service
 from .serializers import (
     InvoiceReadSerializer,
@@ -61,7 +63,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return qs
 
     def get_serializer_class(self):
-        if self.action in ("list", "retrieve", "create", "update", "partial_update"):
+        if self.action in ("create", "update", "partial_update"):
             return InvoiceWriteSerializer
         return InvoiceReadSerializer
 
@@ -94,6 +96,38 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice.status = Invoice.Status.SENT
         invoice.save(update_fields=["status", "updated_at"])
         return Response(InvoiceReadSerializer(invoice).data)
+
+    @action(detail=True, methods=["post"], url_path="submit-ksef")
+    def submit_ksef(self, request, pk=None):
+        """Build FA3 XML and submit this invoice to KSeF."""
+        invoice = self.get_object()
+        if invoice.ksef_status == "accepted":
+            return Response({"detail": "Invoice already accepted by KSeF."}, status=400)
+
+        try:
+            xml_bytes = build_fa3_xml(invoice)
+            invoice.ksef_status = "pending"
+            invoice.save(update_fields=["ksef_status", "updated_at"])
+
+            reference = ksef_submit(invoice, xml_bytes)
+
+            invoice.ksef_number = reference
+            invoice.ksef_status = "accepted"
+            invoice.save(update_fields=["ksef_number", "ksef_status", "updated_at"])
+
+            return Response(InvoiceReadSerializer(invoice).data)
+        except KSeFError as exc:
+            invoice.ksef_status = "error"
+            invoice.save(update_fields=["ksef_status", "updated_at"])
+            return Response({"detail": str(exc)}, status=502)
+
+    @action(detail=True, methods=["get"], url_path="ksef-xml")
+    def ksef_xml_preview(self, request, pk=None):
+        """Return the FA3 XML for this invoice (for preview/debugging)."""
+        invoice = self.get_object()
+        xml_bytes = build_fa3_xml(invoice)
+        from django.http import HttpResponse
+        return HttpResponse(xml_bytes, content_type="application/xml; charset=utf-8")
 
     @action(detail=True, methods=["get", "post"], url_path="payments")
     def payments_list_or_create(self, request, pk=None):

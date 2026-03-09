@@ -33,6 +33,11 @@ black>=24.4
 openai>=1.0.0
 
 # -------------------------
+# KSeF (Polish e-invoicing) — requires Python 3.12+
+# -------------------------
+ksef2>=0.1
+
+# -------------------------
 # Environment variables
 # -------------------------
 python-dotenv>=1.0.0

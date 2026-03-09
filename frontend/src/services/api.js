@@ -147,6 +147,7 @@ export const invoicesAPI = {
   get: (id) => api.get(`/billing/invoices/${id}/`),
   create: (data) => api.post("/billing/invoices/", data),
   update: (id, data) => api.put(`/billing/invoices/${id}/`, data),
+  submitKsef: (id) => api.post(`/billing/invoices/${id}/submit-ksef/`),
 };
 
 export default api;

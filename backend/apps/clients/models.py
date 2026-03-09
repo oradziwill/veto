@@ -14,6 +14,8 @@ class Client(models.Model):
 
     phone = models.CharField(max_length=64, blank=True)
     email = models.EmailField(blank=True)
+    # Polish tax ID — used for B2B KSeF invoices
+    nip = models.CharField(max_length=10, blank=True)
 
     # ---- Address (for prescriptions & documents) ----
     street = models.CharField(max_length=255, blank=True)
