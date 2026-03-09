@@ -5,6 +5,7 @@ import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
 import CalendarTab from "../components/tabs/CalendarTab";
 import WaitingRoomTab from "../components/tabs/WaitingRoomTab";
+import BillingTab from "../components/tabs/BillingTab";
 import LoginModal from "../components/LoginModal";
 import { authAPI, vetsAPI } from "../services/api";
 import "../components/tabs/Tabs.css";
@@ -112,6 +113,7 @@ const ReceptionistView = () => {
     { id: "waiting-room", label: t("tabs.waitingRoom"), icon: "🏥" },
     { id: "patients", label: t("tabs.patients"), icon: "🐾" },
     { id: "visits", label: t("tabs.visits"), icon: "📋" },
+    { id: "billing", label: t("tabs.billing"), icon: "💳" },
   ];
 
   const renderTabContent = () => {
@@ -130,6 +132,8 @@ const ReceptionistView = () => {
         return <PatientsTab />;
       case "visits":
         return <VisitsTab />;
+      case "billing":
+        return <BillingTab />;
       default:
         return (
           <CalendarTab

@@ -25,6 +25,7 @@
     "calendar": "Kalendarz",
     "waitingRoom": "Poczekalnia",
     "inventory": "Magazyn",
+    "billing": "Faktury",
     "aiAssistant": "Asystent AI",
     "activeVisit": "Wizyta",
     "newVisit": "Nowa wizyta"
@@ -344,6 +345,30 @@
     "notesLabel": "Notatki",
     "receiptSummary": "Podsumowanie paragonu",
     "close": "Zamknij"
+  },
+  "billing": {
+    "title": "Faktury",
+    "totalInvoices": "Wszystkie faktury",
+    "paid": "Opłacone",
+    "outstanding": "Do zapłaty",
+    "allStatuses": "Wszystkie statusy",
+    "loading": "Ładowanie faktur...",
+    "loadError": "Nie udało się załadować faktur. Spróbuj ponownie.",
+    "noInvoices": "Brak faktur",
+    "client": "Klient",
+    "patient": "Pacjent",
+    "dueDate": "Termin płatności",
+    "total": "Kwota",
+    "balanceDue": "Do zapłaty",
+    "created": "Utworzona",
+    "status": {
+      "label": "Status",
+      "draft": "Szkic",
+      "sent": "Wysłana",
+      "paid": "Opłacona",
+      "overdue": "Zaległa",
+      "cancelled": "Anulowana"
+    }
   },
   "visitDetails": {
     "title": "Szczegóły wizyty",

@@ -25,6 +25,7 @@
     "calendar": "Calendar",
     "waitingRoom": "Waiting Room",
     "inventory": "Inventory",
+    "billing": "Billing",
     "aiAssistant": "AI Assistant",
     "activeVisit": "Visit",
     "newVisit": "New Visit"
@@ -344,6 +345,30 @@
     "notesLabel": "Notes",
     "receiptSummary": "Receipt Summary",
     "close": "Close"
+  },
+  "billing": {
+    "title": "Billing",
+    "totalInvoices": "Total Invoices",
+    "paid": "Paid",
+    "outstanding": "Outstanding",
+    "allStatuses": "All Statuses",
+    "loading": "Loading invoices...",
+    "loadError": "Failed to load invoices. Please try again.",
+    "noInvoices": "No invoices found",
+    "client": "Client",
+    "patient": "Patient",
+    "dueDate": "Due Date",
+    "total": "Total",
+    "balanceDue": "Balance Due",
+    "created": "Created",
+    "status": {
+      "label": "Status",
+      "draft": "Draft",
+      "sent": "Sent",
+      "paid": "Paid",
+      "overdue": "Overdue",
+      "cancelled": "Cancelled"
+    }
   },
   "visitDetails": {
     "title": "Visit Details",
