@@ -78,7 +78,9 @@ def _round_up(dt: datetime, minutes: int) -> datetime:
     return datetime.fromtimestamp(rounded, tz=dt.tzinfo)
 
 
-def _split_into_slots(intervals: Iterable[Interval], slot_minutes: int) -> list[Interval]:
+def _split_into_slots(
+    intervals: Iterable[Interval], slot_minutes: int
+) -> list[Interval]:
     slot = timedelta(minutes=slot_minutes)
     out: list[Interval] = []
 
@@ -113,7 +115,9 @@ def compute_availability(
     day = datetime.fromisoformat(date_str).date()
 
     # Slot length
-    slot_minutes_final = int(slot_minutes or getattr(settings, "DEFAULT_SLOT_MINUTES", 30))
+    slot_minutes_final = int(
+        slot_minutes or getattr(settings, "DEFAULT_SLOT_MINUTES", 30)
+    )
 
     # Clinic closure check
     holiday = (
@@ -139,7 +143,9 @@ def compute_availability(
 
     # Defaults from settings
     default_open_t = _parse_hhmm(getattr(settings, "DEFAULT_CLINIC_OPEN_TIME", "09:00"))
-    default_close_t = _parse_hhmm(getattr(settings, "DEFAULT_CLINIC_CLOSE_TIME", "17:00"))
+    default_close_t = _parse_hhmm(
+        getattr(settings, "DEFAULT_CLINIC_CLOSE_TIME", "17:00")
+    )
 
     open_t = default_open_t
     close_t = default_close_t
@@ -148,7 +154,9 @@ def compute_availability(
     if vet_id is not None:
         weekday = day.weekday()  # Monday=0 ... Sunday=6
         wh = (
-            VetWorkingHours.objects.filter(vet_id=vet_id, weekday=weekday, is_active=True)
+            VetWorkingHours.objects.filter(
+                vet_id=vet_id, weekday=weekday, is_active=True
+            )
             .order_by("start_time")
             .first()
         )

@@ -43,7 +43,9 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
         ends_at = attrs.get("ends_at")
 
         if starts_at and ends_at and ends_at <= starts_at:
-            raise serializers.ValidationError({"ends_at": "ends_at must be after starts_at"})
+            raise serializers.ValidationError(
+                {"ends_at": "ends_at must be after starts_at"}
+            )
 
         try:
             # Run model-level validation (overlaps, clinic consistency, etc.)

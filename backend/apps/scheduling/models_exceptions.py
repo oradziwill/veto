@@ -13,7 +13,9 @@ class VetAvailabilityException(models.Model):
     - custom hours: is_day_off=False and start_time/end_time set
     """
 
-    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, related_name="vet_exceptions")
+    clinic = models.ForeignKey(
+        Clinic, on_delete=models.PROTECT, related_name="vet_exceptions"
+    )
     vet = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -38,7 +40,9 @@ class VetAvailabilityException(models.Model):
         # If not day off, either both times are set or neither (meaning "no override")
         if not self.is_day_off:
             if (self.start_time is None) ^ (self.end_time is None):
-                raise models.ValidationError("Provide both start_time and end_time or neither.")
+                raise models.ValidationError(
+                    "Provide both start_time and end_time or neither."
+                )
             if self.start_time and self.end_time and self.end_time <= self.start_time:
                 raise models.ValidationError("end_time must be after start_time.")
 
@@ -46,5 +50,7 @@ class VetAvailabilityException(models.Model):
         if self.is_day_off:
             return f"{self.vet} day off ({self.date})"
         if self.start_time and self.end_time:
-            return f"{self.vet} override {self.start_time}-{self.end_time} ({self.date})"
+            return (
+                f"{self.vet} override {self.start_time}-{self.end_time} ({self.date})"
+            )
         return f"{self.vet} exception ({self.date})"

@@ -22,7 +22,15 @@ class VetWorkingHoursAdmin(admin.ModelAdmin):
 
 @admin.register(VetAvailabilityException)
 class VetAvailabilityExceptionAdmin(admin.ModelAdmin):
-    list_display = ("clinic", "vet", "date", "is_day_off", "start_time", "end_time", "note")
+    list_display = (
+        "clinic",
+        "vet",
+        "date",
+        "is_day_off",
+        "start_time",
+        "end_time",
+        "note",
+    )
     list_filter = ("clinic", "is_day_off", "date")
     search_fields = ("vet__username", "vet__first_name", "vet__last_name", "note")
     ordering = ("-date",)
@@ -30,6 +38,14 @@ class VetAvailabilityExceptionAdmin(admin.ModelAdmin):
 
 @admin.register(Appointment)
 class AppointmentAdmin(admin.ModelAdmin):
-    list_display = ("clinic", "vet", "patient", "room", "starts_at", "ends_at", "status")
+    list_display = (
+        "clinic",
+        "vet",
+        "patient",
+        "room",
+        "starts_at",
+        "ends_at",
+        "status",
+    )
     list_filter = ("clinic", "status", "vet")
     search_fields = ("patient__name", "vet__username")

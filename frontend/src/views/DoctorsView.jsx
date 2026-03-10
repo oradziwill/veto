@@ -9,6 +9,7 @@ import AIAssistantTab from "../components/tabs/AIAssistantTab";
 import WaitingRoomTab from "../components/tabs/WaitingRoomTab";
 import ServiceCatalogTab from "../components/tabs/ServiceCatalogTab";
 import OwnerDashboardTab from "../components/tabs/OwnerDashboardTab";
+import SchedulerTab from "../components/tabs/SchedulerTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
 import { authAPI, queueAPI } from "../services/api";
@@ -28,6 +29,7 @@ const DoctorsView = () => {
     !!localStorage.getItem("access_token")
   );
   const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [userRole, setUserRole] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(
     !localStorage.getItem("access_token")
@@ -49,7 +51,7 @@ const DoctorsView = () => {
   // Fetch user info from /api/me/ so it persists across page reloads
   const fetchCurrentUser = () => {
     authAPI.me().then((res) => {
-      const { username, first_name, last_name, role } = res.data;
+      const { id, username, first_name, last_name, role } = res.data;
       if (role === "receptionist") {
         navigate("/receptionist", { replace: true });
         return;
@@ -57,6 +59,7 @@ const DoctorsView = () => {
       const displayName =
         first_name && last_name ? `${first_name} ${last_name}` : username;
       setCurrentUser(displayName);
+      setCurrentUserId(id);
       setUserRole(role);
     }).catch(() => {
       // 401 handled by interceptor (dispatches auth:logout)
@@ -120,6 +123,7 @@ const DoctorsView = () => {
       ? [
           { id: "owner-dashboard", label: t("tabs.ownerDashboard"), icon: "📊" },
           { id: "service-catalog", label: t("tabs.serviceCatalog"), icon: "🗂️" },
+          { id: "scheduler", label: t("tabs.scheduler"), icon: "🗓️" },
         ]
       : []),
     ...(calledQueueEntry
@@ -139,6 +143,7 @@ const DoctorsView = () => {
       case "calendar":
         return (
           <CalendarTab
+            currentUserId={currentUserId}
             onStartVisit={(appointment) => {
               setHeaderVisitInitialPatient(appointment?.patient || null);
               setHeaderVisitActive(true);
@@ -165,6 +170,8 @@ const DoctorsView = () => {
         return <ServiceCatalogTab />;
       case "owner-dashboard":
         return <OwnerDashboardTab />;
+      case "scheduler":
+        return <SchedulerTab />;
       default:
         return <PatientsTab />;
     }

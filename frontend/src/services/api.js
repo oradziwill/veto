@@ -155,4 +155,39 @@ export const invoicesAPI = {
   submitKsef: (id) => api.post(`/billing/invoices/${id}/submit-ksef/`),
 };
 
+export const schedulerAPI = {
+  // Working hours (regular weekly schedule per vet)
+  listWorkingHours: (params) => api.get("/schedule/working-hours/", { params }),
+  createWorkingHours: (data) => api.post("/schedule/working-hours/", data),
+  updateWorkingHours: (id, data) => api.put(`/schedule/working-hours/${id}/`, data),
+  deleteWorkingHours: (id) => api.delete(`/schedule/working-hours/${id}/`),
+
+  // Exceptions (day-offs, custom hours for a specific date)
+  listExceptions: (params) => api.get("/schedule/exceptions/", { params }),
+  createException: (data) => api.post("/schedule/exceptions/", data),
+  updateException: (id, data) => api.patch(`/schedule/exceptions/${id}/`, data),
+  deleteException: (id) => api.delete(`/schedule/exceptions/${id}/`),
+
+  // Clinic holidays (full-day clinic closures)
+  listHolidays: (params) => api.get("/schedule/holidays/", { params }),
+  createHoliday: (data) => api.post("/schedule/holidays/", data),
+  updateHoliday: (id, data) => api.patch(`/schedule/holidays/${id}/`, data),
+  deleteHoliday: (id) => api.delete(`/schedule/holidays/${id}/`),
+
+  // Clinic working hours (when is the clinic open per weekday)
+  listClinicHours: () => api.get("/schedule/clinic-hours/"),
+  createClinicHours: (data) => api.post("/schedule/clinic-hours/", data),
+  updateClinicHours: (id, data) => api.put(`/schedule/clinic-hours/${id}/`, data),
+  deleteClinicHours: (id) => api.delete(`/schedule/clinic-hours/${id}/`),
+
+  // Duty assignments (generated schedule)
+  listAssignments: (params) => api.get("/schedule/assignments/", { params }),
+  createAssignment: (data) => api.post("/schedule/assignments/", data),
+  updateAssignment: (id, data) => api.patch(`/schedule/assignments/${id}/`, data),
+  deleteAssignment: (id) => api.delete(`/schedule/assignments/${id}/`),
+
+  // Schedule generation
+  generate: (data) => api.post("/schedule/generate/", data),
+};
+
 export default api;

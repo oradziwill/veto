@@ -7,6 +7,8 @@ from apps.patients.models import Patient
 from apps.tenancy.models import Clinic
 
 from .models_exceptions import VetAvailabilityException  # noqa: F401
+from .models_clinic_hours import ClinicWorkingHours  # noqa: F401
+from .models_duty import DutyAssignment  # noqa: F401
 
 
 class Room(models.Model):
@@ -47,8 +49,12 @@ class Appointment(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         NO_SHOW = "no_show", "No-show"
 
-    clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, related_name="appointments")
-    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="appointments")
+    clinic = models.ForeignKey(
+        Clinic, on_delete=models.PROTECT, related_name="appointments"
+    )
+    patient = models.ForeignKey(
+        Patient, on_delete=models.PROTECT, related_name="appointments"
+    )
     vet = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -71,7 +77,9 @@ class Appointment(models.Model):
         choices=VisitType.choices,
         default=VisitType.OUTPATIENT,
     )
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.SCHEDULED
+    )
     reason = models.CharField(max_length=255, blank=True)
     internal_notes = models.TextField(blank=True)
 
@@ -90,8 +98,14 @@ class Appointment(models.Model):
         if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
             raise ValidationError({"ends_at": "ends_at must be after starts_at"})
 
-        if self.patient_id and self.clinic_id and self.patient.clinic_id != self.clinic_id:
-            raise ValidationError({"patient": "Patient clinic must match appointment clinic."})
+        if (
+            self.patient_id
+            and self.clinic_id
+            and self.patient.clinic_id != self.clinic_id
+        ):
+            raise ValidationError(
+                {"patient": "Patient clinic must match appointment clinic."}
+            )
 
         if (
             self.vet_id
@@ -101,7 +115,9 @@ class Appointment(models.Model):
             raise ValidationError({"vet": "Vet clinic must match appointment clinic."})
 
         if self.room_id and self.clinic_id and self.room.clinic_id != self.clinic_id:
-            raise ValidationError({"room": "Room must belong to the appointment clinic."})
+            raise ValidationError(
+                {"room": "Room must belong to the appointment clinic."}
+            )
 
         if self.room_id and self.clinic_id and self.starts_at and self.ends_at:
             room_qs = Appointment.objects.filter(
@@ -110,7 +126,9 @@ class Appointment(models.Model):
             ).exclude(status=Appointment.Status.CANCELLED)
             if self.pk:
                 room_qs = room_qs.exclude(pk=self.pk)
-            room_qs = room_qs.filter(starts_at__lt=self.ends_at, ends_at__gt=self.starts_at)
+            room_qs = room_qs.filter(
+                starts_at__lt=self.ends_at, ends_at__gt=self.starts_at
+            )
             if room_qs.exists():
                 raise ValidationError(
                     "This room already has an overlapping appointment in this time range."

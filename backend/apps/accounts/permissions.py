@@ -60,7 +60,43 @@ class IsClinicStaffOrReadOnly(BasePermission):
             return False
         if request.method in SAFE_METHODS:
             return True
-        return bool(getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+        return bool(
+            getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)
+        )
+
+
+class IsClinicAdmin(BasePermission):
+    """
+    Allows access only to clinic admins (role == 'admin').
+    """
+
+    message = "Only clinic admins can perform this action."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        return bool(
+            user and user.is_authenticated and getattr(user, "role", None) == "admin"
+        )
+
+
+class IsAdminOrReadOnly(BasePermission):
+    """
+    Read access for all authenticated clinic staff.
+    Write access only for clinic admins.
+    """
+
+    message = "Only clinic admins can modify this resource."
+
+    def has_permission(self, request, view) -> bool:
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if request.method in SAFE_METHODS:
+            role = getattr(user, "role", None)
+            return role in ("doctor", "receptionist", "admin") or getattr(
+                user, "is_staff", False
+            )
+        return getattr(user, "role", None) == "admin"
 
 
 class IsStaffOrVet(BasePermission):

@@ -26,7 +26,9 @@ def test_close_visit_happy_path_by_vet():
 
     owner = Client.objects.create(first_name="A", last_name="B")
     ClientClinic.objects.create(client=owner, clinic=clinic)
-    patient = Patient.objects.create(clinic=clinic, owner=owner, name="P", species="dog")
+    patient = Patient.objects.create(
+        clinic=clinic, owner=owner, name="P", species="dog"
+    )
 
     appt = Appointment.objects.create(
         clinic=clinic,
@@ -73,7 +75,9 @@ def test_close_visit_forbidden_for_non_vet():
 
     owner = Client.objects.create(first_name="A", last_name="B")
     ClientClinic.objects.create(client=owner, clinic=clinic)
-    patient = Patient.objects.create(clinic=clinic, owner=owner, name="P", species="dog")
+    patient = Patient.objects.create(
+        clinic=clinic, owner=owner, name="P", species="dog"
+    )
 
     appt = Appointment.objects.create(
         clinic=clinic,
@@ -94,7 +98,9 @@ def test_close_visit_forbidden_for_non_vet():
 @pytest.mark.django_db
 def test_close_visit_not_found_outside_clinic():
     clinic1 = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
-    clinic2 = Clinic.objects.create(name="C2", address="a2", phone="p2", email="e2@e.com")
+    clinic2 = Clinic.objects.create(
+        name="C2", address="a2", phone="p2", email="e2@e.com"
+    )
 
     vet1 = User.objects.create_user(
         username="vet1",
@@ -115,7 +121,9 @@ def test_close_visit_not_found_outside_clinic():
 
     owner = Client.objects.create(first_name="A", last_name="B")
     ClientClinic.objects.create(client=owner, clinic=clinic2)
-    patient = Patient.objects.create(clinic=clinic2, owner=owner, name="P", species="dog")
+    patient = Patient.objects.create(
+        clinic=clinic2, owner=owner, name="P", species="dog"
+    )
 
     appt = Appointment.objects.create(
         clinic=clinic2,
