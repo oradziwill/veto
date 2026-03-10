@@ -1,9 +1,9 @@
 from rest_framework import serializers
 
-from apps.scheduling.models_working_hours import VetWorkingHours
-from apps.scheduling.models_exceptions import VetAvailabilityException
 from apps.scheduling.models_clinic_hours import ClinicWorkingHours
 from apps.scheduling.models_duty import DutyAssignment
+from apps.scheduling.models_exceptions import VetAvailabilityException
+from apps.scheduling.models_working_hours import VetWorkingHours
 from apps.tenancy.models import ClinicHoliday
 
 

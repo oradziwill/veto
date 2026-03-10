@@ -21,14 +21,13 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 
-from django.db import transaction
-from django.db.models import Count
-
 from apps.scheduling.models_clinic_hours import ClinicWorkingHours
 from apps.scheduling.models_duty import DutyAssignment
 from apps.scheduling.models_exceptions import VetAvailabilityException
 from apps.scheduling.models_working_hours import VetWorkingHours
 from apps.tenancy.models import Clinic, ClinicHoliday
+from django.db import transaction
+from django.db.models import Count
 
 
 def _build_shifts(clinic_wh: ClinicWorkingHours) -> list[tuple[time, time]]:

@@ -6,8 +6,8 @@ Usage:
     docker compose exec backend python manage.py create_sample_doctors --clinic-slug my-clinic
 """
 
-from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
+from django.core.management.base import BaseCommand, CommandError
 
 User = get_user_model()
 
@@ -66,8 +66,8 @@ class Command(BaseCommand):
 
         try:
             clinic = Clinic.objects.get(slug=slug) if slug else Clinic.objects.first()
-        except Clinic.DoesNotExist:
-            raise CommandError(f"Clinic with slug '{slug}' not found.")
+        except Clinic.DoesNotExist as e:
+            raise CommandError(f"Clinic with slug '{slug}' not found.") from e
 
         if clinic is None:
             raise CommandError("No clinic found. Create a clinic first.")

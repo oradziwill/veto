@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from rest_framework import status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,8 +11,6 @@ from apps.scheduling.models_clinic_hours import ClinicWorkingHours
 from apps.scheduling.models_duty import DutyAssignment
 from apps.scheduling.models_exceptions import VetAvailabilityException
 from apps.scheduling.models_working_hours import VetWorkingHours
-from apps.scheduling.services.schedule_generator import generate_schedule
-from apps.tenancy.models import ClinicHoliday
 from apps.scheduling.serializers_schedule import (
     ClinicHolidaySerializer,
     ClinicWorkingHoursSerializer,
@@ -21,6 +18,8 @@ from apps.scheduling.serializers_schedule import (
     VetAvailabilityExceptionSerializer,
     VetWorkingHoursSerializer,
 )
+from apps.scheduling.services.schedule_generator import generate_schedule
+from apps.tenancy.models import ClinicHoliday
 
 
 class VetWorkingHoursViewSet(viewsets.ModelViewSet):
