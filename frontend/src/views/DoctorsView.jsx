@@ -8,6 +8,7 @@ import InventoryTab from "../components/tabs/InventoryTab";
 import AIAssistantTab from "../components/tabs/AIAssistantTab";
 import WaitingRoomTab from "../components/tabs/WaitingRoomTab";
 import ServiceCatalogTab from "../components/tabs/ServiceCatalogTab";
+import OwnerDashboardTab from "../components/tabs/OwnerDashboardTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
 import { authAPI, queueAPI } from "../services/api";
@@ -116,7 +117,10 @@ const DoctorsView = () => {
     { id: "inventory", label: t("tabs.inventory"), icon: "📦" },
     { id: "ai-assistant", label: t("tabs.aiAssistant"), icon: "🤖" },
     ...(userRole === "admin"
-      ? [{ id: "service-catalog", label: t("tabs.serviceCatalog"), icon: "🗂️" }]
+      ? [
+          { id: "owner-dashboard", label: t("tabs.ownerDashboard"), icon: "📊" },
+          { id: "service-catalog", label: t("tabs.serviceCatalog"), icon: "🗂️" },
+        ]
       : []),
     ...(calledQueueEntry
       ? [{ id: "active-visit", label: calledQueueEntry.patient?.name || t("tabs.activeVisit"), icon: "🩺" }]
@@ -159,6 +163,8 @@ const DoctorsView = () => {
         return <AIAssistantTab />;
       case "service-catalog":
         return <ServiceCatalogTab />;
+      case "owner-dashboard":
+        return <OwnerDashboardTab />;
       default:
         return <PatientsTab />;
     }
