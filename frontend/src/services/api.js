@@ -70,11 +70,13 @@ export const appointmentsAPI = {
 };
 
 export const inventoryAPI = {
-  list: (params) => api.get("/inventory/", { params }),
-  get: (id) => api.get(`/inventory/${id}/`),
-  create: (data) => api.post("/inventory/", data),
-  update: (id, data) => api.put(`/inventory/${id}/`, data),
-  delete: (id) => api.delete(`/inventory/${id}/`),
+  list: (params) => api.get("/inventory/items/", { params }),
+  get: (id) => api.get(`/inventory/items/${id}/`),
+  create: (data) => api.post("/inventory/items/", data),
+  update: (id, data) => api.put(`/inventory/items/${id}/`, data),
+  delete: (id) => api.delete(`/inventory/items/${id}/`),
+  movements: (params) => api.get("/inventory/movements/", { params }),
+  recordMovement: (data) => api.post("/inventory/movements/", data),
 };
 
 export const clientsAPI = {

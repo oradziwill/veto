@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { inventoryAPI } from '../../services/api'
 import AddInventoryModal from '../modals/AddInventoryModal'
+import StockMovementModal from '../modals/StockMovementModal'
 import './Tabs.css'
 
 const InventoryTab = () => {
@@ -11,50 +12,49 @@ const InventoryTab = () => {
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [lowStockOnly, setLowStockOnly] = useState(false)
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [editItem, setEditItem] = useState(null)
+  const [movementItem, setMovementItem] = useState(null)
 
-  const fetchInventory = async (search = '', category = '') => {
+  const fetchInventory = async () => {
     try {
       setLoading(true)
       setError(null)
       const params = {}
-      if (search) params.search = search
-      if (category && category !== 'all') params.category = category
-      const response = await inventoryAPI.list(params)
-      setItems(response.data.results || response.data)
-    } catch (err) {
+      if (searchTerm) params.q = searchTerm
+      if (categoryFilter && categoryFilter !== 'all') params.category = categoryFilter
+      if (lowStockOnly) params.low_stock = '1'
+      const res = await inventoryAPI.list(params)
+      setItems(res.data.results || res.data)
+    } catch {
       setError(t('inventory.loadError'))
-      console.error('Error fetching inventory:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchInventory(searchTerm, categoryFilter)
-  }, [searchTerm, categoryFilter])
+  useEffect(() => { fetchInventory() }, [searchTerm, categoryFilter, lowStockOnly])
 
   const stats = {
     total: items.length,
-    lowStock: items.filter(item => item.is_low_stock && !item.is_out_of_stock).length,
-    outOfStock: items.filter(item => item.is_out_of_stock).length,
+    lowStock: items.filter(i => i.is_low_stock && i.stock_on_hand > 0).length,
+    outOfStock: items.filter(i => i.stock_on_hand === 0).length,
   }
 
   const getStatusBadge = (item) => {
-    if (item.is_out_of_stock) {
-      return <span className="status-badge out-of-stock">{t('inventory.outOfStock')}</span>
-    }
-    if (item.is_low_stock) {
-      return <span className="status-badge low-stock">{t('inventory.lowStock')}</span>
-    }
-    return <span className="status-badge in-stock">{t('inventory.inStock')}</span>
+    if (item.stock_on_hand === 0)
+      return <span className="status-badge" style={{ background: '#fff5f5', color: '#c53030' }}>{t('inventory.outOfStock')}</span>
+    if (item.is_low_stock)
+      return <span className="status-badge" style={{ background: '#fffbeb', color: '#b7791f' }}>{t('inventory.lowStock')}</span>
+    return <span className="status-badge" style={{ background: '#f0fff4', color: '#276749' }}>{t('inventory.inStock')}</span>
   }
 
   return (
     <div className="tab-container">
       <div className="tab-header">
         <h2>{t('inventory.title')}</h2>
-        <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+        <button className="btn-primary" onClick={() => setIsAddOpen(true)}>
           {t('inventory.addItem')}
         </button>
       </div>
@@ -66,11 +66,11 @@ const InventoryTab = () => {
             <div className="stat-label">{t('inventory.totalItems')}</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{stats.lowStock}</div>
+            <div className="stat-value" style={{ color: stats.lowStock > 0 ? '#b7791f' : undefined }}>{stats.lowStock}</div>
             <div className="stat-label">{t('inventory.lowStock')}</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{stats.outOfStock}</div>
+            <div className="stat-value" style={{ color: stats.outOfStock > 0 ? '#c53030' : undefined }}>{stats.outOfStock}</div>
             <div className="stat-label">{t('inventory.outOfStock')}</div>
           </div>
         </div>
@@ -81,19 +81,19 @@ const InventoryTab = () => {
             placeholder={t('inventory.searchPlaceholder')}
             className="search-input"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={e => setSearchTerm(e.target.value)}
           />
-          <select
-            className="filter-select"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-          >
+          <select className="filter-select" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
             <option value="all">{t('inventory.allCategories')}</option>
-            <option value="medication">{t('inventory.medications')}</option>
-            <option value="supplies">{t('inventory.supplies')}</option>
-            <option value="equipment">{t('inventory.equipment')}</option>
+            <option value="medication">{t('inventory.medication')}</option>
+            <option value="supply">{t('inventory.supply')}</option>
+            <option value="food">{t('inventory.food')}</option>
             <option value="other">{t('inventory.other')}</option>
           </select>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem', color: '#4a5568', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={lowStockOnly} onChange={e => setLowStockOnly(e.target.checked)} />
+            {t('inventory.lowStockOnly')}
+          </label>
         </div>
 
         {loading && <div className="loading-message">{t('inventory.loadingInventory')}</div>}
@@ -105,8 +105,9 @@ const InventoryTab = () => {
               <thead>
                 <tr>
                   <th>{t('inventory.itemName')}</th>
+                  <th>{t('inventory.sku')}</th>
                   <th>{t('inventory.category')}</th>
-                  <th>{t('inventory.stock')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('inventory.stock')}</th>
                   <th>{t('inventory.unit')}</th>
                   <th>{t('inventory.status')}</th>
                   <th>{t('inventory.actions')}</th>
@@ -115,20 +116,36 @@ const InventoryTab = () => {
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '2rem' }}>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '2rem' }}>
                       {t('inventory.noItemsFound')}
                     </td>
                   </tr>
                 ) : (
-                  items.map((item) => (
+                  items.map(item => (
                     <tr key={item.id}>
-                      <td>{item.name}</td>
-                      <td>{item.category?.charAt(0).toUpperCase() + item.category?.slice(1) || 'Other'}</td>
-                      <td>{item.stock_quantity}</td>
+                      <td><strong>{item.name}</strong></td>
+                      <td style={{ color: '#718096', fontSize: '0.85rem' }}>{item.sku}</td>
+                      <td>{t(`inventory.${item.category}`) || item.category}</td>
+                      <td style={{ textAlign: 'right', fontWeight: '600' }}>
+                        {item.stock_on_hand}
+                        {item.low_stock_threshold > 0 && (
+                          <span style={{ color: '#a0aec0', fontWeight: '400', fontSize: '0.8rem' }}>
+                            {' '}/ {item.low_stock_threshold}
+                          </span>
+                        )}
+                      </td>
                       <td>{item.unit}</td>
                       <td>{getStatusBadge(item)}</td>
-                      <td>
-                        <button className="btn-link">{t('common.edit')}</button>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <button className="btn-link" style={{ fontSize: '0.85rem' }}
+                          onClick={() => setMovementItem(item)}>
+                          {t('inventory.adjust')}
+                        </button>
+                        {' '}
+                        <button className="btn-link" style={{ fontSize: '0.85rem' }}
+                          onClick={() => setEditItem(item)}>
+                          {t('common.edit')}
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -140,11 +157,17 @@ const InventoryTab = () => {
       </div>
 
       <AddInventoryModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={() => {
-          fetchInventory(searchTerm, categoryFilter)
-        }}
+        isOpen={isAddOpen || !!editItem}
+        editItem={editItem}
+        onClose={() => { setIsAddOpen(false); setEditItem(null) }}
+        onSuccess={() => { fetchInventory(); setIsAddOpen(false); setEditItem(null) }}
+      />
+
+      <StockMovementModal
+        isOpen={!!movementItem}
+        item={movementItem}
+        onClose={() => setMovementItem(null)}
+        onSuccess={() => { fetchInventory(); setMovementItem(null) }}
       />
     </div>
   )
