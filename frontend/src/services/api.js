@@ -140,6 +140,9 @@ export const patientAISummaryAPI = {
 export const servicesAPI = {
   list: (params, options = {}) => api.get("/billing/services/", { params, ...options }),
   get: (id) => api.get(`/billing/services/${id}/`),
+  create: (data) => api.post("/billing/services/", data),
+  update: (id, data) => api.put(`/billing/services/${id}/`, data),
+  delete: (id) => api.delete(`/billing/services/${id}/`),
 };
 
 export const invoicesAPI = {

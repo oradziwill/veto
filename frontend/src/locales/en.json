@@ -11,7 +11,8 @@
     "unknown": "Unknown",
     "retry": "Retry",
     "saving": "Saving...",
-    "error": "An error occurred"
+    "error": "An error occurred",
+    "delete": "Delete"
   },
   "header": {
     "title": "Veto Clinic",
@@ -28,7 +29,8 @@
     "billing": "Billing",
     "aiAssistant": "AI Assistant",
     "activeVisit": "Visit",
-    "newVisit": "New Visit"
+    "newVisit": "New Visit",
+    "serviceCatalog": "Services"
   },
   "patients": {
     "title": "Patients",
@@ -415,5 +417,22 @@
     "room": "Room",
     "status": "Status",
     "internalNotes": "Internal notes"
+  },
+  "serviceCatalog": {
+    "title": "Service Catalog",
+    "addService": "+ Add Service",
+    "name": "Name",
+    "code": "Code",
+    "price": "Price",
+    "description": "Description",
+    "namePlaceholder": "e.g. Consultation",
+    "codePlaceholder": "e.g. CONS01",
+    "descriptionPlaceholder": "Optional description",
+    "empty": "No services yet. Click \"+ Add Service\" to create one.",
+    "nameRequired": "Name is required.",
+    "saveError": "Failed to save. Please try again.",
+    "deleteConfirm": "Delete this service?",
+    "deleteError": "Failed to delete service.",
+    "loadError": "Failed to load services. Please try again."
   }
 }
