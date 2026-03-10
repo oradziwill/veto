@@ -3,26 +3,26 @@ import { useTranslation } from 'react-i18next'
 import { inventoryAPI } from '../../services/api'
 import './Modal.css'
 
-const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
+const EMPTY = { name: '', sku: '', category: 'other', unit: '', stock_on_hand: 0, low_stock_threshold: 0 }
+
+const AddInventoryModal = ({ isOpen, onClose, onSuccess, editItem = null }) => {
   const { t } = useTranslation()
-  const [formData, setFormData] = useState({
-    name: '',
-    category: 'other',
-    description: '',
-    stock_quantity: 0,
-    unit: 'units',
-    min_stock_level: 0,
-  })
+  const [form, setForm] = useState(editItem ? {
+    name: editItem.name,
+    sku: editItem.sku,
+    category: editItem.category,
+    unit: editItem.unit,
+    stock_on_hand: editItem.stock_on_hand,
+    low_stock_threshold: editItem.low_stock_threshold,
+  } : EMPTY)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({
+    setForm(prev => ({
       ...prev,
-      [name]: name === 'stock_quantity' || name === 'min_stock_level'
-        ? parseInt(value) || 0
-        : value
+      [name]: name === 'stock_on_hand' || name === 'low_stock_threshold' ? parseInt(value) || 0 : value,
     }))
   }
 
@@ -30,23 +30,23 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
-
     try {
-      await inventoryAPI.create(formData)
+      if (editItem) {
+        await inventoryAPI.update(editItem.id, form)
+      } else {
+        await inventoryAPI.create(form)
+      }
       onSuccess()
       onClose()
-      // Reset form
-      setFormData({
-        name: '',
-        category: 'other',
-        description: '',
-        stock_quantity: 0,
-        unit: 'units',
-        min_stock_level: 0,
-      })
+      setForm(EMPTY)
     } catch (err) {
-      setError(err.response?.data?.detail || t('addInventory.createError'))
-      console.error('Error creating inventory item:', err)
+      const data = err.response?.data
+      if (data && typeof data === 'object') {
+        const msgs = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
+        setError(msgs.join(' | '))
+      } else {
+        setError(t('addInventory.createError'))
+      }
     } finally {
       setLoading(false)
     }
@@ -56,100 +56,57 @@ const AddInventoryModal = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{t('addInventory.title')}</h2>
+          <h2>{editItem ? t('addInventory.editTitle') : t('addInventory.title')}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
           {error && <div className="error-message">{error}</div>}
 
-          <div className="form-group">
-            <label htmlFor="name">{t('addInventory.itemName')}</label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="category">{t('addInventory.category')}</label>
-            <select
-              id="category"
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              required
-            >
-              <option value="medication">{t('inventory.medications')}</option>
-              <option value="supplies">{t('inventory.supplies')}</option>
-              <option value="equipment">{t('inventory.equipment')}</option>
-              <option value="other">{t('inventory.other')}</option>
-            </select>
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('addInventory.itemName')} *</label>
+              <input name="name" value={form.name} onChange={handleChange} required />
+            </div>
+            <div className="form-group">
+              <label>{t('addInventory.sku')} *</label>
+              <input name="sku" value={form.sku} onChange={handleChange} required placeholder="e.g. AMOX-250" />
+            </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="stock_quantity">{t('addInventory.stockQuantity')}</label>
-              <input
-                type="number"
-                id="stock_quantity"
-                name="stock_quantity"
-                value={formData.stock_quantity}
-                onChange={handleChange}
-                min="0"
-                required
-              />
+              <label>{t('addInventory.category')}</label>
+              <select name="category" value={form.category} onChange={handleChange}>
+                <option value="medication">{t('inventory.medication')}</option>
+                <option value="supply">{t('inventory.supply')}</option>
+                <option value="food">{t('inventory.food')}</option>
+                <option value="other">{t('inventory.other')}</option>
+              </select>
             </div>
-
             <div className="form-group">
-              <label htmlFor="unit">{t('addInventory.unit')}</label>
-              <input
-                type="text"
-                id="unit"
-                name="unit"
-                value={formData.unit}
-                onChange={handleChange}
-                placeholder={t('addInventory.unitPlaceholder')}
-                required
-              />
+              <label>{t('addInventory.unit')} *</label>
+              <input name="unit" value={form.unit} onChange={handleChange} required placeholder={t('addInventory.unitPlaceholder')} />
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="min_stock_level">Minimum Stock Level</label>
-            <input
-              type="number"
-              id="min_stock_level"
-              name="min_stock_level"
-              value={formData.min_stock_level}
-              onChange={handleChange}
-              min="0"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="description">Description</label>
-            <textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows="3"
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label>{t('addInventory.stockOnHand')}</label>
+              <input name="stock_on_hand" type="number" min="0" value={form.stock_on_hand} onChange={handleChange} />
+            </div>
+            <div className="form-group">
+              <label>{t('addInventory.lowStockThreshold')}</label>
+              <input name="low_stock_threshold" type="number" min="0" value={form.low_stock_threshold} onChange={handleChange} />
+            </div>
           </div>
 
           <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              {t('common.cancel')}
-            </button>
+            <button type="button" className="btn-secondary" onClick={onClose}>{t('common.cancel')}</button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? t('addInventory.creating') : t('addInventory.createItem')}
+              {loading ? t('common.saving') : editItem ? t('common.save') : t('addInventory.createItem')}
             </button>
           </div>
         </form>
