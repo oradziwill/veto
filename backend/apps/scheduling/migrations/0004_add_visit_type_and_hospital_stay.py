@@ -19,7 +19,10 @@ class Migration(migrations.Migration):
             model_name="appointment",
             name="visit_type",
             field=models.CharField(
-                choices=[("outpatient", "Outpatient"), ("hospitalization", "Hospitalization")],
+                choices=[
+                    ("outpatient", "Outpatient"),
+                    ("hospitalization", "Hospitalization"),
+                ],
                 default="outpatient",
                 max_length=20,
             ),
@@ -30,13 +33,19 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
                     ),
                 ),
                 (
                     "status",
                     models.CharField(
-                        choices=[("admitted", "Admitted"), ("discharged", "Discharged")],
+                        choices=[
+                            ("admitted", "Admitted"),
+                            ("discharged", "Discharged"),
+                        ],
                         default="admitted",
                         max_length=20,
                     ),
@@ -88,10 +97,12 @@ class Migration(migrations.Migration):
                 "ordering": ["-admitted_at"],
                 "indexes": [
                     models.Index(
-                        fields=["clinic", "status"], name="scheduling__clinic__f13d43_idx"
+                        fields=["clinic", "status"],
+                        name="scheduling__clinic__f13d43_idx",
                     ),
                     models.Index(
-                        fields=["patient", "admitted_at"], name="scheduling__patient_80de73_idx"
+                        fields=["patient", "admitted_at"],
+                        name="scheduling__patient_80de73_idx",
                     ),
                 ],
             },

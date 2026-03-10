@@ -13,7 +13,10 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.medical.models import ClinicalExam
-from apps.medical.serializers import ClinicalExamReadSerializer, ClinicalExamWriteSerializer
+from apps.medical.serializers import (
+    ClinicalExamReadSerializer,
+    ClinicalExamWriteSerializer,
+)
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment, HospitalStay, Room, WaitingQueueEntry
 from apps.scheduling.serializers import (
@@ -346,7 +349,10 @@ class AvailabilityRoomsView(APIView):
         result = []
 
         def dump_interval(interval):
-            return {"start": interval.start.isoformat(), "end": interval.end.isoformat()}
+            return {
+                "start": interval.start.isoformat(),
+                "end": interval.end.isoformat(),
+            }
 
         for room in rooms:
             data = compute_availability(
@@ -384,7 +390,10 @@ class WaitingQueueViewSet(viewsets.ModelViewSet):
         return (
             WaitingQueueEntry.objects.filter(
                 clinic_id=self.request.user.clinic_id,
-                status__in=[WaitingQueueEntry.Status.WAITING, WaitingQueueEntry.Status.IN_PROGRESS],
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
             )
             .select_related("patient", "patient__owner", "called_by")
             .order_by("position", "arrived_at")
@@ -415,7 +424,10 @@ class WaitingQueueViewSet(viewsets.ModelViewSet):
         above = (
             WaitingQueueEntry.objects.filter(
                 clinic_id=entry.clinic_id,
-                status__in=[WaitingQueueEntry.Status.WAITING, WaitingQueueEntry.Status.IN_PROGRESS],
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
                 position__lt=entry.position,
             )
             .order_by("-position")
@@ -433,7 +445,10 @@ class WaitingQueueViewSet(viewsets.ModelViewSet):
         below = (
             WaitingQueueEntry.objects.filter(
                 clinic_id=entry.clinic_id,
-                status__in=[WaitingQueueEntry.Status.WAITING, WaitingQueueEntry.Status.IN_PROGRESS],
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
                 position__gt=entry.position,
             )
             .order_by("position")

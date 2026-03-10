@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { appointmentsAPI, availabilityAPI, roomsAPI } from '../../services/api'
+import { appointmentsAPI, availabilityAPI, roomsAPI, schedulerAPI } from '../../services/api'
 import VisitDetailsModal from '../modals/VisitDetailsModal'
 import AddAppointmentModal from '../modals/AddAppointmentModal'
 import './Tabs.css'
 
-const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVisit = null }) => {
+const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVisit = null, currentUserId = null }) => {
   const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState([])
   const [rooms, setRooms] = useState([])
@@ -18,6 +18,7 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
   const [currentDate, setCurrentDate] = useState(new Date())
   const [availabilityByDay, setAvailabilityByDay] = useState({}) // { 'YYYY-MM-DD': { free: [], busy: [] } }
   const [availabilityByRoomByDay, setAvailabilityByRoomByDay] = useState({}) // { 'YYYY-MM-DD': { rooms: [...] } }
+  const [dutyAssignments, setDutyAssignments] = useState([]) // DutyAssignment records for current user
 
   const days = [t('calendar.sun'), t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), t('calendar.thu'), t('calendar.fri'), t('calendar.sat')]
   const hours = Array.from({ length: 12 }, (_, i) => i + 8) // 8 AM to 7 PM
@@ -130,10 +131,28 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
       setAvailabilityByRoomByDay(roomAvailabilityMap)
     }
 
+    const fetchDutyAssignments = async () => {
+      const dutyVetId = vetId || currentUserId
+      if (!dutyVetId) return
+      const weekStart = getWeekStart(currentDate)
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekEnd.getDate() + 6)
+      const from = weekStart.toISOString().split('T')[0]
+      const to = weekEnd.toISOString().split('T')[0]
+      try {
+        const res = await schedulerAPI.listAssignments({ from, to, vet: dutyVetId })
+        setDutyAssignments(res.data.results || res.data || [])
+      } catch (err) {
+        console.error('Error fetching duty assignments:', err)
+        setDutyAssignments([])
+      }
+    }
+
     fetchAppointments()
     fetchAvailabilityForWeek()
     fetchRoomsAndRoomAvailability()
-  }, [currentDate, vetId])
+    fetchDutyAssignments()
+  }, [currentDate, vetId, currentUserId])
 
   const weekDates = getWeekDates(currentDate)
   const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
@@ -174,6 +193,20 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
       
       // Appointment overlaps if it starts before hour ends and ends after hour starts
       return aptStart < hourEnd && aptEnd > hourStart
+    })
+  }
+
+  const getDutyForCell = (date, hour) => {
+    const dateStr = date.toISOString().split('T')[0]
+    return dutyAssignments.filter(duty => {
+      if (duty.date !== dateStr) return false
+      const [startH, startM] = duty.start_time.split(':').map(Number)
+      const [endH, endM] = duty.end_time.split(':').map(Number)
+      const dutyStartMins = startH * 60 + startM
+      const dutyEndMins = endH * 60 + endM
+      const cellStartMins = hour * 60
+      const cellEndMins = (hour + 1) * 60
+      return dutyStartMins < cellEndMins && dutyEndMins > cellStartMins
     })
   }
 
@@ -382,7 +415,8 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
                     {weekDates.map((date, dayIdx) => {
                       const cellAppointments = getAppointmentsForCell(date, hour)
                       const cellStatus = getCellStatus(date, hour)
-                      
+                      const cellDuties = getDutyForCell(date, hour)
+
                       return (
                         <div
                           key={`${dayIdx}-${hour}`}
@@ -391,6 +425,23 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
                           onClick={() => handleCellClick(date, hour)}
                           style={{ cursor: 'pointer' }}
                         >
+                          {cellDuties.map((duty) => (
+                            <div
+                              key={`duty-${duty.id}`}
+                              style={{
+                                background: '#3182ce',
+                                color: '#fff',
+                                borderRadius: '4px',
+                                padding: '2px 4px',
+                                fontSize: '0.72rem',
+                                fontWeight: 600,
+                                marginBottom: '2px',
+                                pointerEvents: 'none',
+                              }}
+                            >
+                              {t('scheduler.onDuty')} {duty.start_time.slice(0, 5)}–{duty.end_time.slice(0, 5)}
+                            </div>
+                          ))}
                           {cellAppointments.map((apt) => {
                             let displayReason = apt.reason || t('visits.visit')
                             if (displayReason.startsWith('Unknown - ')) {

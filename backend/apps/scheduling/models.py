@@ -6,6 +6,8 @@ from django.utils import timezone
 from apps.patients.models import Patient
 from apps.tenancy.models import Clinic
 
+from .models_clinic_hours import ClinicWorkingHours  # noqa: F401
+from .models_duty import DutyAssignment  # noqa: F401
 from .models_exceptions import VetAvailabilityException  # noqa: F401
 
 
