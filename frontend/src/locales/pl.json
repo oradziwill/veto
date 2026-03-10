@@ -11,7 +11,8 @@
     "unknown": "Nieznany",
     "retry": "Ponów",
     "saving": "Zapisywanie...",
-    "error": "Wystąpił błąd"
+    "error": "Wystąpił błąd",
+    "delete": "Usuń"
   },
   "header": {
     "title": "Veto Clinic",
@@ -28,7 +29,8 @@
     "billing": "Faktury",
     "aiAssistant": "Asystent AI",
     "activeVisit": "Wizyta",
-    "newVisit": "Nowa wizyta"
+    "newVisit": "Nowa wizyta",
+    "serviceCatalog": "Usługi"
   },
   "patients": {
     "title": "Pacjenci",
@@ -415,5 +417,22 @@
     "room": "Sala",
     "status": "Status",
     "internalNotes": "Uwagi wewnętrzne"
+  },
+  "serviceCatalog": {
+    "title": "Katalog usług",
+    "addService": "+ Dodaj usługę",
+    "name": "Nazwa",
+    "code": "Kod",
+    "price": "Cena",
+    "description": "Opis",
+    "namePlaceholder": "np. Konsultacja",
+    "codePlaceholder": "np. KONS01",
+    "descriptionPlaceholder": "Opcjonalny opis",
+    "empty": "Brak usług. Kliknij \"+ Dodaj usługę\", aby dodać.",
+    "nameRequired": "Nazwa jest wymagana.",
+    "saveError": "Nie udało się zapisać. Spróbuj ponownie.",
+    "deleteConfirm": "Usunąć tę usługę?",
+    "deleteError": "Nie udało się usunąć usługi.",
+    "loadError": "Nie udało się załadować usług. Spróbuj ponownie."
   }
 }
