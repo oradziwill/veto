@@ -82,9 +82,7 @@ class Command(BaseCommand):
         for data in SAMPLE_DOCTORS:
             if User.objects.filter(username=data["username"]).exists():
                 self.stdout.write(
-                    self.style.WARNING(
-                        f"  Skipping {data['username']} — already exists."
-                    )
+                    self.style.WARNING(f"  Skipping {data['username']} — already exists.")
                 )
                 skipped_count += 1
                 continue
@@ -101,16 +99,12 @@ class Command(BaseCommand):
             )
             created_count += 1
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"  Created: {user.get_full_name()} ({user.username})"
-                )
+                self.style.SUCCESS(f"  Created: {user.get_full_name()} ({user.username})")
             )
 
         self.stdout.write("")
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Done. Created: {created_count}, Skipped: {skipped_count}"
-            )
+            self.style.SUCCESS(f"Done. Created: {created_count}, Skipped: {skipped_count}")
         )
         if created_count > 0:
             self.stdout.write(f"Default password: {password}")

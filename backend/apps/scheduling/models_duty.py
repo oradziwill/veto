@@ -10,9 +10,7 @@ class DutyAssignment(models.Model):
     Multiple doctors can be assigned per day (e.g. morning + afternoon shifts).
     """
 
-    clinic = models.ForeignKey(
-        Clinic, on_delete=models.CASCADE, related_name="duty_assignments"
-    )
+    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name="duty_assignments")
     vet = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

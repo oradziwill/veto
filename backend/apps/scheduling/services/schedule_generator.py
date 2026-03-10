@@ -66,8 +66,7 @@ def generate_schedule(
 
     # Pre-load clinic open days
     clinic_hours: dict[int, ClinicWorkingHours] = {
-        wh.weekday: wh
-        for wh in ClinicWorkingHours.objects.filter(clinic=clinic, is_active=True)
+        wh.weekday: wh for wh in ClinicWorkingHours.objects.filter(clinic=clinic, is_active=True)
     }
 
     # Pre-load clinic holidays in range
@@ -90,9 +89,7 @@ def generate_schedule(
 
     # Pre-load working hours per doctor (weekday → VetWorkingHours)
     wh_by_vet: dict[int, dict[int, VetWorkingHours]] = {doc.id: {} for doc in doctors}
-    for wh in VetWorkingHours.objects.filter(
-        vet__in=[d.id for d in doctors], is_active=True
-    ):
+    for wh in VetWorkingHours.objects.filter(vet__in=[d.id for d in doctors], is_active=True):
         wh_by_vet[wh.vet_id][wh.weekday] = wh
 
     # Track existing assignments to avoid overwriting (keyed by date)
@@ -107,9 +104,7 @@ def generate_schedule(
     # Fair rotation: seed counts from ALL existing assignments so global fairness holds
     assignment_counts: dict[int, int] = {doc.id: 0 for doc in doctors}
     for row in (
-        DutyAssignment.objects.filter(clinic=clinic)
-        .values("vet_id")
-        .annotate(cnt=Count("id"))
+        DutyAssignment.objects.filter(clinic=clinic).values("vet_id").annotate(cnt=Count("id"))
     ):
         if row["vet_id"] in assignment_counts:
             assignment_counts[row["vet_id"]] += row["cnt"]

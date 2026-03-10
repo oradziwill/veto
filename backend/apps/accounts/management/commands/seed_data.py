@@ -76,9 +76,7 @@ class Command(BaseCommand):
         if created:
             vet.set_password("password123")
             vet.save()
-            self.stdout.write(
-                self.style.SUCCESS(f"✓ Created doctor user: {vet.username}")
-            )
+            self.stdout.write(self.style.SUCCESS(f"✓ Created doctor user: {vet.username}"))
         else:
             self.stdout.write(f"→ Doctor user already exists: {vet.username}")
 
@@ -99,14 +97,10 @@ class Command(BaseCommand):
             receptionist.set_password("password123")
             receptionist.save()
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Created receptionist user: {receptionist.username}"
-                )
+                self.style.SUCCESS(f"✓ Created receptionist user: {receptionist.username}")
             )
         else:
-            self.stdout.write(
-                f"→ Receptionist user already exists: {receptionist.username}"
-            )
+            self.stdout.write(f"→ Receptionist user already exists: {receptionist.username}")
 
         # Create Clinic Admin
         admin_user, created = User.objects.get_or_create(
@@ -125,22 +119,16 @@ class Command(BaseCommand):
             admin_user.set_password("password123")
             admin_user.save()
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Created clinic admin user: {admin_user.username}"
-                )
+                self.style.SUCCESS(f"✓ Created clinic admin user: {admin_user.username}")
             )
         else:
-            self.stdout.write(
-                f"→ Clinic admin user already exists: {admin_user.username}"
-            )
+            self.stdout.write(f"→ Clinic admin user already exists: {admin_user.username}")
 
         # Link any existing users that have no clinic (e.g. Django superusers created via createsuperuser)
         unlinked = User.objects.filter(clinic__isnull=True)
         count = unlinked.update(clinic=clinic)
         if count:
-            self.stdout.write(
-                self.style.SUCCESS(f"✓ Linked {count} existing user(s) to clinic")
-            )
+            self.stdout.write(self.style.SUCCESS(f"✓ Linked {count} existing user(s) to clinic"))
 
         # Create Clients
         clients_data = [
@@ -268,9 +256,7 @@ class Command(BaseCommand):
                 defaults=apt_data,
             )
             if created:
-                self.stdout.write(
-                    self.style.SUCCESS(f"✓ Created appointment: {appointment}")
-                )
+                self.stdout.write(self.style.SUCCESS(f"✓ Created appointment: {appointment}"))
             else:
                 self.stdout.write(f"→ Appointment already exists: {appointment}")
 
@@ -360,9 +346,7 @@ class Command(BaseCommand):
                 )
 
             if created:
-                self.stdout.write(
-                    self.style.SUCCESS(f"✓ Created inventory item: {item}")
-                )
+                self.stdout.write(self.style.SUCCESS(f"✓ Created inventory item: {item}"))
             else:
                 self.stdout.write(f"→ Inventory item already exists: {item}")
 
@@ -392,9 +376,7 @@ class Command(BaseCommand):
                 defaults={"name": lt["name"], "unit": lt["unit"], "is_active": True},
             )
             if created:
-                self.stdout.write(
-                    self.style.SUCCESS(f"✓ Created lab test: {test.name}")
-                )
+                self.stdout.write(self.style.SUCCESS(f"✓ Created lab test: {test.name}"))
 
         self.stdout.write(self.style.SUCCESS("\n✓ Database seeding completed!"))
         self.stdout.write("\nYou can now login with (password: password123):")

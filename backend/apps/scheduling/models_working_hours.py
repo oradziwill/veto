@@ -38,6 +38,4 @@ class VetWorkingHours(models.Model):
             raise ValidationError({"end_time": "end_time must be after start_time"})
 
     def __str__(self) -> str:
-        return (
-            f"{self.vet} {self.get_weekday_display()} {self.start_time}-{self.end_time}"
-        )
+        return f"{self.vet} {self.get_weekday_display()} {self.start_time}-{self.end_time}"

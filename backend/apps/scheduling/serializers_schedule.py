@@ -9,9 +9,7 @@ from apps.tenancy.models import ClinicHoliday
 
 class VetWorkingHoursSerializer(serializers.ModelSerializer):
     vet_name = serializers.SerializerMethodField()
-    weekday_display = serializers.CharField(
-        source="get_weekday_display", read_only=True
-    )
+    weekday_display = serializers.CharField(source="get_weekday_display", read_only=True)
 
     class Meta:
         model = VetWorkingHours
@@ -32,9 +30,7 @@ class VetWorkingHoursSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs.get("end_time") and attrs.get("start_time"):
             if attrs["end_time"] <= attrs["start_time"]:
-                raise serializers.ValidationError(
-                    {"end_time": "end_time must be after start_time"}
-                )
+                raise serializers.ValidationError({"end_time": "end_time must be after start_time"})
         return attrs
 
 
@@ -82,9 +78,7 @@ class ClinicHolidaySerializer(serializers.ModelSerializer):
 
 
 class ClinicWorkingHoursSerializer(serializers.ModelSerializer):
-    weekday_display = serializers.CharField(
-        source="get_weekday_display", read_only=True
-    )
+    weekday_display = serializers.CharField(source="get_weekday_display", read_only=True)
 
     class Meta:
         model = ClinicWorkingHours
@@ -102,9 +96,7 @@ class ClinicWorkingHoursSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs.get("end_time") and attrs.get("start_time"):
             if attrs["end_time"] <= attrs["start_time"]:
-                raise serializers.ValidationError(
-                    {"end_time": "end_time must be after start_time"}
-                )
+                raise serializers.ValidationError({"end_time": "end_time must be after start_time"})
         return attrs
 
 

@@ -105,9 +105,7 @@ class ClinicHolidayViewSet(viewsets.ModelViewSet):
     serializer_class = ClinicHolidaySerializer
 
     def get_queryset(self):
-        return ClinicHoliday.objects.filter(clinic=self.request.user.clinic).order_by(
-            "-date"
-        )
+        return ClinicHoliday.objects.filter(clinic=self.request.user.clinic).order_by("-date")
 
     def perform_create(self, serializer):
         serializer.save(clinic=self.request.user.clinic)
@@ -123,9 +121,9 @@ class ClinicWorkingHoursViewSet(viewsets.ModelViewSet):
     serializer_class = ClinicWorkingHoursSerializer
 
     def get_queryset(self):
-        return ClinicWorkingHours.objects.filter(
-            clinic=self.request.user.clinic
-        ).order_by("weekday")
+        return ClinicWorkingHours.objects.filter(clinic=self.request.user.clinic).order_by(
+            "weekday"
+        )
 
     def perform_create(self, serializer):
         serializer.save(clinic=self.request.user.clinic)
@@ -227,7 +225,5 @@ class GenerateScheduleView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        result = generate_schedule(
-            clinic, start_date, end_date, doctors, overwrite=overwrite
-        )
+        result = generate_schedule(clinic, start_date, end_date, doctors, overwrite=overwrite)
         return Response(result, status=status.HTTP_200_OK)

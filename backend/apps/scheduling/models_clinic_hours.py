@@ -19,9 +19,7 @@ class ClinicWorkingHours(models.Model):
         SAT = 5, "Saturday"
         SUN = 6, "Sunday"
 
-    clinic = models.ForeignKey(
-        Clinic, on_delete=models.CASCADE, related_name="working_hours"
-    )
+    clinic = models.ForeignKey(Clinic, on_delete=models.CASCADE, related_name="working_hours")
     weekday = models.IntegerField(choices=Weekday.choices)
     start_time = models.TimeField()
     end_time = models.TimeField()
