@@ -113,7 +113,7 @@ class ClinicalExam(models.Model):
 
 
 class Prescription(models.Model):
-    """Prescription linked to a patient (and optionally an appointment)."""
+    """Prescription linked to a patient and optionally to a visit (MedicalRecord)."""
 
     clinic = models.ForeignKey(
         Clinic,
@@ -132,6 +132,24 @@ class Prescription(models.Model):
         blank=True,
         related_name="prescriptions",
     )
+    medical_record = models.ForeignKey(
+        MedicalRecord,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prescriptions_for_record",
+    )
+    prescribed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prescribed_prescriptions",
+    )
+    drug_name = models.CharField(max_length=200, blank=True)
+    dosage = models.CharField(max_length=200, blank=True)
+    duration_days = models.PositiveIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
