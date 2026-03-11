@@ -59,3 +59,46 @@ python manage.py mark_overdue_invoices
 **Deployment:** Schedule this command daily (e.g. cron at 01:00, an ECS scheduled task, or a GitHub Actions scheduled workflow). Example cron: `0 1 * * * cd /app/backend && python manage.py mark_overdue_invoices`. Running once per day (e.g. early morning) keeps timezone handling simple and load minimal.
 
 **Relevant tests:** `apps/billing/tests/test_mark_overdue_invoices.py` – command runs on empty DB; only sent + past-due updated; count logged; sent with null `due_date` unchanged.
+
+## Revenue summary (owner dashboard)
+
+- **Endpoint:** `GET /api/billing/revenue-summary/`
+- **Permission:** Clinic Admin only (role `admin`). Returns 403 for non-admin staff.
+- **Purpose:** Summary of revenue over time for the authenticated user's clinic (invoiced, paid, outstanding, and breakdown by period).
+
+**Query parameters:**
+
+- **period** – Optional. `monthly` (default) or `daily`. Groups totals by month or by day. Invalid value returns 400.
+- **from** – Optional. Start of range, ISO date `YYYY-MM-DD`. Default: first day of the current year.
+- **to** – Optional. End of range, ISO date `YYYY-MM-DD`. Default: today. If `from` > `to`, returns 400.
+
+**Response (200):**
+
+```json
+{
+  "period": "monthly",
+  "from": "2026-01-01",
+  "to": "2026-03-31",
+  "total_invoiced": "4500.00",
+  "total_paid": "3800.00",
+  "total_outstanding": "700.00",
+  "by_period": [
+    { "label": "2026-01", "invoiced": "1200.00", "paid": "1200.00" },
+    { "label": "2026-02", "invoiced": "1800.00", "paid": "1600.00" },
+    { "label": "2026-03", "invoiced": "1500.00", "paid": "1000.00" }
+  ]
+}
+```
+
+- **total_invoiced** – Sum of (non-cancelled) invoice line totals with `created_at` in the date range.
+- **total_paid** – Sum of completed payments with `paid_at` in the date range.
+- **total_outstanding** – `total_invoiced - total_paid`.
+- **by_period** – One entry per period in range. **label**: `YYYY-MM` for monthly, `YYYY-MM-DD` for daily. **invoiced** / **paid**: amounts for that period (strings with two decimals).
+
+**Running revenue summary tests:**
+
+```bash
+pytest apps/billing/tests/test_revenue_summary.py -v
+```
+
+Relevant tests: `test_revenue_summary_admin_only`, `test_revenue_summary_scoped_to_clinic`, `test_revenue_summary_totals`, `test_revenue_summary_by_period_monthly`, `test_revenue_summary_by_period_daily`, `test_revenue_summary_excludes_cancelled`, `test_revenue_summary_invalid_period`.
