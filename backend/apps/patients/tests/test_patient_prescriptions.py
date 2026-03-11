@@ -5,7 +5,6 @@ from apps.medical.models import Prescription
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 
