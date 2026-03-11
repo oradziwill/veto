@@ -142,3 +142,37 @@ class Prescription(models.Model):
 
     def __str__(self) -> str:
         return f"Prescription(patient={self.patient_id})"
+
+
+class Vaccination(models.Model):
+    """Vaccination record: vaccine given to a patient, when, and when next dose is due."""
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="vaccinations",
+    )
+    patient = models.ForeignKey(
+        "patients.Patient",
+        on_delete=models.CASCADE,
+        related_name="vaccinations",
+    )
+    vaccine_name = models.CharField(max_length=200)
+    batch_number = models.CharField(max_length=100, blank=True)
+    administered_at = models.DateField()
+    next_due_at = models.DateField(null=True, blank=True)
+    administered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="administered_vaccinations",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-administered_at"]
+        indexes = [models.Index(fields=["clinic", "patient"])]
+
+    def __str__(self) -> str:
+        return f"Vaccination(patient={self.patient_id}, {self.vaccine_name})"
