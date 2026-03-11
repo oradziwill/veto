@@ -9,9 +9,14 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin
+from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.clients.models import ClientClinic
-from apps.medical.models import MedicalRecord, PatientHistoryEntry
+from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription
+from apps.medical.serializers import (
+    PatientHistoryEntryReadSerializer,
+    PatientHistoryEntryWriteSerializer,
+    PrescriptionReadSerializer,
+)
 from apps.patients.models import Patient
 from apps.patients.serializers import (
     PatientHistoryForPatientSerializer,
@@ -23,6 +28,29 @@ from apps.scheduling.models import Appointment
 
 class PatientViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic]
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="prescriptions",
+        permission_classes=[IsStaffOrVet],
+    )
+    def prescriptions(self, request, pk=None):
+        """
+        GET /api/patients/<id>/prescriptions/
+
+        Returns patient's prescription history (newest-first).
+        Scoped to the authenticated user's clinic.
+        """
+        user = request.user
+        patient = self.get_object()  # should already be clinic-scoped by queryset
+
+        qs = Prescription.objects.filter(
+            clinic_id=user.clinic_id,
+            patient_id=patient.id,
+        ).order_by("-created_at")
+
+        return Response(PrescriptionReadSerializer(qs, many=True).data, status=200)
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):

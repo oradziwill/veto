@@ -110,3 +110,35 @@ class ClinicalExam(models.Model):
 
     def __str__(self) -> str:
         return f"ClinicalExam(appt={self.appointment_id})"
+
+
+class Prescription(models.Model):
+    """Prescription linked to a patient (and optionally an appointment)."""
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="prescriptions",
+    )
+    patient = models.ForeignKey(
+        "patients.Patient",
+        on_delete=models.CASCADE,
+        related_name="prescriptions",
+    )
+    appointment = models.ForeignKey(
+        "scheduling.Appointment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prescriptions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["clinic", "patient"], name="medical_pre_clinic__9a8b7c_idx")
+        ]
+
+    def __str__(self) -> str:
+        return f"Prescription(patient={self.patient_id})"
