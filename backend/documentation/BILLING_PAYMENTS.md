@@ -45,3 +45,17 @@ Relevant tests:
 - `test_record_partial_payment_returns_invoice_with_updated_balance_due` – partial payment returns updated balance, status not paid.
 - `test_record_final_payment_that_settles_invoice_returns_paid_invoice` – second payment settles invoice; response has status paid, balance_due 0.
 - `test_partial_payment_keeps_invoice_sent_until_fully_paid` – two partial payments; API returns updated invoice after each; invoice becomes paid after the second.
+
+## Marking overdue invoices (scheduled job)
+
+The management command **`mark_overdue_invoices`** sets `status` to `overdue` for invoices that are `status='sent'` and have `due_date < today` (and a non-null `due_date`). Run it periodically so overdue invoices are updated automatically.
+
+**Run (from backend directory, or with `DJANGO_SETTINGS_MODULE=config.settings` set):**
+
+```bash
+python manage.py mark_overdue_invoices
+```
+
+**Deployment:** Schedule this command daily (e.g. cron at 01:00, an ECS scheduled task, or a GitHub Actions scheduled workflow). Example cron: `0 1 * * * cd /app/backend && python manage.py mark_overdue_invoices`. Running once per day (e.g. early morning) keeps timezone handling simple and load minimal.
+
+**Relevant tests:** `apps/billing/tests/test_mark_overdue_invoices.py` – command runs on empty DB; only sent + past-due updated; count logged; sent with null `due_date` unchanged.
