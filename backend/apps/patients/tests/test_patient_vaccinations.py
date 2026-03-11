@@ -8,9 +8,7 @@ from rest_framework.test import APIClient
 
 
 def _make_clinic_user_patient(clinic_name="C1", username="vet", is_vet=True, is_staff=True):
-    clinic = Clinic.objects.create(
-        name=clinic_name, address="a", phone="p", email="e@e.com"
-    )
+    clinic = Clinic.objects.create(name=clinic_name, address="a", phone="p", email="e@e.com")
     user = User.objects.create_user(
         username=username,
         password="pass",
@@ -20,9 +18,7 @@ def _make_clinic_user_patient(clinic_name="C1", username="vet", is_vet=True, is_
     )
     owner = Client.objects.create(first_name="A", last_name="B")
     ClientClinic.objects.create(client=owner, clinic=clinic)
-    patient = Patient.objects.create(
-        clinic=clinic, owner=owner, name="P", species="dog"
-    )
+    patient = Patient.objects.create(clinic=clinic, owner=owner, name="P", species="dog")
     return clinic, user, patient
 
 
@@ -130,9 +126,7 @@ def test_patient_vaccination_create_without_next_due():
 
 @pytest.mark.django_db
 def test_patient_vaccination_list_forbidden_for_non_staff_non_vet():
-    clinic, user, patient = _make_clinic_user_patient(
-        username="u", is_vet=False, is_staff=False
-    )
+    clinic, user, patient = _make_clinic_user_patient(username="u", is_vet=False, is_staff=False)
     user.role = ""
     user.save(update_fields=["role"])
 
@@ -145,9 +139,7 @@ def test_patient_vaccination_list_forbidden_for_non_staff_non_vet():
 
 @pytest.mark.django_db
 def test_patient_vaccination_create_forbidden_for_non_staff_non_vet():
-    clinic, user, patient = _make_clinic_user_patient(
-        username="u", is_vet=False, is_staff=False
-    )
+    clinic, user, patient = _make_clinic_user_patient(username="u", is_vet=False, is_staff=False)
     user.role = ""
     user.save(update_fields=["role"])
 
@@ -164,12 +156,8 @@ def test_patient_vaccination_create_forbidden_for_non_staff_non_vet():
 
 @pytest.mark.django_db
 def test_vaccination_clinic_isolation_list():
-    clinic_a, user_a, patient_a = _make_clinic_user_patient(
-        clinic_name="C1", username="vet_a"
-    )
-    clinic_b, _, patient_b = _make_clinic_user_patient(
-        clinic_name="C2", username="vet_b"
-    )
+    clinic_a, user_a, patient_a = _make_clinic_user_patient(clinic_name="C1", username="vet_a")
+    clinic_b, _, patient_b = _make_clinic_user_patient(clinic_name="C2", username="vet_b")
     Vaccination.objects.create(
         clinic=clinic_a,
         patient=patient_a,
@@ -195,12 +183,8 @@ def test_vaccination_clinic_isolation_list():
 
 @pytest.mark.django_db
 def test_vaccination_clinic_isolation_retrieve():
-    clinic_a, user_a, patient_a = _make_clinic_user_patient(
-        clinic_name="C1", username="vet_a"
-    )
-    clinic_b, _, patient_b = _make_clinic_user_patient(
-        clinic_name="C2", username="vet_b"
-    )
+    clinic_a, user_a, patient_a = _make_clinic_user_patient(clinic_name="C1", username="vet_a")
+    clinic_b, _, patient_b = _make_clinic_user_patient(clinic_name="C2", username="vet_b")
     vax_b = Vaccination.objects.create(
         clinic=clinic_b,
         patient=patient_b,
@@ -268,12 +252,8 @@ def test_vaccination_delete_happy_path():
 
 @pytest.mark.django_db
 def test_vaccination_update_forbidden_other_clinic():
-    clinic_a, user_a, patient_a = _make_clinic_user_patient(
-        clinic_name="C1", username="vet_a"
-    )
-    clinic_b, _, patient_b = _make_clinic_user_patient(
-        clinic_name="C2", username="vet_b"
-    )
+    clinic_a, user_a, patient_a = _make_clinic_user_patient(clinic_name="C1", username="vet_a")
+    clinic_b, _, patient_b = _make_clinic_user_patient(clinic_name="C2", username="vet_b")
     vax_b = Vaccination.objects.create(
         clinic=clinic_b,
         patient=patient_b,

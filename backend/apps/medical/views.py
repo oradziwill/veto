@@ -58,9 +58,9 @@ class VaccinationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get_queryset(self):
-        return Vaccination.objects.filter(
-            clinic_id=self.request.user.clinic_id
-        ).select_related("patient", "clinic", "administered_by")
+        return Vaccination.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
+            "patient", "clinic", "administered_by"
+        )
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
@@ -70,4 +70,6 @@ class VaccinationViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         from rest_framework.exceptions import MethodNotAllowed
 
-        raise MethodNotAllowed("POST", detail="Create vaccinations via POST /api/patients/<id>/vaccinations/")
+        raise MethodNotAllowed(
+            "POST", detail="Create vaccinations via POST /api/patients/<id>/vaccinations/"
+        )
