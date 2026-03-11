@@ -141,14 +141,18 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         serializer = PaymentWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payment = Payment.objects.create(
+        Payment.objects.create(
             invoice=invoice,
             created_by=request.user,
             **serializer.validated_data,
         )
-        if payment.status == "completed":
-            total_paid = invoice.amount_paid
-            if total_paid >= invoice.total:
-                invoice.status = Invoice.Status.PAID
-                invoice.save(update_fields=["status", "updated_at"])
-        return Response(PaymentSerializer(payment).data, status=201)
+        invoice = (
+            Invoice.objects.filter(pk=invoice.pk)
+            .select_related("client", "patient", "appointment")
+            .prefetch_related("lines", "payments")
+            .get()
+        )
+        if invoice.amount_paid >= invoice.total:
+            invoice.status = Invoice.Status.PAID
+            invoice.save(update_fields=["status", "updated_at"])
+        return Response(InvoiceReadSerializer(invoice).data, status=201)

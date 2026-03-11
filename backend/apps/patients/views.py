@@ -12,11 +12,7 @@ from rest_framework.response import Response
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.clients.models import ClientClinic
 from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription
-from apps.medical.serializers import (
-    PatientHistoryEntryReadSerializer,
-    PatientHistoryEntryWriteSerializer,
-    PrescriptionReadSerializer,
-)
+from apps.medical.serializers import PrescriptionReadSerializer
 from apps.patients.models import Patient
 from apps.patients.serializers import (
     PatientHistoryForPatientSerializer,
