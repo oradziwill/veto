@@ -172,7 +172,9 @@ class Vaccination(models.Model):
 
     class Meta:
         ordering = ["-administered_at"]
-        indexes = [models.Index(fields=["clinic", "patient"])]
+        indexes = [
+            models.Index(fields=["clinic", "patient"], name="medical_vac_clinic__a1b2c3_idx")
+        ]
 
     def __str__(self) -> str:
         return f"Vaccination(patient={self.patient_id}, {self.vaccine_name})"
