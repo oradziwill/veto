@@ -207,11 +207,14 @@ class PatientViewSet(viewsets.ModelViewSet):
             "clinic",
         )
 
-        # Search across patient name, owner name, surname, and phone
+        # Search across patient name, microchip, owner name, surname, and phone
         search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
         if search:
             qs = qs.filter(
                 Q(name__icontains=search)
+                | Q(microchip_no__icontains=search)
                 | Q(owner__first_name__icontains=search)
                 | Q(owner__last_name__icontains=search)
                 | Q(owner__phone__icontains=search)
