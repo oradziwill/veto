@@ -5,12 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 
-from .models import MedicalRecord, PatientHistoryEntry, Vaccination
+from .models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
 from .serializers import (
     MedicalRecordReadSerializer,
     MedicalRecordWriteSerializer,
     PatientHistoryEntryReadSerializer,
     PatientHistoryEntryWriteSerializer,
+    PrescriptionReadSerializer,
     VaccinationReadSerializer,
     VaccinationWriteSerializer,
 )
@@ -73,3 +74,16 @@ class VaccinationViewSet(viewsets.ModelViewSet):
         raise MethodNotAllowed(
             "POST", detail="Create vaccinations via POST /api/patients/<id>/vaccinations/"
         )
+
+
+class PrescriptionViewSet(viewsets.ReadOnlyModelViewSet):
+    """List and retrieve prescriptions. Create via POST /api/patients/<id>/prescriptions/."""
+
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+
+    def get_queryset(self):
+        return Prescription.objects.filter(
+            clinic_id=self.request.user.clinic_id
+        ).select_related("patient", "clinic", "prescribed_by", "medical_record")
+
+    serializer_class = PrescriptionReadSerializer

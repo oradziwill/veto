@@ -14,6 +14,7 @@ from apps.clients.models import ClientClinic
 from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
 from apps.medical.serializers import (
     PrescriptionReadSerializer,
+    PrescriptionWriteSerializer,
     VaccinationReadSerializer,
     VaccinationWriteSerializer,
 )
@@ -31,26 +32,42 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=["get"],
+        methods=["get", "post"],
         url_path="prescriptions",
         permission_classes=[IsStaffOrVet],
     )
     def prescriptions(self, request, pk=None):
         """
-        GET /api/patients/<id>/prescriptions/
-
-        Returns patient's prescription history (newest-first).
-        Scoped to the authenticated user's clinic.
+        GET  /api/patients/<id>/prescriptions/  -> list prescriptions (clinic scoped)
+        POST /api/patients/<id>/prescriptions/  -> create (doctors and admins only)
         """
         user = request.user
-        patient = self.get_object()  # should already be clinic-scoped by queryset
+        patient = self.get_object()
 
-        qs = Prescription.objects.filter(
+        if request.method == "GET":
+            qs = Prescription.objects.filter(
+                clinic_id=user.clinic_id,
+                patient_id=patient.id,
+            ).order_by("-created_at")
+            return Response(PrescriptionReadSerializer(qs, many=True).data, status=200)
+
+        # POST: only doctors and admins
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can create prescriptions.")
+        if not getattr(user, "clinic_id", None):
+            raise ValidationError("User must belong to a clinic to create prescriptions.")
+        serializer = PrescriptionWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        prescription = Prescription.objects.create(
             clinic_id=user.clinic_id,
-            patient_id=patient.id,
-        ).order_by("-created_at")
-
-        return Response(PrescriptionReadSerializer(qs, many=True).data, status=200)
+            patient=patient,
+            prescribed_by=user,
+            **serializer.validated_data,
+        )
+        return Response(
+            PrescriptionReadSerializer(prescription).data,
+            status=201,
+        )
 
     @action(
         detail=True,

@@ -131,9 +131,37 @@ class PrescriptionReadSerializer(serializers.ModelSerializer):
             "clinic",
             "patient",
             "appointment",
+            "medical_record",
+            "prescribed_by",
+            "drug_name",
+            "dosage",
+            "duration_days",
+            "notes",
             "created_at",
         ]
         read_only_fields = fields
+
+
+class PrescriptionWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Prescription
+        fields = [
+            "medical_record",
+            "drug_name",
+            "dosage",
+            "duration_days",
+            "notes",
+        ]
+
+    def validate_drug_name(self, value):
+        if not (value or "").strip():
+            raise serializers.ValidationError("drug_name is required for new prescriptions.")
+        return value
+
+    def validate_dosage(self, value):
+        if not (value or "").strip():
+            raise serializers.ValidationError("dosage is required for new prescriptions.")
+        return value
 
 
 # -------------------------
