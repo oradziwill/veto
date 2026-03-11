@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.medical.models import ClinicalExam, MedicalRecord, PatientHistoryEntry, Prescription
+from apps.medical.models import (
+    ClinicalExam,
+    MedicalRecord,
+    PatientHistoryEntry,
+    Prescription,
+    Vaccination,
+)
 
 # -------------------------
 # Clinical Exam
@@ -128,3 +134,37 @@ class PrescriptionReadSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+# -------------------------
+# Vaccination
+# -------------------------
+
+
+class VaccinationReadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vaccination
+        fields = [
+            "id",
+            "clinic",
+            "patient",
+            "vaccine_name",
+            "batch_number",
+            "administered_at",
+            "next_due_at",
+            "administered_by",
+            "notes",
+        ]
+        read_only_fields = fields
+
+
+class VaccinationWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vaccination
+        fields = [
+            "vaccine_name",
+            "batch_number",
+            "administered_at",
+            "next_due_at",
+            "notes",
+        ]

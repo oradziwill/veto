@@ -11,8 +11,12 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.clients.models import ClientClinic
-from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription
-from apps.medical.serializers import PrescriptionReadSerializer
+from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
+from apps.medical.serializers import (
+    PrescriptionReadSerializer,
+    VaccinationReadSerializer,
+    VaccinationWriteSerializer,
+)
 from apps.patients.models import Patient
 from apps.patients.serializers import (
     PatientHistoryForPatientSerializer,
@@ -47,6 +51,43 @@ class PatientViewSet(viewsets.ModelViewSet):
         ).order_by("-created_at")
 
         return Response(PrescriptionReadSerializer(qs, many=True).data, status=200)
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="vaccinations",
+        permission_classes=[IsStaffOrVet],
+    )
+    def vaccinations(self, request, pk=None):
+        """
+        GET  /api/patients/<id>/vaccinations/  -> list vaccinations for this patient (clinic scoped)
+        POST /api/patients/<id>/vaccinations/  -> record new vaccination
+        """
+        user = request.user
+        patient = self.get_object()
+
+        if request.method == "GET":
+            qs = Vaccination.objects.filter(
+                clinic_id=user.clinic_id,
+                patient_id=patient.id,
+            ).order_by("-administered_at")
+            return Response(VaccinationReadSerializer(qs, many=True).data, status=200)
+
+        # POST: create new vaccination
+        if not getattr(user, "clinic_id", None):
+            raise ValidationError("User must belong to a clinic to record vaccinations.")
+        serializer = VaccinationWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vaccination = Vaccination.objects.create(
+            clinic_id=user.clinic_id,
+            patient=patient,
+            administered_by=user,
+            **serializer.validated_data,
+        )
+        return Response(
+            VaccinationReadSerializer(vaccination).data,
+            status=201,
+        )
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
