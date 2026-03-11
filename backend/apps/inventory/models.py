@@ -26,6 +26,8 @@ class InventoryItem(models.Model):
     stock_on_hand = models.IntegerField(default=0, validators=[MinValueValidator(0)])
     low_stock_threshold = models.IntegerField(default=0, validators=[MinValueValidator(0)])
 
+    is_active = models.BooleanField(default=True)
+
     # Nullable to avoid forced defaults when migrating existing data.
     # The API should set this (see viewset perform_create).
     created_by = models.ForeignKey(

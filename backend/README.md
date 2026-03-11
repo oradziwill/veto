@@ -42,11 +42,19 @@ backend/
 
 ### 1. Create virtual environment and install deps
 
+From the **project root** (parent of `backend/`), so the venv lives next to frontend:
+
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate   # or `venv\Scripts\activate` on Windows
-pip install -r requirements.txt
+python3.13 -m venv .venv
+source .venv/bin/activate   # or `.venv\Scripts\activate` on Windows
+pip install -r backend/requirements.txt
+```
+
+If your venv has multiple Python versions and `python` doesn’t find Django, use the same interpreter pip used (e.g. **python3.13**):
+
+```bash
+.venv/bin/python3.13 backend/manage.py migrate
+.venv/bin/python3.13 backend/manage.py runserver
 ```
 
 ### 2. Run migrations

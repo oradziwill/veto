@@ -1,65 +1,137 @@
-import React, { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
 import CalendarTab from "../components/tabs/CalendarTab";
 import InventoryTab from "../components/tabs/InventoryTab";
 import AIAssistantTab from "../components/tabs/AIAssistantTab";
+import WaitingRoomTab from "../components/tabs/WaitingRoomTab";
+import ServiceCatalogTab from "../components/tabs/ServiceCatalogTab";
+import OwnerDashboardTab from "../components/tabs/OwnerDashboardTab";
+import SchedulerTab from "../components/tabs/SchedulerTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
-import { authAPI } from "../services/api";
+import { authAPI, queueAPI } from "../services/api";
 import "../components/tabs/Tabs.css";
 import "./DoctorsView.css";
 
+const LANGUAGES = [
+  { code: "pl", label: "Polski", flag: "🇵🇱" },
+  { code: "en", label: "English", flag: "🇬🇧" },
+];
+
 const DoctorsView = () => {
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "patients";
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showStartVisitModal, setShowStartVisitModal] = useState(false);
-  // For development: always show as authenticated for Dr. Smith
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    !!localStorage.getItem("access_token")
+  );
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [showLoginModal, setShowLoginModal] = useState(
+    !localStorage.getItem("access_token")
+  );
+  const [headerVisitActive, setHeaderVisitActive] = useState(false);
+  const [headerVisitInitialPatient, setHeaderVisitInitialPatient] = useState(null);
+  const [calledQueueEntry, setCalledQueueEntry] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef(null);
 
-  // Auto-login on mount for development
-  useEffect(() => {
-    const ensureAuth = async () => {
-      const token = localStorage.getItem("access_token");
-      if (token) {
-        try {
-          await authAPI.me();
-          setIsAuthenticated(true);
-          return; // Token is valid, we're done
-        } catch (err) {
-          // Token invalid, clear it
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-        }
+  const rawTab = searchParams.get("tab");
+  // Fall back to calendar if a visit tab is in the URL but the visit state is gone (stale URL)
+  const activeTab =
+    (rawTab === "active-visit" && !calledQueueEntry) ||
+    (rawTab === "new-visit" && !headerVisitActive)
+      ? "calendar"
+      : rawTab || "calendar";
+
+  // Fetch user info from /api/me/ so it persists across page reloads
+  const fetchCurrentUser = () => {
+    authAPI.me().then((res) => {
+      const { id, username, first_name, last_name, role } = res.data;
+      if (role === "receptionist") {
+        navigate("/receptionist", { replace: true });
+        return;
       }
+      const displayName =
+        first_name && last_name ? `${first_name} ${last_name}` : username;
+      setCurrentUser(displayName);
+      setCurrentUserId(id);
+      setUserRole(role);
+    }).catch(() => {
+      // 401 handled by interceptor (dispatches auth:logout)
+    });
+  };
 
-      // Try auto-login with default credentials
-      try {
-        const response = await authAPI.login("drsmith", "password123");
-        localStorage.setItem("access_token", response.data.access);
-        localStorage.setItem("refresh_token", response.data.refresh);
-        setIsAuthenticated(true);
-      } catch (err) {
-        console.error("Auto-login failed:", err);
-        // Still set as authenticated for development - API interceptor will handle retries
-        setIsAuthenticated(true);
+  useEffect(() => {
+    if (localStorage.getItem("access_token")) {
+      fetchCurrentUser();
+    }
+  }, []);
+
+  // Listen for token expiry events dispatched by the API interceptor
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setShowLoginModal(true);
+      setShowUserMenu(false);
+    };
+    window.addEventListener("auth:logout", handleUnauthorized);
+    return () => window.removeEventListener("auth:logout", handleUnauthorized);
+  }, []);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setShowUserMenu(false);
       }
     };
-    ensureAuth();
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setShowLoginModal(true);
+    setShowUserMenu(false);
+  };
 
   const handleTabChange = (tabId) => {
     setSearchParams({ tab: tabId });
   };
 
+  const avatarInitials = currentUser
+    ? currentUser.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
+    : null;
+
   const tabs = [
-    { id: "patients", label: "Patients", icon: "🐾" },
-    { id: "visits", label: "Visits", icon: "📋" },
-    { id: "calendar", label: "Calendar", icon: "📅" },
-    { id: "inventory", label: "Inventory", icon: "📦" },
-    { id: "ai-assistant", label: "AI Assistant", icon: "🤖" },
+    { id: "patients", label: t("tabs.patients"), icon: "🐾" },
+    { id: "visits", label: t("tabs.visits"), icon: "📋" },
+    { id: "calendar", label: t("tabs.calendar"), icon: "📅" },
+    { id: "waiting-room", label: t("tabs.waitingRoom"), icon: "🏥" },
+    { id: "inventory", label: t("tabs.inventory"), icon: "📦" },
+    { id: "ai-assistant", label: t("tabs.aiAssistant"), icon: "🤖" },
+    ...(userRole === "admin"
+      ? [
+          { id: "owner-dashboard", label: t("tabs.ownerDashboard"), icon: "📊" },
+          { id: "service-catalog", label: t("tabs.serviceCatalog"), icon: "🗂️" },
+          { id: "scheduler", label: t("tabs.scheduler"), icon: "🗓️" },
+        ]
+      : []),
+    ...(calledQueueEntry
+      ? [{ id: "active-visit", label: calledQueueEntry.patient?.name || t("tabs.activeVisit"), icon: "🩺" }]
+      : []),
+    ...(headerVisitActive
+      ? [{ id: "new-visit", label: t("tabs.newVisit"), icon: "➕" }]
+      : []),
   ];
 
   const renderTabContent = () => {
@@ -69,24 +141,55 @@ const DoctorsView = () => {
       case "visits":
         return <VisitsTab />;
       case "calendar":
-        return <CalendarTab />;
+        return (
+          <CalendarTab
+            currentUserId={currentUserId}
+            onStartVisit={(appointment) => {
+              setHeaderVisitInitialPatient(appointment?.patient || null);
+              setHeaderVisitActive(true);
+              setSearchParams({ tab: "new-visit" });
+            }}
+          />
+        );
+      case "waiting-room":
+        return (
+          <WaitingRoomTab
+            userRole={userRole}
+            hasActiveVisit={!!calledQueueEntry}
+            onCallPatient={(entry) => {
+              setCalledQueueEntry(entry);
+              setSearchParams({ tab: "active-visit" });
+            }}
+          />
+        );
       case "inventory":
         return <InventoryTab />;
       case "ai-assistant":
         return <AIAssistantTab />;
+      case "service-catalog":
+        return <ServiceCatalogTab />;
+      case "owner-dashboard":
+        return <OwnerDashboardTab />;
+      case "scheduler":
+        return <SchedulerTab />;
       default:
         return <PatientsTab />;
     }
   };
 
+  const currentLang = i18n.language?.slice(0, 2) || "pl";
+
   return (
     <div className="doctors-view">
       <header className="doctors-header">
         <div className="header-content">
-          <h1 className="header-title">Veto Clinic Management</h1>
+          <h1 className="header-title">{t("header.title")}</h1>
           <div className="header-actions">
             <button
-              onClick={() => setShowStartVisitModal(true)}
+              onClick={() => {
+                setHeaderVisitActive(true);
+                setSearchParams({ tab: "new-visit" });
+              }}
               className="start-visit-btn"
               style={{
                 padding: "0.75rem 1.5rem",
@@ -100,11 +203,146 @@ const DoctorsView = () => {
                 boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
               }}
             >
-              Start Visit
+              {t("header.startVisit")}
             </button>
-            <div className="header-user">
-              <span className="user-name">Dr. Smith</span>
-              <div className="user-avatar">DS</div>
+
+            {/* User avatar + settings dropdown */}
+            <div
+              ref={userMenuRef}
+              className="header-user"
+              style={{ position: "relative" }}
+            >
+              <button
+                onClick={() => setShowUserMenu((prev) => !prev)}
+                className="user-avatar"
+                title={currentUser || ""}
+                style={{
+                  cursor: "pointer",
+                  border: "2px solid rgba(255,255,255,0.7)",
+                  background: "rgba(255,255,255,0.15)",
+                  color: "white",
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: "700",
+                  fontSize: "0.9rem",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {avatarInitials || "…"}
+              </button>
+
+              {showUserMenu && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 10px)",
+                    right: 0,
+                    background: "white",
+                    borderRadius: "12px",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                    border: "1px solid #e2e8f0",
+                    minWidth: "220px",
+                    zIndex: 1000,
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* User info */}
+                  {currentUser && (
+                    <div
+                      style={{
+                        padding: "1rem",
+                        borderBottom: "1px solid #e2e8f0",
+                        background: "#f7fafc",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: "600",
+                          color: "#2d3748",
+                          fontSize: "0.95rem",
+                        }}
+                      >
+                        {currentUser}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Language */}
+                  <div
+                    style={{
+                      padding: "0.75rem 1rem",
+                      borderBottom: "1px solid #e2e8f0",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "0.75rem",
+                        fontWeight: "600",
+                        color: "#718096",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      {t("header.language")}
+                    </div>
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      {LANGUAGES.map((lang) => {
+                        const active = currentLang === lang.code;
+                        return (
+                          <button
+                            key={lang.code}
+                            onClick={() => {
+                              i18n.changeLanguage(lang.code);
+                              localStorage.setItem("veto-language", lang.code);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "0.4rem 0.5rem",
+                              border: `2px solid ${active ? "#48bb78" : "#e2e8f0"}`,
+                              borderRadius: "8px",
+                              background: active ? "#f0fff4" : "white",
+                              cursor: "pointer",
+                              fontSize: "0.85rem",
+                              fontWeight: active ? "600" : "400",
+                              color: active ? "#276749" : "#4a5568",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "0.3rem",
+                            }}
+                          >
+                            <span>{lang.flag}</span>
+                            <span>{lang.code.toUpperCase()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Logout */}
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      border: "none",
+                      background: "transparent",
+                      cursor: "pointer",
+                      color: "#e53e3e",
+                      fontWeight: "600",
+                      textAlign: "left",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {t("header.logout")}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -125,30 +363,75 @@ const DoctorsView = () => {
         </nav>
 
         <main className="doctors-main">
-          <div className="tab-content">{renderTabContent()}</div>
+          {/* Regular tab content — hidden when on a visit tab */}
+          <div
+            className="tab-content"
+            style={["active-visit", "new-visit"].includes(activeTab) ? { display: "none" } : undefined}
+          >
+            {isAuthenticated && !["active-visit", "new-visit"].includes(activeTab) ? renderTabContent() : null}
+          </div>
+
+          {/* Queue visit form — always mounted while calledQueueEntry is set */}
+          {calledQueueEntry && (
+            <div style={activeTab !== "active-visit" ? { display: "none" } : { overflowY: "auto", height: "100%" }}>
+              <StartVisitModal
+                standalone
+                isOpen={true}
+                initialPatient={calledQueueEntry.patient}
+                initialChiefComplaint={calledQueueEntry.chief_complaint}
+                onClose={async () => {
+                  if (calledQueueEntry?.id) {
+                    try { await queueAPI.requeue(calledQueueEntry.id); } catch (_) {}
+                  }
+                  setCalledQueueEntry(null);
+                  setSearchParams({ tab: "waiting-room" });
+                }}
+                onSuccess={async () => {
+                  if (calledQueueEntry?.id) {
+                    try { await queueAPI.done(calledQueueEntry.id); } catch (_) {}
+                  }
+                  setCalledQueueEntry(null);
+                  setSearchParams({ tab: "waiting-room" });
+                }}
+              />
+            </div>
+          )}
+
+          {/* Header "Rozpocznij wizytę" form — always mounted while headerVisitActive */}
+          {headerVisitActive && (
+            <div style={activeTab !== "new-visit" ? { display: "none" } : { overflowY: "auto", height: "100%" }}>
+              <StartVisitModal
+                standalone
+                isOpen={true}
+                initialPatient={headerVisitInitialPatient}
+                onClose={() => {
+                  setHeaderVisitActive(false);
+                  setHeaderVisitInitialPatient(null);
+                  setSearchParams({ tab: "calendar" });
+                }}
+                onSuccess={() => {
+                  setHeaderVisitActive(false);
+                  setHeaderVisitInitialPatient(null);
+                  setSearchParams({ tab: "visits" });
+                }}
+              />
+            </div>
+          )}
         </main>
       </div>
 
       <LoginModal
         isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
+        isRequired={!isAuthenticated}
+        onClose={() => isAuthenticated && setShowLoginModal(false)}
         onSuccess={() => {
           setIsAuthenticated(true);
           setShowLoginModal(false);
+          setSearchParams({ tab: "calendar" });
+          fetchCurrentUser();
         }}
       />
 
-      <StartVisitModal
-        isOpen={showStartVisitModal}
-        onClose={() => setShowStartVisitModal(false)}
-        onSuccess={() => {
-          setShowStartVisitModal(false);
-          // Refresh visits tab if it's active
-          if (activeTab === "visits") {
-            window.location.reload(); // Simple refresh for now
-          }
-        }}
-      />
     </div>
   );
 };

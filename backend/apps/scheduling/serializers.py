@@ -1,12 +1,20 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from apps.patients.serializers import PatientReadSerializer
-from apps.scheduling.models import Appointment, HospitalStay
+from apps.patients.serializers import PatientReadSerializer, VetMiniSerializer
+from apps.scheduling.models import Appointment, HospitalStay, Room, WaitingQueueEntry
+
+
+class RoomSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Room
+        fields = ["id", "name", "display_order"]
 
 
 class AppointmentReadSerializer(serializers.ModelSerializer):
     patient = PatientReadSerializer(read_only=True)
+    vet = VetMiniSerializer(read_only=True)
+    room = RoomSerializer(read_only=True, allow_null=True)
 
     class Meta:
         model = Appointment
@@ -20,6 +28,7 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
             "id",
             "patient",
             "vet",
+            "room",
             "visit_type",
             "starts_at",
             "ends_at",
@@ -82,3 +91,18 @@ class HospitalStayWriteSerializer(serializers.ModelSerializer):
         ):
             raise serializers.ValidationError("Vet must belong to your clinic.")
         return value
+
+
+class WaitingQueueEntryReadSerializer(serializers.ModelSerializer):
+    patient = PatientReadSerializer(read_only=True)
+    called_by = VetMiniSerializer(read_only=True)
+
+    class Meta:
+        model = WaitingQueueEntry
+        fields = "__all__"
+
+
+class WaitingQueueEntryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WaitingQueueEntry
+        fields = ["patient", "chief_complaint", "is_urgent", "notes"]

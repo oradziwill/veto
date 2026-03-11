@@ -4,25 +4,10 @@ import axios from "axios";
 // The vite.config.js proxies /api/* to http://localhost:8000/api/*
 const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
-// Helper to auto-login for development
-const autoLogin = async () => {
-  try {
-    const response = await axios.post(`${API_BASE_URL}/auth/token/`, {
-      username: "drsmith",
-      password: "password123",
-    });
-    localStorage.setItem("access_token", response.data.access);
-    localStorage.setItem("refresh_token", response.data.refresh);
-    return response.data.access;
-  } catch (err) {
-    console.error("Auto-login failed:", err);
-    return null;
-  }
-};
-
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000, // 30 seconds — prevents infinite loading if backend is unresponsive
   headers: {
     "Content-Type": "application/json",
   },
@@ -40,7 +25,7 @@ api.interceptors.request.use((config) => {
 // Handle errors globally
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     // Log connection errors for debugging
     if (
       error.code === "ERR_NETWORK" ||
@@ -55,16 +40,11 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 401) {
-      // Clear invalid token
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
-
-      // Auto-login for development (try to auto-login as drsmith)
-      const token = await autoLogin();
-      if (token && error.config) {
-        // Retry the original request with the new token
-        error.config.headers.Authorization = `Bearer ${token}`;
-        return api.request(error.config);
+      // Notify the app to show login (skip for login requests themselves)
+      if (!error.config?.url?.includes("/auth/token/")) {
+        window.dispatchEvent(new CustomEvent("auth:logout"));
       }
     }
     return Promise.reject(error);
@@ -73,7 +53,7 @@ api.interceptors.response.use(
 
 // API endpoints
 export const patientsAPI = {
-  list: (params) => api.get("/patients/", { params }),
+  list: (params, options = {}) => api.get("/patients/", { params, ...options }),
   get: (id) => api.get(`/patients/${id}/`),
   create: (data) => api.post("/patients/", data),
   update: (id, data) => api.put(`/patients/${id}/`, data),
@@ -90,11 +70,13 @@ export const appointmentsAPI = {
 };
 
 export const inventoryAPI = {
-  list: (params) => api.get("/inventory/", { params }),
-  get: (id) => api.get(`/inventory/${id}/`),
-  create: (data) => api.post("/inventory/", data),
-  update: (id, data) => api.put(`/inventory/${id}/`, data),
-  delete: (id) => api.delete(`/inventory/${id}/`),
+  list: (params) => api.get("/inventory/items/", { params }),
+  get: (id) => api.get(`/inventory/items/${id}/`),
+  create: (data) => api.post("/inventory/items/", data),
+  update: (id, data) => api.put(`/inventory/items/${id}/`, data),
+  delete: (id) => api.delete(`/inventory/items/${id}/`),
+  movements: (params) => api.get("/inventory/movements/", { params }),
+  recordMovement: (data) => api.post("/inventory/movements/", data),
 };
 
 export const clientsAPI = {
@@ -128,6 +110,23 @@ export const vetsAPI = {
 
 export const availabilityAPI = {
   get: (params) => api.get("/availability/", { params }),
+  rooms: (params) => api.get("/availability/rooms/", { params }),
+};
+
+export const roomsAPI = {
+  list: (params) => api.get("/rooms/", { params }),
+};
+
+export const queueAPI = {
+  list: (params) => api.get("/queue/", { params }),
+  add: (data) => api.post("/queue/", data),
+  update: (id, data) => api.patch(`/queue/${id}/`, data),
+  remove: (id) => api.delete(`/queue/${id}/`),
+  moveUp: (id) => api.post(`/queue/${id}/move-up/`),
+  moveDown: (id) => api.post(`/queue/${id}/move-down/`),
+  call: (id) => api.post(`/queue/${id}/call/`),
+  requeue: (id) => api.post(`/queue/${id}/requeue/`),
+  done: (id) => api.post(`/queue/${id}/done/`),
 };
 
 export const patientHistoryAPI = {
@@ -138,6 +137,57 @@ export const patientHistoryAPI = {
 
 export const patientAISummaryAPI = {
   get: (patientId) => api.get(`/patients/${patientId}/ai-summary/`),
+};
+
+export const servicesAPI = {
+  list: (params, options = {}) => api.get("/billing/services/", { params, ...options }),
+  get: (id) => api.get(`/billing/services/${id}/`),
+  create: (data) => api.post("/billing/services/", data),
+  update: (id, data) => api.put(`/billing/services/${id}/`, data),
+  delete: (id) => api.delete(`/billing/services/${id}/`),
+};
+
+export const invoicesAPI = {
+  list: (params) => api.get("/billing/invoices/", { params }),
+  get: (id) => api.get(`/billing/invoices/${id}/`),
+  create: (data) => api.post("/billing/invoices/", data),
+  update: (id, data) => api.put(`/billing/invoices/${id}/`, data),
+  submitKsef: (id) => api.post(`/billing/invoices/${id}/submit-ksef/`),
+};
+
+export const schedulerAPI = {
+  // Working hours (regular weekly schedule per vet)
+  listWorkingHours: (params) => api.get("/schedule/working-hours/", { params }),
+  createWorkingHours: (data) => api.post("/schedule/working-hours/", data),
+  updateWorkingHours: (id, data) => api.put(`/schedule/working-hours/${id}/`, data),
+  deleteWorkingHours: (id) => api.delete(`/schedule/working-hours/${id}/`),
+
+  // Exceptions (day-offs, custom hours for a specific date)
+  listExceptions: (params) => api.get("/schedule/exceptions/", { params }),
+  createException: (data) => api.post("/schedule/exceptions/", data),
+  updateException: (id, data) => api.patch(`/schedule/exceptions/${id}/`, data),
+  deleteException: (id) => api.delete(`/schedule/exceptions/${id}/`),
+
+  // Clinic holidays (full-day clinic closures)
+  listHolidays: (params) => api.get("/schedule/holidays/", { params }),
+  createHoliday: (data) => api.post("/schedule/holidays/", data),
+  updateHoliday: (id, data) => api.patch(`/schedule/holidays/${id}/`, data),
+  deleteHoliday: (id) => api.delete(`/schedule/holidays/${id}/`),
+
+  // Clinic working hours (when is the clinic open per weekday)
+  listClinicHours: () => api.get("/schedule/clinic-hours/"),
+  createClinicHours: (data) => api.post("/schedule/clinic-hours/", data),
+  updateClinicHours: (id, data) => api.put(`/schedule/clinic-hours/${id}/`, data),
+  deleteClinicHours: (id) => api.delete(`/schedule/clinic-hours/${id}/`),
+
+  // Duty assignments (generated schedule)
+  listAssignments: (params) => api.get("/schedule/assignments/", { params }),
+  createAssignment: (data) => api.post("/schedule/assignments/", data),
+  updateAssignment: (id, data) => api.patch(`/schedule/assignments/${id}/`, data),
+  deleteAssignment: (id) => api.delete(`/schedule/assignments/${id}/`),
+
+  // Schedule generation
+  generate: (data) => api.post("/schedule/generate/", data),
 };
 
 export default api;

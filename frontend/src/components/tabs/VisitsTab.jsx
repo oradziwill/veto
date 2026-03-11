@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { appointmentsAPI } from '../../services/api'
 import AddAppointmentModal from '../modals/AddAppointmentModal'
 import './Tabs.css'
@@ -29,6 +30,7 @@ const placeholderAppointments = [
 ]
 
 const VisitsTab = () => {
+  const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState(placeholderAppointments)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -36,29 +38,32 @@ const VisitsTab = () => {
   const [useAPI, setUseAPI] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const getDateRange = (filterType) => {
+  const getDateRangeParams = (filterType) => {
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const toYYYYMMDD = (d) => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
 
     switch (filterType) {
       case 'today':
-        return {
-          from: today.toISOString(),
-          to: new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString(),
-        }
+        return { date: toYYYYMMDD(today) }
       case 'week':
-        const weekStart = today
-        const weekEnd = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+        const weekEnd = new Date(today)
+        weekEnd.setDate(weekEnd.getDate() + 6)
         return {
-          from: weekStart.toISOString(),
-          to: weekEnd.toISOString(),
+          date_from: toYYYYMMDD(today),
+          date_to: toYYYYMMDD(weekEnd),
         }
       case 'month':
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
         return {
-          from: monthStart.toISOString(),
-          to: monthEnd.toISOString(),
+          date_from: toYYYYMMDD(monthStart),
+          date_to: toYYYYMMDD(monthEnd),
         }
       default:
         return {}
@@ -67,7 +72,6 @@ const VisitsTab = () => {
 
   const fetchAppointments = async (filterType) => {
     if (!useAPI) {
-      // Use placeholder data
       setAppointments(placeholderAppointments)
       return
     }
@@ -75,9 +79,9 @@ const VisitsTab = () => {
     try {
       setLoading(true)
       setError(null)
-      const params = getDateRange(filterType)
+      const params = getDateRangeParams(filterType)
       const response = await appointmentsAPI.list(params)
-      setAppointments(response.data.results || response.data)
+      setAppointments(response.data.results || response.data || [])
     } catch (err) {
       // Fall back to placeholder data on error
       setUseAPI(false)
@@ -94,9 +98,10 @@ const VisitsTab = () => {
 
   const formatDateTime = (dateString) => {
     const date = new Date(dateString)
+    const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
     return {
-      time: date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      time: date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }),
+      date: date.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' }),
     }
   }
 
@@ -115,9 +120,9 @@ const VisitsTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>Visits</h2>
+        <h2>{t('visits.title')}</h2>
         <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          + New Visit
+          {t('visits.newVisit')}
         </button>
       </div>
 
@@ -127,33 +132,33 @@ const VisitsTab = () => {
             className={`filter-btn ${filter === 'today' ? 'active' : ''}`}
             onClick={() => setFilter('today')}
           >
-            Today
+            {t('visits.today')}
           </button>
           <button
             className={`filter-btn ${filter === 'week' ? 'active' : ''}`}
             onClick={() => setFilter('week')}
           >
-            This Week
+            {t('visits.thisWeek')}
           </button>
           <button
             className={`filter-btn ${filter === 'month' ? 'active' : ''}`}
             onClick={() => setFilter('month')}
           >
-            This Month
+            {t('visits.thisMonth')}
           </button>
           <button
             className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
-            All
+            {t('visits.all')}
           </button>
         </div>
 
-        {loading && <div className="loading-message">Loading visits...</div>}
+        {loading && <div className="loading-message">{t('visits.loadingVisits')}</div>}
 
         <div className="visits-list">
           {appointments.length === 0 ? (
-            <div className="empty-state">No visits found for this period</div>
+            <div className="empty-state">{t('visits.noVisitsFound')}</div>
           ) : (
             appointments.map((appointment) => {
                 const { time, date } = formatDateTime(appointment.starts_at)
@@ -167,7 +172,7 @@ const VisitsTab = () => {
                       <h3>
                         {(() => {
                           // Remove "Unknown -" prefix from reason if present
-                          let displayReason = appointment.reason || 'Visit';
+                          let displayReason = appointment.reason || t('visits.visit');
                           if (displayReason.startsWith('Unknown - ')) {
                             displayReason = displayReason.replace('Unknown - ', '');
                           }
@@ -175,12 +180,12 @@ const VisitsTab = () => {
                         })()}
                       </h3>
                       <p className="visit-owner">
-                        Owner: {appointment.patient?.owner
-                          ? `${appointment.patient.owner.first_name || ''} ${appointment.patient.owner.last_name || ''}`.trim() || 'Unknown'
-                          : 'Unknown'}
+                        {t('visits.owner')} {appointment.patient?.owner
+                          ? `${appointment.patient.owner.first_name || ''} ${appointment.patient.owner.last_name || ''}`.trim() || t('common.unknown')
+                          : t('common.unknown')}
                       </p>
-                      <p className="visit-type">Type: {(() => {
-                        let reason = appointment.reason || 'General';
+                      <p className="visit-type">{t('visits.type')} {(() => {
+                        let reason = appointment.reason || t('visits.general');
                         // Remove "Unknown -" prefix if present
                         if (reason.startsWith('Unknown - ')) {
                           reason = reason.replace('Unknown - ', '');
@@ -195,7 +200,7 @@ const VisitsTab = () => {
                     </div>
                     <div className="visit-status">
                       <span className={`status-badge ${getStatusClass(appointment.status)}`}>
-                        {appointment.status?.replace('_', ' ').toUpperCase() || 'SCHEDULED'}
+                        {appointment.status ? (t(`visits.${appointment.status}`) || appointment.status) : t('visits.scheduled')}
                       </span>
                     </div>
                   </div>

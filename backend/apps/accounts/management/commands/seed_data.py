@@ -16,7 +16,7 @@ from apps.clients.models import Client, ClientClinic
 from apps.inventory.models import InventoryItem
 from apps.labs.models import Lab, LabTest
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment
+from apps.scheduling.models import Appointment, Room
 from apps.tenancy.models import Clinic
 
 
@@ -39,6 +39,26 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"✓ Created clinic: {clinic.name}"))
         else:
             self.stdout.write(f"→ Clinic already exists: {clinic.name}")
+
+        # Create example rooms
+        example_rooms = [
+            ("Room 1", 0),
+            ("Room 2", 1),
+            ("RTG room", 2),
+            ("Surgery", 3),
+        ]
+        for name, order in example_rooms:
+            room, created = Room.objects.get_or_create(
+                clinic=clinic,
+                name=name,
+                defaults={"display_order": order},
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"✓ Created room: {room.name}"))
+            else:
+                room.display_order = order
+                room.save(update_fields=["display_order"])
+        self.stdout.write(f"→ Rooms ready: {', '.join(r[0] for r in example_rooms)}")
 
         # Create Doctor
         vet, created = User.objects.get_or_create(
@@ -103,6 +123,12 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write(f"→ Clinic admin user already exists: {admin_user.username}")
+
+        # Link any existing users that have no clinic (e.g. Django superusers created via createsuperuser)
+        unlinked = User.objects.filter(clinic__isnull=True)
+        count = unlinked.update(clinic=clinic)
+        if count:
+            self.stdout.write(self.style.SUCCESS(f"✓ Linked {count} existing user(s) to clinic"))
 
         # Create Clients
         clients_data = [
@@ -234,6 +260,28 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"→ Appointment already exists: {appointment}")
 
+        # Create Billing Services (before inventory so they exist even if inventory fails)
+        services_data = [
+            {"name": "Consultation", "code": "CONS", "price": "150.00"},
+            {"name": "Vaccination", "code": "VACC", "price": "80.00"},
+            {"name": "Routine Checkup", "code": "CHECK", "price": "120.00"},
+            {"name": "Blood Test", "code": "BLOOD", "price": "200.00"},
+            {"name": "X-Ray", "code": "XRAY", "price": "250.00"},
+        ]
+        for svc_data in services_data:
+            svc, created = Service.objects.get_or_create(
+                clinic=clinic,
+                code=svc_data["code"],
+                defaults={
+                    "name": svc_data["name"],
+                    "price": svc_data["price"],
+                },
+            )
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"✓ Created service: {svc.name}"))
+            else:
+                self.stdout.write(f"→ Service already exists: {svc.name}")
+
         # Create Inventory Items
         #
         # IMPORTANT:
@@ -301,28 +349,6 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"✓ Created inventory item: {item}"))
             else:
                 self.stdout.write(f"→ Inventory item already exists: {item}")
-
-        # Create Billing Services
-        services_data = [
-            {"name": "Consultation", "code": "CONS", "price": "150.00"},
-            {"name": "Vaccination", "code": "VACC", "price": "80.00"},
-            {"name": "Routine Checkup", "code": "CHECK", "price": "120.00"},
-            {"name": "Blood Test", "code": "BLOOD", "price": "200.00"},
-            {"name": "X-Ray", "code": "XRAY", "price": "250.00"},
-        ]
-        for svc_data in services_data:
-            svc, created = Service.objects.get_or_create(
-                clinic=clinic,
-                code=svc_data["code"],
-                defaults={
-                    "name": svc_data["name"],
-                    "price": svc_data["price"],
-                },
-            )
-            if created:
-                self.stdout.write(self.style.SUCCESS(f"✓ Created service: {svc.name}"))
-            else:
-                self.stdout.write(f"→ Service already exists: {svc.name}")
 
         # Create in-clinic Lab and tests
         lab, created = Lab.objects.get_or_create(

@@ -20,11 +20,14 @@ if not ALLOWED_HOSTS:
 
 # --- Security behind ALB/EB ---
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-SECURE_SSL_REDIRECT = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# Set to True only when HTTPS is configured on the ALB
+SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "False").lower() == "true"
+SESSION_COOKIE_SECURE = os.getenv("SECURE_SSL_REDIRECT", "False").lower() == "true"
+CSRF_COOKIE_SECURE = os.getenv("SECURE_SSL_REDIRECT", "False").lower() == "true"
 
 CSRF_TRUSTED_ORIGINS = _split_csv(os.getenv("CSRF_TRUSTED_ORIGINS", ""))
+
+CORS_ALLOWED_ORIGINS = _split_csv(os.getenv("CORS_ALLOWED_ORIGINS", ""))
 
 # HSTS - start ostrożnie, potem zwiększaj
 SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
@@ -66,6 +69,9 @@ DATABASES = {
         "HOST": RDS_HOSTNAME,
         "PORT": os.getenv("RDS_PORT", "5432"),
         "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+        "OPTIONS": {
+            "connect_timeout": 10,
+        },
     }
 }
 

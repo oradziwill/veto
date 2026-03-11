@@ -92,12 +92,18 @@ def _split_into_slots(intervals: Iterable[Interval], slot_minutes: int) -> list[
 
 
 def compute_availability(
-    *, clinic_id: int, date_str: str, vet_id: int | None, slot_minutes: int | None
+    *,
+    clinic_id: int,
+    date_str: str,
+    vet_id: int | None,
+    room_id: int | None,
+    slot_minutes: int | None,
 ):
     """
     Compute availability for a clinic on a given date.
     - If vet_id is provided: use vet working hours (if configured) for that weekday,
       otherwise fall back to default clinic hours from settings.
+    - If room_id is provided: busy intervals are only from appointments in that room.
     - Excludes CANCELLED appointments from busy time.
     - Respects clinic holidays (ClinicHoliday): returns closed_reason + empty slots.
     """
@@ -188,11 +194,13 @@ def compute_availability(
             ends_at__gt=work.start,
         )
         .exclude(status=Appointment.Status.CANCELLED)
-        .only("id", "starts_at", "ends_at", "vet_id")
+        .only("id", "starts_at", "ends_at", "vet_id", "room_id")
     )
 
     if vet_id is not None:
         qs = qs.filter(vet_id=vet_id)
+    if room_id is not None:
+        qs = qs.filter(room_id=room_id)
 
     busy_raw: list[tuple[int, Interval]] = [
         (a.id, Interval(start=a.starts_at, end=a.ends_at)) for a in qs

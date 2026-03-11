@@ -33,6 +33,8 @@ class ServiceWriteSerializer(serializers.ModelSerializer):
 
 class InvoiceLineSerializer(serializers.ModelSerializer):
     line_total = serializers.SerializerMethodField()
+    line_vat_amount = serializers.SerializerMethodField()
+    line_gross = serializers.SerializerMethodField()
 
     class Meta:
         model = InvoiceLine
@@ -41,13 +43,23 @@ class InvoiceLineSerializer(serializers.ModelSerializer):
             "description",
             "quantity",
             "unit_price",
+            "vat_rate",
+            "unit",
             "line_total",
+            "line_vat_amount",
+            "line_gross",
             "service",
             "inventory_item",
         ]
 
     def get_line_total(self, obj):
         return str(obj.line_total)
+
+    def get_line_vat_amount(self, obj):
+        return str(obj.line_vat_amount)
+
+    def get_line_gross(self, obj):
+        return str(obj.line_gross)
 
 
 class InvoiceLineWriteSerializer(serializers.ModelSerializer):
@@ -57,6 +69,8 @@ class InvoiceLineWriteSerializer(serializers.ModelSerializer):
             "description",
             "quantity",
             "unit_price",
+            "vat_rate",
+            "unit",
             "service",
             "inventory_item",
         ]
@@ -88,6 +102,7 @@ class InvoiceReadSerializer(serializers.ModelSerializer):
     lines = InvoiceLineSerializer(many=True, read_only=True)
     payments = PaymentSerializer(many=True, read_only=True)
     total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_gross = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     amount_paid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     balance_due = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     client_detail = ClientSerializer(source="client", read_only=True)
@@ -104,11 +119,15 @@ class InvoiceReadSerializer(serializers.ModelSerializer):
             "patient_detail",
             "appointment",
             "status",
+            "invoice_number",
             "due_date",
             "currency",
+            "ksef_number",
+            "ksef_status",
             "lines",
             "payments",
             "total",
+            "total_gross",
             "amount_paid",
             "balance_due",
             "created_by",
@@ -127,6 +146,7 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
             "patient",
             "appointment",
             "status",
+            "invoice_number",
             "due_date",
             "currency",
             "lines",

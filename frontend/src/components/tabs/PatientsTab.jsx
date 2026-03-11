@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { patientsAPI } from "../../services/api";
+import { translateSpecies } from "../../utils/species";
 import AddPatientModal from "../modals/AddPatientModal";
 import PatientDetailsModal from "../modals/PatientDetailsModal";
 import "./Tabs.css";
 
 const PatientsTab = () => {
+  const { t } = useTranslation();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,31 +15,49 @@ const PatientsTab = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const abortControllerRef = React.useRef(null);
 
   const fetchPatients = async (search = "") => {
+    // Cancel any in-flight request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       setLoading(true);
       setError(null);
       const params = search ? { search } : {};
-      const response = await patientsAPI.list(params);
+      const response = await patientsAPI.list(params, { signal: controller.signal });
       // Handle both paginated and non-paginated responses
       const patientsData = response.data.results || response.data || [];
       setPatients(Array.isArray(patientsData) ? patientsData : []);
     } catch (err) {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
+        return; // Ignore cancellations — a newer request is already in flight
+      }
       console.error("Error fetching patients:", err);
       const errorMessage =
         err.response?.data?.detail ||
         err.message ||
-        "Failed to load patients. Please try again.";
+        t("patients.loadError");
       setError(errorMessage);
       setPatients([]);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     fetchPatients();
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
   const handleSearch = (e) => {
@@ -56,23 +77,23 @@ const PatientsTab = () => {
   };
 
   const calculateAge = (birthDate) => {
-    if (!birthDate) return "Unknown";
+    if (!birthDate) return t("common.unknown");
     const today = new Date();
     const birth = new Date(birthDate);
     const years = today.getFullYear() - birth.getFullYear();
     const months = today.getMonth() - birth.getMonth();
     if (years > 0) {
-      return `${years} year${years !== 1 ? "s" : ""}`;
+      return `${years} ${years !== 1 ? t("patients.years") : t("patients.year")}`;
     }
-    return `${months} month${months !== 1 ? "s" : ""}`;
+    return `${months} ${months !== 1 ? t("patients.months") : t("patients.month")}`;
   };
 
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>Patients</h2>
+        <h2>{t("patients.title")}</h2>
         <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-          + Add Patient
+          {t("patients.addPatient")}
         </button>
       </div>
 
@@ -80,18 +101,17 @@ const PatientsTab = () => {
         <div className="search-bar">
           <input
             type="text"
-            placeholder="Search by patient name, owner name, surname, or phone..."
+            placeholder={t("patients.searchPlaceholder")}
             className="search-input"
             value={searchTerm}
             onChange={handleSearch}
           />
         </div>
 
-        {loading && <div className="loading-message">Loading patients...</div>}
+        {loading && <div className="loading-message">{t("patients.loadingPatients")}</div>}
 
         {error && !loading && (
           <div
-            className="error-message"
             style={{
               padding: "1rem",
               backgroundColor: "#fff5f5",
@@ -99,15 +119,25 @@ const PatientsTab = () => {
               border: "1px solid #fed7d7",
               color: "#c53030",
               marginBottom: "1rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
             }}
           >
-            {error}
+            <span>{error}</span>
+            <button
+              className="btn-secondary"
+              onClick={() => fetchPatients(searchTerm)}
+            >
+              {t("common.retry")}
+            </button>
           </div>
         )}
 
         <div className="patients-grid">
           {!loading && patients.length === 0 ? (
-            <div className="empty-state">No patients found</div>
+            <div className="empty-state">{t("patients.noPatientsFound")}</div>
           ) : (
             patients.map((patient) => (
               <div key={patient.id} className="patient-card">
@@ -118,22 +148,22 @@ const PatientsTab = () => {
                   <div className="patient-name-section">
                     <h3>{patient.name}</h3>
                     <p className="patient-species">
-                      {patient.species}{" "}
+                      {translateSpecies(patient.species, t)}{" "}
                       {patient.breed ? `• ${patient.breed}` : ""}
                     </p>
                   </div>
                 </div>
                 <div className="patient-details">
                   <div className="patient-detail-row">
-                    <span className="detail-label">Owner:</span>
+                    <span className="detail-label">{t("patients.owner")}</span>
                     <span className="detail-value">
                       {patient.owner
                         ? `${patient.owner.first_name} ${patient.owner.last_name}`
-                        : "Unknown"}
+                        : t("common.unknown")}
                     </span>
                   </div>
                   <div className="patient-detail-row">
-                    <span className="detail-label">Age:</span>
+                    <span className="detail-label">{t("patients.age")}</span>
                     <span className="detail-value">
                       {calculateAge(patient.birth_date)}
                     </span>
@@ -147,7 +177,7 @@ const PatientsTab = () => {
                       setIsDetailsModalOpen(true);
                     }}
                   >
-                    View Details
+                    {t("patients.viewDetails")}
                   </button>
                 </div>
               </div>
