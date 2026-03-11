@@ -1,18 +1,21 @@
 import os
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
+from apps.billing.models import Invoice
+from apps.billing.serializers import InvoiceReadSerializer
 from apps.clients.models import ClientClinic
 from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
 from apps.medical.serializers import (
+    MedicalRecordReadSerializer,
     PrescriptionReadSerializer,
     PrescriptionWriteSerializer,
     VaccinationReadSerializer,
@@ -20,11 +23,13 @@ from apps.medical.serializers import (
 )
 from apps.patients.models import Patient
 from apps.patients.serializers import (
+    ClientMiniSerializer,
     PatientHistoryForPatientSerializer,
     PatientReadSerializer,
     PatientWriteSerializer,
 )
 from apps.scheduling.models import Appointment
+from apps.scheduling.serializers import AppointmentReadSerializer
 
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -105,6 +110,86 @@ class PatientViewSet(viewsets.ModelViewSet):
             VaccinationReadSerializer(vaccination).data,
             status=201,
         )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="profile",
+        permission_classes=[IsStaffOrVet],
+    )
+    def profile(self, request, pk=None):
+        """
+        GET /api/patients/<id>/profile/
+        Single-call payload: patient, owner, last 5 medical records, all vaccinations,
+        next 3 upcoming appointments, open invoices. Clinic-scoped.
+        """
+        patient = self.get_object()
+        user = request.user
+        now = timezone.now()
+        open_statuses = [
+            Invoice.Status.DRAFT,
+            Invoice.Status.SENT,
+            Invoice.Status.OVERDUE,
+        ]
+        upcoming_statuses = [
+            Appointment.Status.SCHEDULED,
+            Appointment.Status.CONFIRMED,
+            Appointment.Status.CHECKED_IN,
+        ]
+
+        patient = (
+            Patient.objects.filter(pk=patient.pk, clinic_id=user.clinic_id)
+            .select_related("owner", "primary_vet", "clinic")
+            .prefetch_related(
+                Prefetch(
+                    "medical_records",
+                    queryset=MedicalRecord.objects.select_related("created_by").order_by(
+                        "-created_at"
+                    ),
+                ),
+                Prefetch(
+                    "vaccinations",
+                    queryset=Vaccination.objects.select_related("administered_by").order_by(
+                        "-administered_at"
+                    ),
+                ),
+                Prefetch(
+                    "appointments",
+                    queryset=Appointment.objects.filter(
+                        starts_at__gte=now, status__in=upcoming_statuses
+                    )
+                    .select_related("vet", "room")
+                    .order_by("starts_at"),
+                ),
+                Prefetch(
+                    "invoices",
+                    queryset=Invoice.objects.filter(status__in=open_statuses)
+                    .select_related("client", "patient")
+                    .prefetch_related("lines", "payments")
+                    .order_by("-created_at"),
+                ),
+            )
+            .first()
+        )
+        if not patient:
+            raise NotFound()
+
+        medical_records = list(patient.medical_records.all())[:5]
+        vaccinations = list(patient.vaccinations.all())
+        upcoming_appointments = list(patient.appointments.all())[:3]
+        open_invoices = list(patient.invoices.all())
+
+        data = {
+            "patient": PatientReadSerializer(patient).data,
+            "owner": ClientMiniSerializer(patient.owner).data,
+            "medical_records": MedicalRecordReadSerializer(medical_records, many=True).data,
+            "vaccinations": VaccinationReadSerializer(vaccinations, many=True).data,
+            "upcoming_appointments": AppointmentReadSerializer(
+                upcoming_appointments, many=True
+            ).data,
+            "open_invoices": InvoiceReadSerializer(open_invoices, many=True).data,
+        }
+        return Response(data, status=200)
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
