@@ -101,6 +101,27 @@ Create `.env` in project root or `backend/` and add variables as needed.
 
 All endpoints except auth require: `Authorization: Bearer <access_token>`
 
+### Error Response Format
+
+API errors use a standardized envelope:
+
+```json
+{
+  "code": "validation_error",
+  "message": "Validation failed.",
+  "detail": "Validation failed.",
+  "details": {
+    "field_name": ["Error text"]
+  },
+  "status": 400
+}
+```
+
+- `code` – stable machine-readable error code
+- `message` / `detail` – human-readable message
+- `details` – original DRF error payload (field errors or detail)
+- `status` – HTTP status code
+
 ### Authentication
 
 | Method | Endpoint | Description |
