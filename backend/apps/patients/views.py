@@ -61,7 +61,10 @@ class PatientViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Only doctors and clinic admins can create prescriptions.")
         if not getattr(user, "clinic_id", None):
             raise ValidationError("User must belong to a clinic to create prescriptions.")
-        serializer = PrescriptionWriteSerializer(data=request.data)
+        serializer = PrescriptionWriteSerializer(
+            data=request.data,
+            context={"request": request, "patient": patient},
+        )
         serializer.is_valid(raise_exception=True)
         prescription = Prescription.objects.create(
             clinic_id=user.clinic_id,
@@ -509,8 +512,11 @@ class PatientViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        except Exception as e:
+        except Exception:
             return Response(
-                {"error": f"Failed to generate AI summary: {str(e)}"},
+                {
+                    "code": "ai_summary_generation_failed",
+                    "message": "Failed to generate AI summary.",
+                },
                 status=500,
             )

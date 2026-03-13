@@ -82,6 +82,12 @@ class MedicalRecordReadSerializer(serializers.ModelSerializer):
 
 
 class MedicalRecordWriteSerializer(serializers.ModelSerializer):
+    def validate_patient(self, value):
+        request = self.context.get("request")
+        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+            raise serializers.ValidationError("Patient must belong to your clinic.")
+        return value
+
     class Meta:
         model = MedicalRecord
         fields = [
@@ -110,6 +116,12 @@ class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
 
 
 class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
+    def validate_record(self, value):
+        request = self.context.get("request")
+        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+            raise serializers.ValidationError("Medical record must belong to your clinic.")
+        return value
+
     class Meta:
         model = PatientHistoryEntry
         fields = [
@@ -169,6 +181,17 @@ class PrescriptionWriteSerializer(serializers.ModelSerializer):
     def validate_dosage(self, value):
         if not (value or "").strip():
             raise serializers.ValidationError("dosage is required for new prescriptions.")
+        return value
+
+    def validate_medical_record(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+            raise serializers.ValidationError("Medical record must belong to your clinic.")
+        patient = self.context.get("patient")
+        if patient and value.patient_id != patient.id:
+            raise serializers.ValidationError("Medical record must belong to this patient.")
         return value
 
 
