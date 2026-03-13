@@ -2,10 +2,11 @@
 Billing API views.
 """
 
+import calendar
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.db.models import DecimalField, F, Sum
+from django.db.models import Count, DecimalField, F, Sum
 from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
 from rest_framework import viewsets
@@ -193,6 +194,24 @@ def _periods_in_range(date_from, date_to, period_kind):
             current = current + timedelta(days=1)
 
 
+def _last_n_months_range(today, n):
+    """Return (date_from, date_to) for the last n calendar months ending with current month."""
+    if n < 1:
+        return today, today
+    end_year, end_month = today.year, today.month
+    start_month = end_month - (n - 1)
+    start_year = end_year
+    while start_month < 1:
+        start_month += 12
+        start_year -= 1
+    date_from = date(start_year, start_month, 1)
+    _, last_day = calendar.monthrange(end_year, end_month)
+    date_to = date(end_year, end_month, last_day)
+    if date_to > today:
+        date_to = today
+    return date_from, date_to
+
+
 class RevenueSummaryView(APIView):
     """GET /api/billing/revenue-summary/ – Admin-only revenue summary by period."""
 
@@ -207,10 +226,45 @@ class RevenueSummaryView(APIView):
             )
         period_kind = period_param
 
+        breakdown_param = (request.query_params.get("breakdown") or "").strip().lower()
+        months_param = request.query_params.get("months")
+        if months_param is not None and months_param != "" and breakdown_param != "monthly":
+            return Response(
+                {"detail": "Parameter 'months' is only valid when breakdown=monthly."},
+                status=400,
+            )
+        if breakdown_param and breakdown_param != "monthly":
+            return Response(
+                {"detail": "Invalid breakdown. Use 'monthly' or omit."},
+                status=400,
+            )
+        if breakdown_param == "monthly" and months_param is not None:
+            try:
+                n_months = int(months_param)
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "Parameter 'months' must be a positive integer."},
+                    status=400,
+                )
+            if n_months < 1:
+                return Response(
+                    {"detail": "Parameter 'months' must be a positive integer."},
+                    status=400,
+                )
+
         today = timezone.now().date()
         start_of_year = date(today.year, 1, 1)
-        date_from = _parse_date(request.query_params.get("from")) or start_of_year
-        date_to = _parse_date(request.query_params.get("to")) or today
+        date_from = _parse_date(request.query_params.get("from"))
+        date_to = _parse_date(request.query_params.get("to"))
+        if breakdown_param == "monthly" and date_from is None and date_to is None:
+            n = 6
+            if months_param not in (None, ""):
+                n = int(months_param)
+            date_from, date_to = _last_n_months_range(today, n)
+        if date_from is None:
+            date_from = start_of_year
+        if date_to is None:
+            date_to = today
         if date_from > date_to:
             return Response(
                 {"detail": "'from' must be less than or equal to 'to'."},
@@ -311,14 +365,44 @@ class RevenueSummaryView(APIView):
                 }
             )
 
-        return Response(
-            {
-                "period": period_kind,
-                "from": date_from.isoformat(),
-                "to": date_to.isoformat(),
-                "total_invoiced": str(total_invoiced.quantize(Decimal("0.01"))),
-                "total_paid": str(total_paid.quantize(Decimal("0.01"))),
-                "total_outstanding": str(total_outstanding.quantize(Decimal("0.01"))),
-                "by_period": by_period,
-            }
-        )
+        payload = {
+            "period": period_kind,
+            "from": date_from.isoformat(),
+            "to": date_to.isoformat(),
+            "total_invoiced": str(total_invoiced.quantize(Decimal("0.01"))),
+            "total_paid": str(total_paid.quantize(Decimal("0.01"))),
+            "total_outstanding": str(total_outstanding.quantize(Decimal("0.01"))),
+            "by_period": by_period,
+        }
+
+        if breakdown_param == "monthly":
+            invoice_counts = (
+                Invoice.objects.filter(
+                    clinic_id=clinic_id,
+                    created_at__date__gte=date_from,
+                    created_at__date__lte=date_to,
+                )
+                .exclude(status=Invoice.Status.CANCELLED)
+                .annotate(period=TruncMonth("created_at"))
+                .values("period")
+                .annotate(invoice_count=Count("id"))
+                .order_by("period")
+            )
+            count_by_label = {}
+            for row in invoice_counts:
+                pv = row["period"]
+                d = pv.date() if hasattr(pv, "date") else pv
+                count_by_label[d.strftime("%Y-%m")] = row["invoice_count"]
+            monthly = []
+            for _period_date, label in _periods_in_range(date_from, date_to, "monthly"):
+                rev = invoiced_map.get(label, Decimal("0"))
+                monthly.append(
+                    {
+                        "month": label,
+                        "revenue": str(rev.quantize(Decimal("0.01"))),
+                        "invoice_count": count_by_label.get(label, 0),
+                    }
+                )
+            payload["monthly"] = monthly
+
+        return Response(payload)

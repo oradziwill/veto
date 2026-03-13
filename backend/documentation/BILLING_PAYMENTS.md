@@ -69,10 +69,14 @@ python manage.py mark_overdue_invoices
 **Query parameters:**
 
 - **period** – Optional. `monthly` (default) or `daily`. Groups totals by month or by day. Invalid value returns 400.
-- **from** – Optional. Start of range, ISO date `YYYY-MM-DD`. Default: first day of the current year.
-- **to** – Optional. End of range, ISO date `YYYY-MM-DD`. Default: today. If `from` > `to`, returns 400.
+- **from** – Optional. Start of range, ISO date `YYYY-MM-DD`. Default: first day of the current year (or, when `breakdown=monthly` and no `from`/`to`, start of the first month in the trailing window).
+- **to** – Optional. End of range, ISO date `YYYY-MM-DD`. Default: today (or last day of current month when using default breakdown window).
+- **breakdown** – Optional. `monthly` to include a **monthly** array in the response (for chart data). Any other value returns 400. Omit for standard summary only.
+- **months** – Optional. Only valid when `breakdown=monthly`. Positive integer; when `breakdown=monthly` and `from`/`to` are not provided, the range is the last **N** calendar months (default **6**). Invalid or non-positive returns 400. If provided without `breakdown=monthly`, returns 400.
 
 **Response (200):**
+
+Standard response (no breakdown):
 
 ```json
 {
@@ -90,10 +94,30 @@ python manage.py mark_overdue_invoices
 }
 ```
 
+With `?breakdown=monthly` the response also includes **monthly** (chart-friendly):
+
+```json
+{
+  "period": "monthly",
+  "from": "2026-01-01",
+  "to": "2026-03-31",
+  "total_invoiced": "4500.00",
+  "total_paid": "3800.00",
+  "total_outstanding": "700.00",
+  "by_period": [ ... ],
+  "monthly": [
+    { "month": "2026-01", "revenue": "1200.00", "invoice_count": 8 },
+    { "month": "2026-02", "revenue": "1800.00", "invoice_count": 12 },
+    { "month": "2026-03", "revenue": "1500.00", "invoice_count": 10 }
+  ]
+}
+```
+
 - **total_invoiced** – Sum of (non-cancelled) invoice line totals with `created_at` in the date range.
 - **total_paid** – Sum of completed payments with `paid_at` in the date range.
 - **total_outstanding** – `total_invoiced - total_paid`.
 - **by_period** – One entry per period in range. **label**: `YYYY-MM` for monthly, `YYYY-MM-DD` for daily. **invoiced** / **paid**: amounts for that period (strings with two decimals).
+- **monthly** – Present only when `breakdown=monthly`. One entry per month in range: **month** (`YYYY-MM`), **revenue** (invoiced amount as string), **invoice_count** (non-cancelled invoices in that month). Clinic-scoped.
 
 **Running revenue summary tests:**
 
@@ -101,4 +125,4 @@ python manage.py mark_overdue_invoices
 pytest apps/billing/tests/test_revenue_summary.py -v
 ```
 
-Relevant tests: `test_revenue_summary_admin_only`, `test_revenue_summary_scoped_to_clinic`, `test_revenue_summary_totals`, `test_revenue_summary_by_period_monthly`, `test_revenue_summary_by_period_daily`, `test_revenue_summary_excludes_cancelled`, `test_revenue_summary_invalid_period`.
+Relevant tests: `test_revenue_summary_admin_only`, `test_revenue_summary_scoped_to_clinic`, `test_revenue_summary_totals`, `test_revenue_summary_by_period_monthly`, `test_revenue_summary_by_period_daily`, `test_revenue_summary_excludes_cancelled`, `test_revenue_summary_invalid_period`, `test_revenue_summary_breakdown_monthly_returns_monthly_array`, `test_revenue_summary_breakdown_monthly_custom_months`, `test_revenue_summary_months_without_breakdown_returns_400`, `test_revenue_summary_invalid_months_returns_400`, `test_revenue_summary_invalid_breakdown_returns_400`, `test_revenue_summary_breakdown_monthly_excludes_cancelled`, `test_revenue_summary_no_breakdown_omits_monthly_key`.

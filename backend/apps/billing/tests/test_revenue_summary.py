@@ -308,3 +308,155 @@ def test_revenue_summary_invalid_period(clinic_admin, api_client):
     r = api_client.get("/api/billing/revenue-summary/", {"period": "weekly"})
     assert r.status_code == 400
     assert "Invalid period" in r.data["detail"]
+
+
+@pytest.mark.django_db
+def test_revenue_summary_breakdown_monthly_returns_monthly_array(
+    clinic_admin,
+    client_with_membership,
+    patient,
+    api_client,
+):
+    """breakdown=monthly returns monthly key with month, revenue, invoice_count."""
+    inv = Invoice.objects.create(
+        clinic=clinic_admin.clinic,
+        client=client_with_membership,
+        patient=patient,
+        status="sent",
+    )
+    InvoiceLine.objects.create(
+        invoice=inv,
+        description="Consultation",
+        quantity=1,
+        unit_price=1200,
+    )
+    Invoice.objects.filter(pk=inv.pk).update(
+        created_at=timezone.datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.UTC)
+    )
+
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get(
+        "/api/billing/revenue-summary/",
+        {"breakdown": "monthly", "from": "2026-01-01", "to": "2026-01-31"},
+    )
+    assert r.status_code == 200
+    assert "monthly" in r.data
+    monthly = r.data["monthly"]
+    assert len(monthly) == 1
+    assert monthly[0]["month"] == "2026-01"
+    assert monthly[0]["revenue"] == "1200.00"
+    assert monthly[0]["invoice_count"] == 1
+
+
+@pytest.mark.django_db
+def test_revenue_summary_breakdown_monthly_custom_months(
+    clinic_admin,
+    api_client,
+):
+    """breakdown=monthly with months=N returns N ordered monthly buckets."""
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get(
+        "/api/billing/revenue-summary/",
+        {"breakdown": "monthly", "months": "3"},
+    )
+    assert r.status_code == 200
+    assert "monthly" in r.data
+    monthly = r.data["monthly"]
+    assert len(monthly) == 3
+    for _i, row in enumerate(monthly):
+        assert "month" in row
+        assert "revenue" in row
+        assert "invoice_count" in row
+        assert row["invoice_count"] >= 0
+
+
+@pytest.mark.django_db
+def test_revenue_summary_months_without_breakdown_returns_400(clinic_admin, api_client):
+    """months without breakdown=monthly returns 400."""
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get("/api/billing/revenue-summary/", {"months": "6"})
+    assert r.status_code == 400
+    assert "months" in r.data["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_revenue_summary_invalid_months_returns_400(clinic_admin, api_client):
+    """Invalid months (non-integer, zero, negative) returns 400."""
+    api_client.force_authenticate(user=clinic_admin)
+    for params in [
+        {"breakdown": "monthly", "months": "abc"},
+        {"breakdown": "monthly", "months": "0"},
+        {"breakdown": "monthly", "months": "-1"},
+    ]:
+        r = api_client.get("/api/billing/revenue-summary/", params)
+        assert r.status_code == 400, params
+
+
+@pytest.mark.django_db
+def test_revenue_summary_invalid_breakdown_returns_400(clinic_admin, api_client):
+    """Invalid breakdown value returns 400."""
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get("/api/billing/revenue-summary/", {"breakdown": "daily"})
+    assert r.status_code == 400
+    assert "breakdown" in r.data["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_revenue_summary_breakdown_monthly_excludes_cancelled(
+    clinic_admin,
+    client_with_membership,
+    patient,
+    api_client,
+):
+    """Monthly breakdown excludes cancelled invoices from revenue and count."""
+    inv_ok = Invoice.objects.create(
+        clinic=clinic_admin.clinic,
+        client=client_with_membership,
+        patient=patient,
+        status="sent",
+    )
+    InvoiceLine.objects.create(
+        invoice=inv_ok,
+        description="OK",
+        quantity=1,
+        unit_price=100,
+    )
+    inv_cancelled = Invoice.objects.create(
+        clinic=clinic_admin.clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.CANCELLED,
+    )
+    InvoiceLine.objects.create(
+        invoice=inv_cancelled,
+        description="Cancelled",
+        quantity=1,
+        unit_price=500,
+    )
+    Invoice.objects.filter(pk=inv_ok.pk).update(
+        created_at=timezone.datetime(2026, 6, 1, 10, 0, 0, tzinfo=timezone.UTC)
+    )
+    Invoice.objects.filter(pk=inv_cancelled.pk).update(
+        created_at=timezone.datetime(2026, 6, 2, 10, 0, 0, tzinfo=timezone.UTC)
+    )
+
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get(
+        "/api/billing/revenue-summary/",
+        {"breakdown": "monthly", "from": "2026-06-01", "to": "2026-06-30"},
+    )
+    assert r.status_code == 200
+    monthly = r.data["monthly"]
+    assert len(monthly) == 1
+    assert monthly[0]["month"] == "2026-06"
+    assert monthly[0]["revenue"] == "100.00"
+    assert monthly[0]["invoice_count"] == 1
+
+
+@pytest.mark.django_db
+def test_revenue_summary_no_breakdown_omits_monthly_key(clinic_admin, api_client):
+    """Without breakdown=monthly, response does not include monthly key."""
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get("/api/billing/revenue-summary/")
+    assert r.status_code == 200
+    assert "monthly" not in r.data
