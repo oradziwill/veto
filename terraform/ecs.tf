@@ -39,19 +39,19 @@ resource "aws_ecs_task_definition" "backend" {
 
     environment = [
       { name = "DJANGO_SETTINGS_MODULE", value = "config.settings_production" },
-      { name = "ALLOWED_HOSTS",          value = "${aws_lb.main.dns_name},localhost,127.0.0.1,*" },
-      { name = "CSRF_TRUSTED_ORIGINS",   value = "http://${aws_lb.main.dns_name}" },
-      { name = "RDS_HOSTNAME",           value = aws_db_instance.main.address },
-      { name = "RDS_PORT",               value = tostring(aws_db_instance.main.port) },
-      { name = "RDS_DB_NAME",            value = aws_db_instance.main.db_name },
-      { name = "RDS_USERNAME",           value = aws_db_instance.main.username },
+      { name = "ALLOWED_HOSTS", value = "${aws_lb.main.dns_name},localhost,127.0.0.1,*" },
+      { name = "CSRF_TRUSTED_ORIGINS", value = "http://${aws_lb.main.dns_name}" },
+      { name = "RDS_HOSTNAME", value = aws_db_instance.main.address },
+      { name = "RDS_PORT", value = tostring(aws_db_instance.main.port) },
+      { name = "RDS_DB_NAME", value = aws_db_instance.main.db_name },
+      { name = "RDS_USERNAME", value = aws_db_instance.main.username },
       # Disable until HTTPS is configured on the ALB
-      { name = "SECURE_SSL_REDIRECT",    value = "False" },
+      { name = "SECURE_SSL_REDIRECT", value = "False" },
     ]
 
     secrets = [
-      { name = "SECRET_KEY",           valueFrom = aws_secretsmanager_secret.django_secret_key.arn },
-      { name = "RDS_PASSWORD",         valueFrom = aws_secretsmanager_secret.db_password.arn },
+      { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.django_secret_key.arn },
+      { name = "RDS_PASSWORD", valueFrom = aws_secretsmanager_secret.db_password.arn },
       { name = "CORS_ALLOWED_ORIGINS", valueFrom = aws_secretsmanager_secret.cors_allowed_origins.arn },
     ]
 
