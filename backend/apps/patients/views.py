@@ -93,6 +93,11 @@ class PatientViewSet(viewsets.ModelViewSet):
                 clinic_id=user.clinic_id,
                 patient_id=patient.id,
             ).order_by("-administered_at")
+            if request.query_params.get("upcoming") == "1":
+                qs = qs.filter(
+                    next_due_at__isnull=False,
+                    next_due_at__gte=timezone.now().date(),
+                )
             return Response(VaccinationReadSerializer(qs, many=True).data, status=200)
 
         # POST: create new vaccination

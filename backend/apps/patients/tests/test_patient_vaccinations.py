@@ -1,9 +1,12 @@
+from datetime import timedelta
+
 import pytest
 from apps.accounts.models import User
 from apps.clients.models import Client, ClientClinic
 from apps.medical.models import Vaccination
 from apps.patients.models import Patient
 from apps.tenancy.models import Clinic
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 
@@ -221,6 +224,13 @@ def test_vaccination_update_happy_path():
         format="json",
     )
     assert resp.status_code == 200
+    assert resp.data["id"] == vax.id
+    assert resp.data["clinic"] == clinic.id
+    assert resp.data["patient"] == patient.id
+    assert resp.data["administered_by"] == vet.id
+    assert resp.data["administered_by_name"] == vet.username
+    assert resp.data["vaccine_name"] == "Rabies"
+    assert resp.data["administered_at"] == "2025-01-01"
     assert resp.data["notes"] == "Updated notes"
     assert resp.data["next_due_at"] == "2026-06-01"
 
@@ -295,3 +305,50 @@ def test_vaccination_create_validation_required_fields():
     )
     assert resp2.status_code == 400
     assert "administered_at" in resp2.data
+
+
+@pytest.mark.django_db
+def test_patient_vaccination_list_upcoming_filter():
+    clinic, vet, patient = _make_clinic_user_patient()
+    today = timezone.now().date()
+
+    Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="No due",
+        administered_at="2025-01-01",
+        next_due_at=None,
+        administered_by=vet,
+    )
+    Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="Past due",
+        administered_at="2025-01-02",
+        next_due_at=today - timedelta(days=1),
+        administered_by=vet,
+    )
+    today_due = Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="Due today",
+        administered_at="2025-01-03",
+        next_due_at=today,
+        administered_by=vet,
+    )
+    future_due = Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="Due later",
+        administered_at="2025-01-04",
+        next_due_at=today + timedelta(days=30),
+        administered_by=vet,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=vet)
+
+    resp = client.get(f"/api/patients/{patient.id}/vaccinations/?upcoming=1")
+    assert resp.status_code == 200
+    ids = {item["id"] for item in resp.data}
+    assert ids == {today_due.id, future_due.id}

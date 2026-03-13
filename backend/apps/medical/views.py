@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 
@@ -74,6 +75,23 @@ class VaccinationViewSet(viewsets.ModelViewSet):
         raise MethodNotAllowed(
             "POST", detail="Create vaccinations via POST /api/patients/<id>/vaccinations/"
         )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        vaccination = serializer.save()
+        vaccination = (
+            Vaccination.objects.filter(pk=vaccination.pk)
+            .select_related("patient", "clinic", "administered_by")
+            .get()
+        )
+        return Response(VaccinationReadSerializer(vaccination).data)
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
 
 class PrescriptionViewSet(viewsets.ReadOnlyModelViewSet):
