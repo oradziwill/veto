@@ -5,6 +5,7 @@
 Doctors and clinic admins record prescriptions during or after a visit. Each prescription links to a patient and optionally to a visit (MedicalRecord). Data is scoped to the authenticated user’s clinic.
 
 - **List / create:** `GET` and `POST /api/patients/<id>/prescriptions/`
+- **Global list:** `GET /api/prescriptions/` (supports query filters)
 - **Retrieve one:** `GET /api/prescriptions/<id>/`
 
 Only **doctors and clinic admins** can create prescriptions (`IsDoctorOrAdmin`). List and retrieve are available to clinic staff (`IsStaffOrVet`).
@@ -34,9 +35,15 @@ Only **doctors and clinic admins** can create prescriptions (`IsDoctorOrAdmin`).
 }
 ```
 
-**Response (201):** Full prescription object (id, clinic, patient, prescribed_by, drug_name, dosage, duration_days, notes, medical_record, appointment, created_at).
+**Response (201):** Full prescription object (id, clinic, patient, prescribed_by, prescribed_by_name, drug_name, dosage, duration_days, notes, medical_record, appointment, created_at).
 
 **GET** `/api/patients/<id>/prescriptions/` returns a list of prescriptions for that patient (newest first), clinic-scoped.
+
+**GET** `/api/prescriptions/` returns clinic-scoped prescriptions and supports:
+
+- `?patient=<id>` – only prescriptions for that patient
+- `?medical_record=<id>` – only prescriptions linked to that visit/record
+- both params together (intersection filter)
 
 **GET** `/api/prescriptions/<id>/` returns a single prescription; 404 if it belongs to another clinic.
 
@@ -46,6 +53,7 @@ From the **backend** directory (with venv activated):
 
 ```bash
 pytest apps/patients/tests/test_patient_prescriptions.py -v
+pytest apps/medical/tests/test_prescription_filters.py -v
 ```
 
 Relevant tests:
@@ -55,6 +63,10 @@ Relevant tests:
 - `test_patient_prescription_create_forbidden_for_receptionist` – receptionist gets 403 on POST
 - `test_prescription_retrieve_happy_path` – GET /api/prescriptions/<id>/ returns own clinic’s prescription
 - `test_prescription_retrieve_404_other_clinic` – GET other clinic’s prescription returns 404
+- `test_prescriptions_list_filter_by_patient` – `?patient=<id>` filter
+- `test_prescriptions_list_filter_by_medical_record` – `?medical_record=<id>` filter
+- `test_prescriptions_list_filter_by_patient_and_medical_record` – combined filters
+- `test_prescriptions_list_includes_prescribed_by_name` – list/retrieve include readable prescriber name
 
 ## Migration
 

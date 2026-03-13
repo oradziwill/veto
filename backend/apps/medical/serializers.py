@@ -124,6 +124,13 @@ class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
 
 
 class PrescriptionReadSerializer(serializers.ModelSerializer):
+    prescribed_by_name = serializers.SerializerMethodField()
+
+    def get_prescribed_by_name(self, obj):
+        if not obj.prescribed_by:
+            return None
+        return obj.prescribed_by.get_full_name() or obj.prescribed_by.username
+
     class Meta:
         model = Prescription
         fields = [
@@ -133,6 +140,7 @@ class PrescriptionReadSerializer(serializers.ModelSerializer):
             "appointment",
             "medical_record",
             "prescribed_by",
+            "prescribed_by_name",
             "drug_name",
             "dosage",
             "duration_days",
