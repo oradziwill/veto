@@ -171,11 +171,21 @@ class PrescriptionWriteSerializer(serializers.ModelSerializer):
 
 class VaccinationReadSerializer(serializers.ModelSerializer):
     administered_by_name = serializers.SerializerMethodField()
+    patient_name = serializers.CharField(source="patient.name", read_only=True)
+    owner_name = serializers.SerializerMethodField()
+    next_due_date = serializers.DateField(source="next_due_at", read_only=True)
 
     def get_administered_by_name(self, obj):
         if not obj.administered_by:
             return None
         return obj.administered_by.get_full_name() or obj.administered_by.username
+
+    def get_owner_name(self, obj):
+        owner = getattr(obj.patient, "owner", None)
+        if not owner:
+            return None
+        full_name = f"{owner.first_name or ''} {owner.last_name or ''}".strip()
+        return full_name or None
 
     class Meta:
         model = Vaccination
@@ -187,8 +197,11 @@ class VaccinationReadSerializer(serializers.ModelSerializer):
             "batch_number",
             "administered_at",
             "next_due_at",
+            "next_due_date",
             "administered_by",
             "administered_by_name",
+            "patient_name",
+            "owner_name",
             "notes",
         ]
         read_only_fields = fields

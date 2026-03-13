@@ -149,6 +149,7 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 | CRUD | `/api/medical/records/` | Medical records (vet only) |
 | CRUD | `/api/medical/history/` | Patient history entries (vet only) |
 | GET/PATCH/DELETE | `/api/vaccinations/<id>/` | Vaccination record details and edits (create via patient route) |
+| GET | `/api/vaccinations/?due_within_days=30&include_overdue=1` | Vaccination reminders (clinic-scoped). Default excludes overdue; set `include_overdue=1` to include them. Returns readable fields: `patient_name`, `owner_name`, `vaccine_name`, `next_due_date` |
 
 ### Inventory
 
