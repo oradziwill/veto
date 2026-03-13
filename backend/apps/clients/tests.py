@@ -66,3 +66,38 @@ def test_clients_require_clinic_membership(api_client):
     api_client.force_authenticate(user=user_without_clinic)
     r = api_client.get("/api/clients/")
     assert r.status_code == 403
+
+
+@pytest.mark.django_db
+def test_client_memberships_list_scoped_to_current_clinic(api_client, receptionist):
+    clinic_a = receptionist.clinic
+    clinic_b = Clinic.objects.create(name="Clinic C", address="c", phone="4", email="c@c.com")
+    shared_client = Client.objects.create(first_name="Shared", last_name="Owner")
+    own_membership = ClientClinic.objects.create(
+        client=shared_client, clinic=clinic_a, is_active=True
+    )
+    other_membership = ClientClinic.objects.create(
+        client=shared_client, clinic=clinic_b, is_active=True
+    )
+
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.get("/api/client-memberships/")
+    assert r.status_code == 200
+    ids = {row["id"] for row in r.data}
+    assert own_membership.id in ids
+    assert other_membership.id not in ids
+
+
+@pytest.mark.django_db
+def test_client_membership_create_ignores_foreign_clinic_input(api_client, receptionist):
+    foreign_clinic = Clinic.objects.create(name="Clinic D", address="d", phone="5", email="d@c.com")
+    client = Client.objects.create(first_name="Jane", last_name="Owner")
+
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.post(
+        "/api/client-memberships/",
+        {"client": client.id, "clinic": foreign_clinic.id, "is_active": True},
+        format="json",
+    )
+    assert r.status_code == 201
+    assert r.data["clinic"] == receptionist.clinic_id

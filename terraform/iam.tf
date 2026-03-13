@@ -122,6 +122,14 @@ resource "aws_iam_role_policy" "github_actions" {
         Resource = "*"
       },
       {
+        Sid    = "ELBReadForSmokeChecks"
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DescribeLoadBalancers",
+        ]
+        Resource = "*"
+      },
+      {
         Sid    = "PassRoleToECS"
         Effect = "Allow"
         Action = ["iam:PassRole"]

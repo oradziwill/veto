@@ -89,11 +89,15 @@ Admin: http://localhost:8000/admin/
 
 ## Environment Variables
 
-| Variable       | Required | Description                          |
-|----------------|----------|--------------------------------------|
-| `OPENAI_API_KEY` | No     | For AI patient summaries; omit to disable |
-| `SECRET_KEY`     | No     | Uses dev default if not set          |
-| `DATABASE_URL`   | No     | Uses SQLite by default               |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | No | For AI patient summaries; omit to disable |
+| `SECRET_KEY` | No | Uses dev default if not set |
+| `POSTGRES_DB` | No | If set, backend uses PostgreSQL instead of SQLite |
+| `POSTGRES_USER` | With `POSTGRES_DB` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | With `POSTGRES_DB` | PostgreSQL password |
+| `POSTGRES_HOST` | No | PostgreSQL host (default `127.0.0.1`) |
+| `POSTGRES_PORT` | No | PostgreSQL port (default `5432`) |
 
 Create `.env` in project root or `backend/` and add variables as needed.
 
@@ -245,8 +249,20 @@ pytest
 # or: pytest tests/ apps/ -v
 ```
 
+Run the same suite against PostgreSQL locally:
+
+```bash
+POSTGRES_DB=veto_test \
+POSTGRES_USER=veto \
+POSTGRES_PASSWORD=veto \
+POSTGRES_HOST=127.0.0.1 \
+POSTGRES_PORT=5432 \
+pytest
+```
+
 - **`tests/behavior/`** – Behavior tests for end-to-end workflows (visit-to-invoice, role access, clinic isolation, vaccination edit flow).
 - **`conftest.py`** – Shared pytest fixtures (clinic, doctor, receptionist, patient, appointment, service, etc.).
+- GitHub Actions runs backend tests on both SQLite (`backend`) and PostgreSQL (`backend_postgres`) jobs for DB parity.
 
 ## Operations
 

@@ -57,6 +57,64 @@ jobs:
         run: |
           pytest
 
+  backend_postgres:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: veto_test
+          POSTGRES_USER: veto
+          POSTGRES_PASSWORD: veto
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veto -d veto_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django migrate (PostgreSQL)
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          POSTGRES_DB: veto_test
+          POSTGRES_USER: veto
+          POSTGRES_PASSWORD: veto
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5432"
+        run: |
+          python manage.py migrate --no-input
+
+      - name: Pytest (PostgreSQL parity)
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          POSTGRES_DB: veto_test
+          POSTGRES_USER: veto
+          POSTGRES_PASSWORD: veto
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5432"
+        run: |
+          pytest
+
   frontend:
     runs-on: ubuntu-latest
 
