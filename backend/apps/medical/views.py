@@ -127,8 +127,15 @@ class PrescriptionViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get_queryset(self):
-        return Prescription.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
+        qs = Prescription.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
             "patient", "clinic", "prescribed_by", "medical_record"
         )
+        patient_id = self.request.query_params.get("patient")
+        medical_record_id = self.request.query_params.get("medical_record")
+        if patient_id:
+            qs = qs.filter(patient_id=patient_id)
+        if medical_record_id:
+            qs = qs.filter(medical_record_id=medical_record_id)
+        return qs
 
     serializer_class = PrescriptionReadSerializer
