@@ -104,3 +104,51 @@ class TestVaccinationEditWorkflow:
         assert due_future.id in ids
         assert past_due.id not in ids
         assert no_due.id not in ids
+
+    def test_due_within_days_filter_with_overdue_toggle(self, doctor, patient, api_client):
+        """Behavior: /api/vaccinations/ reminders include readable fields and overdue toggle."""
+        today = timezone.localdate()
+        overdue = Vaccination.objects.create(
+            clinic=doctor.clinic,
+            patient=patient,
+            vaccine_name="Overdue",
+            administered_at="2025-01-01",
+            next_due_at=today - timedelta(days=1),
+            administered_by=doctor,
+        )
+        due_soon = Vaccination.objects.create(
+            clinic=doctor.clinic,
+            patient=patient,
+            vaccine_name="Soon",
+            administered_at="2025-01-02",
+            next_due_at=today + timedelta(days=10),
+            administered_by=doctor,
+        )
+        Vaccination.objects.create(
+            clinic=doctor.clinic,
+            patient=patient,
+            vaccine_name="Later",
+            administered_at="2025-01-03",
+            next_due_at=today + timedelta(days=45),
+            administered_by=doctor,
+        )
+
+        api_client.force_authenticate(user=doctor)
+        resp = api_client.get("/api/vaccinations/?due_within_days=30")
+        assert resp.status_code == 200
+        ids = {item["id"] for item in resp.data}
+        assert due_soon.id in ids
+        assert overdue.id not in ids
+
+        row = next(item for item in resp.data if item["id"] == due_soon.id)
+        assert row["patient_name"] == patient.name
+        assert row["owner_name"] == f"{patient.owner.first_name} {patient.owner.last_name}"
+        assert row["next_due_date"] == str(due_soon.next_due_at)
+
+        resp_with_overdue = api_client.get(
+            "/api/vaccinations/?due_within_days=30&include_overdue=1"
+        )
+        assert resp_with_overdue.status_code == 200
+        ids_with_overdue = {item["id"] for item in resp_with_overdue.data}
+        assert due_soon.id in ids_with_overdue
+        assert overdue.id in ids_with_overdue

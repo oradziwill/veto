@@ -25,6 +25,10 @@ def _make_clinic_user_patient(clinic_name="C1", username="vet", is_vet=True, is_
     return clinic, user, patient
 
 
+def _as_list(data):
+    return data if isinstance(data, list) else data.get("results", [])
+
+
 @pytest.mark.django_db
 def test_patient_vaccination_list_happy_path():
     clinic, vet, patient = _make_clinic_user_patient()
@@ -352,3 +356,114 @@ def test_patient_vaccination_list_upcoming_filter():
     assert resp.status_code == 200
     ids = {item["id"] for item in resp.data}
     assert ids == {today_due.id, future_due.id}
+
+
+@pytest.mark.django_db
+def test_vaccinations_due_within_days_default_excludes_overdue():
+    clinic, vet, patient = _make_clinic_user_patient()
+    today = timezone.localdate()
+
+    overdue = Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="Overdue",
+        administered_at="2025-01-01",
+        next_due_at=today - timedelta(days=2),
+        administered_by=vet,
+    )
+    due_soon = Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="Soon",
+        administered_at="2025-01-02",
+        next_due_at=today + timedelta(days=7),
+        administered_by=vet,
+    )
+    Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="Later",
+        administered_at="2025-01-03",
+        next_due_at=today + timedelta(days=40),
+        administered_by=vet,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=vet)
+    resp = client.get("/api/vaccinations/?due_within_days=30")
+    assert resp.status_code == 200
+
+    rows = _as_list(resp.data)
+    ids = {item["id"] for item in rows}
+    assert due_soon.id in ids
+    assert overdue.id not in ids
+
+
+@pytest.mark.django_db
+def test_vaccinations_due_within_days_include_overdue_and_response_fields():
+    clinic, vet, patient = _make_clinic_user_patient()
+    today = timezone.localdate()
+    overdue = Vaccination.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vaccine_name="Rabies",
+        administered_at="2025-01-01",
+        next_due_at=today - timedelta(days=1),
+        administered_by=vet,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=vet)
+    resp = client.get("/api/vaccinations/?due_within_days=30&include_overdue=1")
+    assert resp.status_code == 200
+
+    rows = _as_list(resp.data)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["id"] == overdue.id
+    assert row["vaccine_name"] == "Rabies"
+    assert row["next_due_date"] == str(overdue.next_due_at)
+    assert row["patient_name"] == patient.name
+    assert row["owner_name"] == f"{patient.owner.first_name} {patient.owner.last_name}"
+
+
+@pytest.mark.django_db
+def test_vaccinations_due_within_days_invalid_value_returns_400():
+    clinic, vet, patient = _make_clinic_user_patient()
+    client = APIClient()
+    client.force_authenticate(user=vet)
+
+    resp = client.get("/api/vaccinations/?due_within_days=abc")
+    assert resp.status_code == 400
+    assert "due_within_days" in resp.data
+
+
+@pytest.mark.django_db
+def test_vaccinations_due_within_days_clinic_scoped():
+    clinic_a, user_a, patient_a = _make_clinic_user_patient(clinic_name="C1", username="vet_a")
+    clinic_b, _, patient_b = _make_clinic_user_patient(clinic_name="C2", username="vet_b")
+    today = timezone.localdate()
+
+    due_a = Vaccination.objects.create(
+        clinic=clinic_a,
+        patient=patient_a,
+        vaccine_name="A due",
+        administered_at="2025-01-01",
+        next_due_at=today + timedelta(days=5),
+        administered_by=user_a,
+    )
+    due_b = Vaccination.objects.create(
+        clinic=clinic_b,
+        patient=patient_b,
+        vaccine_name="B due",
+        administered_at="2025-01-01",
+        next_due_at=today + timedelta(days=5),
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=user_a)
+    resp = client.get("/api/vaccinations/?due_within_days=30")
+    assert resp.status_code == 200
+    ids = {item["id"] for item in _as_list(resp.data)}
+    assert due_a.id in ids
+    assert due_b.id not in ids

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework import viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -59,10 +63,33 @@ class VaccinationViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
+    def _parse_due_within_days(self):
+        raw = self.request.query_params.get("due_within_days")
+        if raw in (None, ""):
+            return None
+        try:
+            days = int(raw)
+        except (TypeError, ValueError) as err:
+            raise ValidationError({"due_within_days": "Must be a positive integer."}) from err
+        if days < 0:
+            raise ValidationError({"due_within_days": "Must be a positive integer."})
+        return days
+
     def get_queryset(self):
-        return Vaccination.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
+        qs = Vaccination.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
             "patient", "clinic", "administered_by"
         )
+        due_within_days = self._parse_due_within_days()
+        if due_within_days is not None:
+            today = timezone.localdate()
+            due_before = today + timedelta(days=due_within_days)
+            qs = qs.filter(
+                next_due_at__isnull=False,
+                next_due_at__lte=due_before,
+            )
+            if self.request.query_params.get("include_overdue") != "1":
+                qs = qs.filter(next_due_at__gte=today)
+        return qs
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
