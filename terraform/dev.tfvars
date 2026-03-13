@@ -1,5 +1,5 @@
-env               = "dev"
-region            = "eu-central-1"
+env    = "dev"
+region = "eu-central-1"
 
 # RDS
 db_instance_class = "db.t3.micro"

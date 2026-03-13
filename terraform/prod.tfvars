@@ -1,5 +1,5 @@
-env               = "prod"
-region            = "eu-central-1"
+env    = "prod"
+region = "eu-central-1"
 
 # RDS — multi-AZ, deletion protection, and 7-day backups are enabled automatically for prod
 db_instance_class = "db.t3.small"
