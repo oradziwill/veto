@@ -248,6 +248,13 @@ pytest
 - **`tests/behavior/`** – Behavior tests for end-to-end workflows (visit-to-invoice, role access, clinic isolation, vaccination edit flow).
 - **`conftest.py`** – Shared pytest fixtures (clinic, doctor, receptionist, patient, appointment, service, etc.).
 
+## Operations
+
+- Each API response includes `X-Request-ID` for request tracing.
+- Production logging includes `request_id`, `user_id`, and `clinic_id` context.
+- Overdue invoice status updates are scheduled via EventBridge/ECS (`terraform/ops.tf`).
+- Deploy workflow runs post-deploy smoke checks on `/health/` and a protected API route.
+
 ## Code Quality
 
 ```bash

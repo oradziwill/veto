@@ -40,13 +40,13 @@ variable "db_instance_class" {
 variable "backend_image" {
   description = "Backend Docker image URI (e.g. 123456789.dkr.ecr.eu-central-1.amazonaws.com/veto-backend:sha-abc)"
   type        = string
-  default     = "placeholder"  # overridden by CI/CD on deploy
+  default     = "placeholder" # overridden by CI/CD on deploy
 }
 
 variable "frontend_image" {
   description = "Frontend Docker image URI"
   type        = string
-  default     = "placeholder"  # overridden by CI/CD on deploy
+  default     = "placeholder" # overridden by CI/CD on deploy
 }
 
 variable "backend_task_cpu" {
@@ -87,4 +87,10 @@ variable "cors_allowed_origins" {
   description = "Comma-separated CORS_ALLOWED_ORIGINS for the backend (e.g. https://app.example.com)"
   type        = string
   default     = ""
+}
+
+variable "overdue_invoices_schedule_expression" {
+  description = "EventBridge schedule for mark_overdue_invoices command"
+  type        = string
+  default     = "cron(0 1 * * ? *)"
 }

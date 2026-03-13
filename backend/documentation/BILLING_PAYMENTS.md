@@ -56,7 +56,11 @@ The management command **`mark_overdue_invoices`** sets `status` to `overdue` fo
 python manage.py mark_overdue_invoices
 ```
 
-**Deployment:** Schedule this command daily (e.g. cron at 01:00, an ECS scheduled task, or a GitHub Actions scheduled workflow). Example cron: `0 1 * * * cd /app/backend && python manage.py mark_overdue_invoices`. Running once per day (e.g. early morning) keeps timezone handling simple and load minimal.
+**Deployment:** This command is wired as a scheduled ECS task in Terraform using EventBridge (`terraform/ops.tf`), defaulting to daily at 01:00 UTC (`cron(0 1 * * ? *)`). You can still run it manually for ad-hoc correction:
+
+```bash
+python manage.py mark_overdue_invoices
+```
 
 **Relevant tests:** `apps/billing/tests/test_mark_overdue_invoices.py` – command runs on empty DB; only sent + past-due updated; count logged; sent with null `due_date` unchanged.
 
