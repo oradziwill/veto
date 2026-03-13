@@ -75,10 +75,26 @@ DATABASES = {
     }
 }
 
-# --- Logging (minimum sane defaults for EB/CloudWatch) ---
+# --- Logging (structured enough for CloudWatch filtering/correlation) ---
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "filters": {
+        "request_context": {
+            "()": "config.logging_filters.RequestContextFilter",
+        }
+    },
+    "formatters": {
+        "default": {
+            "format": '{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","request_id":"%(request_id)s","user_id":"%(user_id)s","clinic_id":"%(clinic_id)s","msg":"%(message)s"}'
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "filters": ["request_context"],
+            "formatter": "default",
+        }
+    },
     "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
 }
