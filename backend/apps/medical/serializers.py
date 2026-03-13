@@ -170,6 +170,13 @@ class PrescriptionWriteSerializer(serializers.ModelSerializer):
 
 
 class VaccinationReadSerializer(serializers.ModelSerializer):
+    administered_by_name = serializers.SerializerMethodField()
+
+    def get_administered_by_name(self, obj):
+        if not obj.administered_by:
+            return None
+        return obj.administered_by.get_full_name() or obj.administered_by.username
+
     class Meta:
         model = Vaccination
         fields = [
@@ -181,6 +188,7 @@ class VaccinationReadSerializer(serializers.ModelSerializer):
             "administered_at",
             "next_due_at",
             "administered_by",
+            "administered_by_name",
             "notes",
         ]
         read_only_fields = fields

@@ -128,6 +128,7 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 |--------|----------|-------------|
 | CRUD | `/api/patients/` | Patients. Filters: `?search=`, `?species=`, `?owner=`, `?vet=` |
 | GET/POST | `/api/patients/<id>/history/` | Visit history (create: vets only) |
+| GET/POST | `/api/patients/<id>/vaccinations/` | Patient vaccinations. Filter: `?upcoming=1` (next due date is today/future) |
 | GET | `/api/patients/<id>/ai-summary/` | AI summary (uses `OPENAI_API_KEY`) |
 
 ### Scheduling
@@ -147,6 +148,7 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 |--------|----------|-------------|
 | CRUD | `/api/medical/records/` | Medical records (vet only) |
 | CRUD | `/api/medical/history/` | Patient history entries (vet only) |
+| GET/PATCH/DELETE | `/api/vaccinations/<id>/` | Vaccination record details and edits (create via patient route) |
 
 ### Inventory
 
@@ -216,7 +218,7 @@ pytest
 # or: pytest tests/ apps/ -v
 ```
 
-- **`tests/behavior/`** – Behavior tests for end-to-end workflows (visit-to-invoice, role access, clinic isolation).
+- **`tests/behavior/`** – Behavior tests for end-to-end workflows (visit-to-invoice, role access, clinic isolation, vaccination edit flow).
 - **`conftest.py`** – Shared pytest fixtures (clinic, doctor, receptionist, patient, appointment, service, etc.).
 
 ## Code Quality
