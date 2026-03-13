@@ -119,7 +119,7 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| CRUD | `/api/clients/` | Clients. Filters: `?q=`, `?in_my_clinic=1` |
+| CRUD | `/api/clients/` | Clinic-scoped clients. Filter: `?q=` |
 | CRUD | `/api/client-memberships/` | Client ↔ clinic memberships |
 
 ### Patients
@@ -163,7 +163,8 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| CRUD | `/api/billing/services/` | Service catalog (name, code, price) |
+| GET | `/api/billing/services/` | Service catalog list (all clinic staff) |
+| POST/PATCH/DELETE | `/api/billing/services/` | Service catalog write (clinic admin only) |
 | CRUD | `/api/billing/invoices/` | Invoices. Filters: `?client=`, `?status=` |
 | POST | `/api/billing/invoices/<id>/send/` | Mark invoice as sent |
 | GET/POST | `/api/billing/invoices/<id>/payments/` | List or record payments |
@@ -172,9 +173,12 @@ All endpoints except auth require: `Authorization: Bearer <access_token>`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| CRUD | `/api/labs/` | Labs (in-clinic, external). Filter: `?lab_type=` |
-| CRUD | `/api/lab-tests/` | Lab test catalog. Filter: `?lab=` |
-| CRUD | `/api/lab-orders/` | Lab orders. Filters: `?patient=`, `?status=` |
+| GET | `/api/labs/` | Labs (in-clinic, external). Filter: `?lab_type=` |
+| POST/PATCH/DELETE | `/api/labs/` | Labs write (clinic admin only) |
+| GET | `/api/lab-tests/` | Lab test catalog. Filter: `?lab=` |
+| POST/PATCH/DELETE | `/api/lab-tests/` | Lab test write (clinic admin only) |
+| GET | `/api/lab-orders/` | Lab orders list (clinic staff). Filters: `?patient=`, `?status=` |
+| POST/PATCH/DELETE | `/api/lab-orders/` | Lab orders write (doctor/admin) |
 | POST | `/api/lab-orders/<id>/send/` | Send order to lab |
 | POST/PATCH | `/api/lab-orders/<id>/enter-result/` | Enter/update result (Doctor/Admin) |
 

@@ -27,4 +27,4 @@ class ClientClinicSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClientClinic
         fields = ["id", "client", "clinic", "notes", "is_active", "created_at"]
-        read_only_fields = ["created_at"]
+        read_only_fields = ["clinic", "created_at"]

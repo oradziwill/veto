@@ -5,7 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
+from apps.accounts.permissions import HasClinic, IsAdminOrReadOnly, IsDoctorOrAdmin, IsStaffOrVet
 
 from .models import Lab, LabOrder, LabOrderLine, LabResult, LabTest
 from .serializers import (
@@ -21,7 +21,7 @@ from .serializers import (
 class LabViewSet(viewsets.ModelViewSet):
     """Labs - in-clinic and external."""
 
-    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    permission_classes = [IsAuthenticated, HasClinic, IsAdminOrReadOnly]
     serializer_class = LabSerializer
 
     def get_queryset(self):
@@ -41,7 +41,7 @@ class LabViewSet(viewsets.ModelViewSet):
 class LabTestViewSet(viewsets.ModelViewSet):
     """Lab test catalog."""
 
-    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    permission_classes = [IsAuthenticated, HasClinic, IsAdminOrReadOnly]
     serializer_class = LabTestSerializer
 
     def get_queryset(self):
@@ -63,6 +63,11 @@ class LabOrderViewSet(viewsets.ModelViewSet):
     """Lab orders - Doctor/Admin create, all staff can list."""
 
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+
+    def get_permissions(self):
+        if self.action in {"create", "update", "partial_update", "destroy", "send_order"}:
+            return [IsAuthenticated(), HasClinic(), IsDoctorOrAdmin()]
+        return [perm() for perm in self.permission_classes]
 
     def get_queryset(self):
         user = self.request.user

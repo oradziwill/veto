@@ -15,7 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import HasClinic, IsClinicAdmin, IsStaffOrVet
+from apps.accounts.permissions import HasClinic, IsAdminOrReadOnly, IsClinicAdmin, IsStaffOrVet
 
 from .ksef_service import KSeFError
 from .ksef_service import submit_invoice as ksef_submit
@@ -34,7 +34,7 @@ from .serializers import (
 class ServiceViewSet(viewsets.ModelViewSet):
     """Service catalog - Clinic Admin can manage, all staff can list."""
 
-    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    permission_classes = [IsAuthenticated, HasClinic, IsAdminOrReadOnly]
 
     def get_queryset(self):
         return Service.objects.filter(clinic_id=self.request.user.clinic_id).order_by("name")
