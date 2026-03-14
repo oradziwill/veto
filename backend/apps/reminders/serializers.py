@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from apps.clients.models import ClientClinic
 
-from .models import Reminder, ReminderPreference
+from .models import Reminder, ReminderPreference, ReminderTemplate, ReminderTemplateVersion
 
 
 class ReminderReadSerializer(serializers.ModelSerializer):
@@ -62,6 +62,7 @@ class ReminderPreferenceSerializer(serializers.ModelSerializer):
             "allow_email",
             "allow_sms",
             "preferred_channel",
+            "locale",
             "timezone",
             "quiet_hours_start",
             "quiet_hours_end",
@@ -104,3 +105,53 @@ class ReminderPreferenceSerializer(serializers.ModelSerializer):
         if not obj.client_id:
             return ""
         return f"{obj.client.first_name} {obj.client.last_name}".strip()
+
+
+class ReminderTemplateVersionSerializer(serializers.ModelSerializer):
+    changed_by_username = serializers.CharField(source="changed_by.username", read_only=True)
+
+    class Meta:
+        model = ReminderTemplateVersion
+        fields = [
+            "id",
+            "template",
+            "version",
+            "subject_template",
+            "body_template",
+            "changed_by",
+            "changed_by_username",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+
+class ReminderTemplateSerializer(serializers.ModelSerializer):
+    versions = ReminderTemplateVersionSerializer(read_only=True, many=True)
+
+    class Meta:
+        model = ReminderTemplate
+        fields = [
+            "id",
+            "clinic",
+            "reminder_type",
+            "channel",
+            "locale",
+            "is_active",
+            "subject_template",
+            "body_template",
+            "updated_by",
+            "created_at",
+            "updated_at",
+            "versions",
+        ]
+        read_only_fields = ["clinic", "updated_by", "created_at", "updated_at", "versions"]
+
+
+class ReminderTemplatePreviewSerializer(serializers.Serializer):
+    template_id = serializers.IntegerField(required=False)
+    reminder_type = serializers.ChoiceField(choices=Reminder.ReminderType.choices)
+    channel = serializers.ChoiceField(choices=Reminder.Channel.choices)
+    locale = serializers.ChoiceField(choices=ReminderTemplate.Locale.choices, required=False)
+    subject_template = serializers.CharField(required=False, allow_blank=True, default="")
+    body_template = serializers.CharField(required=False, allow_blank=True, default="")
+    context = serializers.DictField(required=False, default=dict)

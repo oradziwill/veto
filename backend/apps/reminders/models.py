@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -120,6 +121,7 @@ class ReminderPreference(models.Model):
         choices=PreferredChannel.choices,
         default=PreferredChannel.AUTO,
     )
+    locale = models.CharField(max_length=10, default="en")
     timezone = models.CharField(max_length=64, default="UTC")
     quiet_hours_start = models.TimeField(null=True, blank=True)
     quiet_hours_end = models.TimeField(null=True, blank=True)
@@ -164,3 +166,78 @@ class ReminderEvent(models.Model):
 
     def __str__(self) -> str:
         return f"ReminderEvent(reminder={self.reminder_id}, type={self.event_type})"
+
+
+class ReminderTemplate(models.Model):
+    class Locale(models.TextChoices):
+        EN = "en", "English"
+        PL = "pl", "Polski"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="reminder_templates",
+    )
+    reminder_type = models.CharField(max_length=20, choices=Reminder.ReminderType.choices)
+    channel = models.CharField(max_length=10, choices=Reminder.Channel.choices)
+    locale = models.CharField(max_length=10, choices=Locale.choices, default=Locale.EN)
+    is_active = models.BooleanField(default=True)
+    subject_template = models.CharField(max_length=255, blank=True)
+    body_template = models.TextField()
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_reminder_templates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clinic", "reminder_type", "channel", "locale"],
+                name="reminders_template_clinic_type_channel_locale_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["clinic", "reminder_type", "channel", "locale", "is_active"])
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"ReminderTemplate(clinic={self.clinic_id}, type={self.reminder_type}, "
+            f"channel={self.channel}, locale={self.locale})"
+        )
+
+
+class ReminderTemplateVersion(models.Model):
+    template = models.ForeignKey(
+        ReminderTemplate,
+        on_delete=models.CASCADE,
+        related_name="versions",
+    )
+    version = models.PositiveIntegerField()
+    subject_template = models.CharField(max_length=255, blank=True)
+    body_template = models.TextField()
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reminder_template_versions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["template", "version"],
+                name="reminders_template_version_uniq",
+            )
+        ]
+        ordering = ["-version", "-created_at"]
+
+    def __str__(self) -> str:
+        return f"ReminderTemplateVersion(template={self.template_id}, version={self.version})"

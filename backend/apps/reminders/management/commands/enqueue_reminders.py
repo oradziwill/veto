@@ -8,7 +8,11 @@ from django.utils import timezone
 from apps.billing.models import Invoice
 from apps.medical.models import Vaccination
 from apps.reminders.models import Reminder, ReminderEvent, ReminderPreference
-from apps.reminders.services import pick_channel_and_recipient
+from apps.reminders.services import (
+    build_reminder_context,
+    pick_channel_and_recipient,
+    render_reminder_content,
+)
 from apps.scheduling.models import Appointment
 
 
@@ -69,6 +73,20 @@ class Command(BaseCommand):
             if exists.exists():
                 continue
 
+            context = build_reminder_context(
+                clinic_name=appointment.clinic.name,
+                patient_name=appointment.patient.name,
+                owner_name=f"{owner.first_name} {owner.last_name}".strip(),
+                appointment_start=timezone.localtime(appointment.starts_at).isoformat(),
+            )
+            locale = getattr(preference, "locale", "en") if preference else "en"
+            subject, body = render_reminder_content(
+                clinic_id=appointment.clinic_id,
+                reminder_type=Reminder.ReminderType.APPOINTMENT,
+                channel=channel,
+                locale=locale,
+                context=context,
+            )
             reminder = Reminder.objects.create(
                 clinic_id=appointment.clinic_id,
                 patient_id=appointment.patient_id,
@@ -76,8 +94,8 @@ class Command(BaseCommand):
                 reminder_type=Reminder.ReminderType.APPOINTMENT,
                 channel=channel,
                 recipient=recipient,
-                subject=f"Upcoming appointment for {appointment.patient.name}",
-                body=f"Appointment starts at {timezone.localtime(appointment.starts_at).isoformat()}",
+                subject=subject,
+                body=body,
                 scheduled_for=scheduled_for,
             )
             ReminderEvent.objects.create(
@@ -120,6 +138,21 @@ class Command(BaseCommand):
             if exists.exists():
                 continue
 
+            context = build_reminder_context(
+                clinic_name=vaccination.clinic.name,
+                patient_name=vaccination.patient.name,
+                owner_name=f"{owner.first_name} {owner.last_name}".strip(),
+                due_date=vaccination.next_due_at.isoformat() if vaccination.next_due_at else "",
+                vaccine_name=vaccination.vaccine_name,
+            )
+            locale = getattr(preference, "locale", "en") if preference else "en"
+            subject, body = render_reminder_content(
+                clinic_id=vaccination.clinic_id,
+                reminder_type=Reminder.ReminderType.VACCINATION,
+                channel=channel,
+                locale=locale,
+                context=context,
+            )
             reminder = Reminder.objects.create(
                 clinic_id=vaccination.clinic_id,
                 patient_id=vaccination.patient_id,
@@ -127,8 +160,8 @@ class Command(BaseCommand):
                 reminder_type=Reminder.ReminderType.VACCINATION,
                 channel=channel,
                 recipient=recipient,
-                subject=f"Vaccination due soon for {vaccination.patient.name}",
-                body=f"Next dose due at {vaccination.next_due_at.isoformat()} for {vaccination.vaccine_name}",
+                subject=subject,
+                body=body,
                 scheduled_for=scheduled_for,
             )
             ReminderEvent.objects.create(
@@ -171,6 +204,21 @@ class Command(BaseCommand):
                 continue
 
             patient_name = invoice.patient.name if invoice.patient_id else "your pet"
+            context = build_reminder_context(
+                clinic_name=invoice.clinic.name,
+                patient_name=patient_name,
+                owner_name=f"{invoice.client.first_name} {invoice.client.last_name}".strip(),
+                due_date=invoice.due_date.isoformat() if invoice.due_date else "",
+                invoice_number=str(invoice.id),
+            )
+            locale = getattr(preference, "locale", "en") if preference else "en"
+            subject, body = render_reminder_content(
+                clinic_id=invoice.clinic_id,
+                reminder_type=Reminder.ReminderType.INVOICE,
+                channel=channel,
+                locale=locale,
+                context=context,
+            )
             reminder = Reminder.objects.create(
                 clinic_id=invoice.clinic_id,
                 patient_id=invoice.patient_id,
@@ -178,8 +226,8 @@ class Command(BaseCommand):
                 reminder_type=Reminder.ReminderType.INVOICE,
                 channel=channel,
                 recipient=recipient,
-                subject=f"Invoice reminder for {patient_name}",
-                body=f"Invoice #{invoice.id} is due on {invoice.due_date.isoformat()}",
+                subject=subject,
+                body=body,
                 scheduled_for=scheduled_for,
             )
             ReminderEvent.objects.create(

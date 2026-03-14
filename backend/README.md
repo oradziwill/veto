@@ -230,7 +230,9 @@ API errors use a standardized envelope:
 | GET | `/api/reminders/` | Clinic-scoped reminder queue and delivery history. Filters: `?status=`, `?type=`, `?channel=` |
 | GET | `/api/reminders/<id>/` | Reminder details |
 | POST | `/api/reminders/<id>/resend/` | Re-queue reminder for retry (clinic admin only) |
-| GET/POST/PATCH | `/api/reminder-preferences/` | Client consent/channel preferences and quiet-hours settings |
+| GET/POST/PATCH | `/api/reminder-preferences/` | Client consent/channel preferences, locale (`en/pl`), and quiet-hours settings |
+| GET/POST/PATCH | `/api/reminder-templates/` | Clinic-scoped localized reminder templates (admin write, staff read) |
+| POST | `/api/reminder-templates/preview/` | Preview rendered template output with context payload |
 | POST | `/api/reminders/webhooks/<provider>/` | Provider callback for delivery status updates |
 
 ## Apps and Responsibilities
