@@ -55,17 +55,21 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
 data "aws_caller_identity" "current" {}
 
 resource "aws_iam_openid_connect_provider" "github" {
+  count = var.manage_shared_ci_iam_resources ? 1 : 0
+
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
 }
 
 data "aws_iam_policy_document" "github_actions_assume_role" {
+  count = var.manage_shared_ci_iam_resources ? 1 : 0
+
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [aws_iam_openid_connect_provider.github[0].arn]
     }
     condition {
       test     = "StringEquals"
@@ -81,13 +85,17 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
 }
 
 resource "aws_iam_role" "github_actions" {
+  count = var.manage_shared_ci_iam_resources ? 1 : 0
+
   name               = "veto-github-actions"
-  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role[0].json
 }
 
 resource "aws_iam_role_policy" "github_actions" {
+  count = var.manage_shared_ci_iam_resources ? 1 : 0
+
   name = "veto-github-actions-policy"
-  role = aws_iam_role.github_actions.id
+  role = aws_iam_role.github_actions[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"

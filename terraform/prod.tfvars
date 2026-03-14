@@ -1,8 +1,16 @@
 env    = "prod"
 region = "eu-central-1"
 
-# RDS — multi-AZ, deletion protection, and 7-day backups are enabled automatically for prod
-db_instance_class = "db.t3.small"
+# Shared global resources are managed in this state after import.
+manage_shared_ecr_resources    = true
+manage_shared_ci_iam_resources = true
+
+# RDS bootstrap settings for this account plan.
+db_instance_class           = "db.t3.micro"
+rds_backup_retention_period = 0
+rds_multi_az                = false
+rds_deletion_protection     = false
+rds_skip_final_snapshot     = true
 
 # ECS — backend
 backend_task_cpu    = 512
