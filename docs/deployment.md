@@ -75,7 +75,7 @@ Key resources:
 - `ecs.tf` — ECS cluster, services, task definitions
 - `ecr.tf` — ECR repositories for backend and frontend
 - `rds.tf` — PostgreSQL RDS instance
-- `secrets.tf` — Secrets Manager secrets (`db_password`, `django_secret_key`, `cors_allowed_origins`, `openai_api_key`)
+- `secrets.tf` — Secrets Manager secrets (`db_password`, `django_secret_key`, `cors_allowed_origins`, `openai_api_key`, reminder provider credentials)
 - `iam.tf` — GitHub Actions OIDC provider + IAM role
 - `alb.tf` — Application Load Balancer, listeners, target groups
 - `ops.tf` — EventBridge schedules and CloudWatch alarms for recurring ops jobs
@@ -124,6 +124,12 @@ Secrets are stored in AWS Secrets Manager and injected into ECS tasks as environ
 | `veto-<env>/django-secret-key` | `SECRET_KEY` | Django settings |
 | `veto-<env>/cors-allowed-origins` | `CORS_ALLOWED_ORIGINS` | Django CORS config |
 | `veto-<env>/openai-api-key` | `OPENAI_API_KEY` | AI patient summary endpoint |
+| `veto-<env>/reminder-sendgrid-api-key` | `REMINDER_SENDGRID_API_KEY` | SendGrid API calls |
+| `veto-<env>/reminder-sendgrid-webhook-secret` | `REMINDER_SENDGRID_WEBHOOK_SECRET` | SendGrid webhook signature verification |
+| `veto-<env>/reminder-twilio-account-sid` | `REMINDER_TWILIO_ACCOUNT_SID` | Twilio API auth |
+| `veto-<env>/reminder-twilio-auth-token` | `REMINDER_TWILIO_AUTH_TOKEN` | Twilio API auth |
+| `veto-<env>/reminder-twilio-webhook-secret` | `REMINDER_TWILIO_WEBHOOK_SECRET` | Twilio webhook signature verification |
+| `veto-<env>/reminder-webhook-token` | `REMINDER_WEBHOOK_TOKEN` | Fallback webhook token |
 
 To update a secret value:
 ```bash
@@ -149,6 +155,13 @@ aws ecs describe-task-definition \
   --query "taskDefinition.containerDefinitions[?name=='backend'].secrets[*].name" \
   --output text
 ```
+
+Reminder provider runtime variables are split into:
+
+- plain ECS env vars: provider selectors and non-secret sender metadata
+- ECS secret env vars: provider credentials/tokens/signing secrets
+
+Deploy workflow smoke checks now fail fast if required backend secret injections are missing.
 
 ---
 

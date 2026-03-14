@@ -162,6 +162,36 @@ jobs:
 
       - name: Post-deploy smoke checks
         run: |
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --services veto-${{ steps.env.outputs.ENV }}-backend \
+            --query "services[0].taskDefinition" \
+            --output text)
+
+          BACKEND_SECRET_NAMES=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF_ARN" \
+            --query "taskDefinition.containerDefinitions[?name=='backend'].secrets[*].name" \
+            --output text)
+
+          REQUIRED_SECRET_NAMES=(
+            SECRET_KEY
+            RDS_PASSWORD
+            CORS_ALLOWED_ORIGINS
+            OPENAI_API_KEY
+            REMINDER_SENDGRID_API_KEY
+            REMINDER_SENDGRID_WEBHOOK_SECRET
+            REMINDER_TWILIO_ACCOUNT_SID
+            REMINDER_TWILIO_AUTH_TOKEN
+            REMINDER_TWILIO_WEBHOOK_SECRET
+            REMINDER_WEBHOOK_TOKEN
+          )
+          for secret_name in "${REQUIRED_SECRET_NAMES[@]}"; do
+            if [[ " $BACKEND_SECRET_NAMES " != *" ${secret_name} "* ]]; then
+              echo "Missing required backend secret injection: $secret_name"
+              exit 1
+            fi
+          done
+
           ALB_DNS=$(aws elbv2 describe-load-balancers \
             --names veto-${{ steps.env.outputs.ENV }}-alb \
             --query "LoadBalancers[0].DNSName" \

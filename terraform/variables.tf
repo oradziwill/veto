@@ -96,6 +96,92 @@ variable "openai_api_key" {
   default     = ""
 }
 
+variable "reminder_email_provider" {
+  description = "Reminder email provider (internal or sendgrid)"
+  type        = string
+  default     = "internal"
+  validation {
+    condition     = contains(["internal", "sendgrid"], var.reminder_email_provider)
+    error_message = "reminder_email_provider must be one of: internal, sendgrid."
+  }
+}
+
+variable "reminder_sms_provider" {
+  description = "Reminder SMS provider (internal or twilio)"
+  type        = string
+  default     = "internal"
+  validation {
+    condition     = contains(["internal", "twilio"], var.reminder_sms_provider)
+    error_message = "reminder_sms_provider must be one of: internal, twilio."
+  }
+}
+
+variable "reminder_sendgrid_api_key" {
+  description = "SendGrid API key for reminder email delivery"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "reminder_sendgrid_from_email" {
+  description = "SendGrid sender email for reminder messages"
+  type        = string
+  default     = ""
+}
+
+variable "reminder_sendgrid_from_name" {
+  description = "SendGrid sender display name for reminder messages"
+  type        = string
+  default     = "Veto Clinic"
+}
+
+variable "reminder_sendgrid_webhook_secret" {
+  description = "HMAC secret used to verify SendGrid reminder webhooks"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "reminder_twilio_account_sid" {
+  description = "Twilio account SID used for reminder SMS delivery"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "reminder_twilio_auth_token" {
+  description = "Twilio auth token used for reminder SMS delivery"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "reminder_twilio_from_number" {
+  description = "Twilio sender number for reminder SMS delivery"
+  type        = string
+  default     = ""
+}
+
+variable "reminder_twilio_status_callback_url" {
+  description = "Optional Twilio status callback URL for reminder delivery updates"
+  type        = string
+  default     = ""
+}
+
+variable "reminder_twilio_webhook_secret" {
+  description = "HMAC secret used to verify Twilio reminder webhooks"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "reminder_webhook_token" {
+  description = "Fallback shared token for reminder webhooks (legacy provider integrations)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "overdue_invoices_schedule_expression" {
   description = "EventBridge schedule for mark_overdue_invoices command"
   type        = string
