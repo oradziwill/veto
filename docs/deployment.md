@@ -73,12 +73,24 @@ terraform apply
 
 Key resources:
 - `ecs.tf` — ECS cluster, services, task definitions
-- `ecr.tf` — ECR repositories for backend and frontend
+- `ecr.tf` — shared ECR repositories for backend and frontend
 - `rds.tf` — PostgreSQL RDS instance
 - `secrets.tf` — Secrets Manager secrets (`db_password`, `django_secret_key`, `cors_allowed_origins`, `openai_api_key`, reminder provider credentials)
 - `iam.tf` — GitHub Actions OIDC provider + IAM role
 - `alb.tf` — Application Load Balancer, listeners, target groups
 - `ops.tf` — EventBridge schedules and CloudWatch alarms for recurring ops jobs
+
+Bootstrap notes for multi-environment in the same AWS account:
+
+- Shared global resources should be managed by one state only (typically `dev`):
+  - `manage_shared_ecr_resources = true`
+  - `manage_shared_ci_iam_resources = true`
+- For `prod` state in the same account, set both to `false` to avoid create conflicts.
+- RDS behavior is configurable via:
+  - `rds_backup_retention_period`
+  - `rds_multi_az`
+  - `rds_deletion_protection`
+  - `rds_skip_final_snapshot`
 
 ### Important: Secrets lifecycle
 

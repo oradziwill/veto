@@ -36,6 +36,46 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
+variable "rds_backup_retention_period" {
+  description = "RDS automated backup retention days (0 disables automated backups)"
+  type        = number
+  default     = 1
+  validation {
+    condition     = var.rds_backup_retention_period >= 0 && var.rds_backup_retention_period <= 35
+    error_message = "rds_backup_retention_period must be between 0 and 35."
+  }
+}
+
+variable "rds_multi_az" {
+  description = "Enable Multi-AZ deployment for RDS"
+  type        = bool
+  default     = false
+}
+
+variable "rds_deletion_protection" {
+  description = "Enable deletion protection for RDS"
+  type        = bool
+  default     = false
+}
+
+variable "rds_skip_final_snapshot" {
+  description = "Skip final snapshot when destroying RDS"
+  type        = bool
+  default     = true
+}
+
+variable "manage_shared_ecr_resources" {
+  description = "Whether this Terraform state manages shared ECR repositories/policies"
+  type        = bool
+  default     = true
+}
+
+variable "manage_shared_ci_iam_resources" {
+  description = "Whether this Terraform state manages shared GitHub OIDC provider and CI IAM role/policy"
+  type        = bool
+  default     = true
+}
+
 # --- ECS ---
 variable "backend_image" {
   description = "Backend Docker image URI (e.g. 123456789.dkr.ecr.eu-central-1.amazonaws.com/veto-backend:sha-abc)"

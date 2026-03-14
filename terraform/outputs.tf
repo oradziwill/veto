@@ -5,12 +5,18 @@ output "alb_dns_name" {
 
 output "ecr_backend_url" {
   description = "ECR repository URL for the backend image"
-  value       = aws_ecr_repository.backend.repository_url
+  value = coalesce(
+    try(aws_ecr_repository.backend[0].repository_url, null),
+    "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/${var.app_name}-backend",
+  )
 }
 
 output "ecr_frontend_url" {
   description = "ECR repository URL for the frontend image"
-  value       = aws_ecr_repository.frontend.repository_url
+  value = coalesce(
+    try(aws_ecr_repository.frontend[0].repository_url, null),
+    "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/${var.app_name}-frontend",
+  )
 }
 
 output "rds_hostname" {

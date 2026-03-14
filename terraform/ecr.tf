@@ -2,6 +2,8 @@
 # distinguished by image tags: sha-<commit> for dev, release-<tag> for prod)
 
 resource "aws_ecr_repository" "backend" {
+  count = var.manage_shared_ecr_resources ? 1 : 0
+
   name                 = "${var.app_name}-backend"
   image_tag_mutability = "MUTABLE"
 
@@ -15,6 +17,8 @@ resource "aws_ecr_repository" "backend" {
 }
 
 resource "aws_ecr_repository" "frontend" {
+  count = var.manage_shared_ecr_resources ? 1 : 0
+
   name                 = "${var.app_name}-frontend"
   image_tag_mutability = "MUTABLE"
 
@@ -29,7 +33,8 @@ resource "aws_ecr_repository" "frontend" {
 
 # Keep the last 10 images; delete untagged images after 1 day
 resource "aws_ecr_lifecycle_policy" "backend" {
-  repository = aws_ecr_repository.backend.name
+  count      = var.manage_shared_ecr_resources ? 1 : 0
+  repository = aws_ecr_repository.backend[0].name
   policy = jsonencode({
     rules = [
       {
@@ -59,6 +64,7 @@ resource "aws_ecr_lifecycle_policy" "backend" {
 }
 
 resource "aws_ecr_lifecycle_policy" "frontend" {
-  repository = aws_ecr_repository.frontend.name
-  policy     = aws_ecr_lifecycle_policy.backend.policy
+  count      = var.manage_shared_ecr_resources ? 1 : 0
+  repository = aws_ecr_repository.frontend[0].name
+  policy     = aws_ecr_lifecycle_policy.backend[0].policy
 }

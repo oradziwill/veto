@@ -1,8 +1,16 @@
 env    = "dev"
 region = "eu-central-1"
 
+# Dev state manages shared global resources.
+manage_shared_ecr_resources    = true
+manage_shared_ci_iam_resources = true
+
 # RDS
-db_instance_class = "db.t3.micro"
+db_instance_class           = "db.t3.micro"
+rds_backup_retention_period = 1
+rds_multi_az                = false
+rds_deletion_protection     = false
+rds_skip_final_snapshot     = true
 
 # ECS — backend
 backend_task_cpu    = 256
