@@ -7,7 +7,8 @@ from django.utils import timezone
 
 from apps.billing.models import Invoice
 from apps.medical.models import Vaccination
-from apps.reminders.models import Reminder
+from apps.reminders.models import Reminder, ReminderEvent, ReminderPreference
+from apps.reminders.services import pick_channel_and_recipient
 from apps.scheduling.models import Appointment
 
 
@@ -50,7 +51,12 @@ class Command(BaseCommand):
         created = 0
         for appointment in qs:
             owner = appointment.patient.owner
-            recipient = owner.email or owner.phone
+            preference = self._get_preference(appointment.clinic_id, owner.id)
+            channel, recipient = pick_channel_and_recipient(
+                preference,
+                email=owner.email,
+                phone=owner.phone,
+            )
             if not recipient:
                 continue
 
@@ -58,21 +64,24 @@ class Command(BaseCommand):
             exists = Reminder.objects.filter(
                 appointment_id=appointment.id,
                 reminder_type=Reminder.ReminderType.APPOINTMENT,
-                channel=Reminder.Channel.EMAIL,
+                channel=channel,
             ).exclude(status=Reminder.Status.CANCELLED)
             if exists.exists():
                 continue
 
-            Reminder.objects.create(
+            reminder = Reminder.objects.create(
                 clinic_id=appointment.clinic_id,
                 patient_id=appointment.patient_id,
                 appointment_id=appointment.id,
                 reminder_type=Reminder.ReminderType.APPOINTMENT,
-                channel=Reminder.Channel.EMAIL,
+                channel=channel,
                 recipient=recipient,
                 subject=f"Upcoming appointment for {appointment.patient.name}",
                 body=f"Appointment starts at {timezone.localtime(appointment.starts_at).isoformat()}",
                 scheduled_for=scheduled_for,
+            )
+            ReminderEvent.objects.create(
+                reminder=reminder, event_type=ReminderEvent.EventType.ENQUEUED
             )
             created += 1
         return created
@@ -90,7 +99,12 @@ class Command(BaseCommand):
         created = 0
         for vaccination in qs:
             owner = vaccination.patient.owner
-            recipient = owner.email or owner.phone
+            preference = self._get_preference(vaccination.clinic_id, owner.id)
+            channel, recipient = pick_channel_and_recipient(
+                preference,
+                email=owner.email,
+                phone=owner.phone,
+            )
             if not recipient:
                 continue
 
@@ -101,21 +115,24 @@ class Command(BaseCommand):
             exists = Reminder.objects.filter(
                 vaccination_id=vaccination.id,
                 reminder_type=Reminder.ReminderType.VACCINATION,
-                channel=Reminder.Channel.EMAIL,
+                channel=channel,
             ).exclude(status=Reminder.Status.CANCELLED)
             if exists.exists():
                 continue
 
-            Reminder.objects.create(
+            reminder = Reminder.objects.create(
                 clinic_id=vaccination.clinic_id,
                 patient_id=vaccination.patient_id,
                 vaccination_id=vaccination.id,
                 reminder_type=Reminder.ReminderType.VACCINATION,
-                channel=Reminder.Channel.EMAIL,
+                channel=channel,
                 recipient=recipient,
                 subject=f"Vaccination due soon for {vaccination.patient.name}",
                 body=f"Next dose due at {vaccination.next_due_at.isoformat()} for {vaccination.vaccine_name}",
                 scheduled_for=scheduled_for,
+            )
+            ReminderEvent.objects.create(
+                reminder=reminder, event_type=ReminderEvent.EventType.ENQUEUED
             )
             created += 1
         return created
@@ -135,7 +152,12 @@ class Command(BaseCommand):
         )
         created = 0
         for invoice in qs:
-            recipient = invoice.client.email or invoice.client.phone
+            preference = self._get_preference(invoice.clinic_id, invoice.client_id)
+            channel, recipient = pick_channel_and_recipient(
+                preference,
+                email=invoice.client.email,
+                phone=invoice.client.phone,
+            )
             if not recipient:
                 continue
 
@@ -143,22 +165,29 @@ class Command(BaseCommand):
             exists = Reminder.objects.filter(
                 invoice_id=invoice.id,
                 reminder_type=Reminder.ReminderType.INVOICE,
-                channel=Reminder.Channel.EMAIL,
+                channel=channel,
             ).exclude(status=Reminder.Status.CANCELLED)
             if exists.exists():
                 continue
 
             patient_name = invoice.patient.name if invoice.patient_id else "your pet"
-            Reminder.objects.create(
+            reminder = Reminder.objects.create(
                 clinic_id=invoice.clinic_id,
                 patient_id=invoice.patient_id,
                 invoice_id=invoice.id,
                 reminder_type=Reminder.ReminderType.INVOICE,
-                channel=Reminder.Channel.EMAIL,
+                channel=channel,
                 recipient=recipient,
                 subject=f"Invoice reminder for {patient_name}",
                 body=f"Invoice #{invoice.id} is due on {invoice.due_date.isoformat()}",
                 scheduled_for=scheduled_for,
             )
+            ReminderEvent.objects.create(
+                reminder=reminder, event_type=ReminderEvent.EventType.ENQUEUED
+            )
             created += 1
         return created
+
+    @staticmethod
+    def _get_preference(clinic_id: int, client_id: int):
+        return ReminderPreference.objects.filter(clinic_id=clinic_id, client_id=client_id).first()

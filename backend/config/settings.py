@@ -207,6 +207,10 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
 }
 
+REMINDER_EMAIL_PROVIDER = os.getenv("REMINDER_EMAIL_PROVIDER", "internal")
+REMINDER_SMS_PROVIDER = os.getenv("REMINDER_SMS_PROVIDER", "internal")
+REMINDER_WEBHOOK_TOKEN = os.getenv("REMINDER_WEBHOOK_TOKEN", "")
+
 # Availability defaults (MVP)
 # REMEMBER
 # TODO

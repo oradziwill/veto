@@ -11,7 +11,7 @@ from apps.billing.models import Invoice
 from apps.clients.models import Client, ClientClinic
 from apps.medical.models import Vaccination
 from apps.patients.models import Patient
-from apps.reminders.models import Reminder
+from apps.reminders.models import Reminder, ReminderPreference
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
 
@@ -197,3 +197,70 @@ def test_process_reminders_retries_and_fails(clinic, patient, client_with_member
     reminder.refresh_from_db()
     assert reminder.status == Reminder.Status.FAILED
     assert reminder.attempts == 2
+
+
+@pytest.mark.django_db
+def test_process_reminders_cancels_when_no_consent(clinic, patient, client_with_membership):
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    ReminderPreference.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        allow_email=False,
+        allow_sms=False,
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        recipient="owner@example.com",
+        scheduled_for=timezone.now() - timedelta(minutes=1),
+    )
+
+    call_command("process_reminders")
+    reminder.refresh_from_db()
+    assert reminder.status == Reminder.Status.CANCELLED
+    assert "Consent not granted" in reminder.last_error
+
+
+@pytest.mark.django_db
+def test_process_reminders_defers_when_quiet_hours(clinic, patient, client_with_membership):
+    now = timezone.now()
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    local_now = timezone.localtime(now)
+    ReminderPreference.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        allow_email=True,
+        preferred_channel=ReminderPreference.PreferredChannel.EMAIL,
+        timezone="UTC",
+        quiet_hours_start=(local_now - timedelta(hours=1)).time().replace(second=0, microsecond=0),
+        quiet_hours_end=(local_now + timedelta(hours=1)).time().replace(second=0, microsecond=0),
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        recipient="owner@example.com",
+        scheduled_for=now - timedelta(minutes=1),
+    )
+
+    call_command("process_reminders")
+    reminder.refresh_from_db()
+    assert reminder.status == Reminder.Status.DEFERRED
+    assert reminder.scheduled_for > now

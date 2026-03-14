@@ -118,3 +118,93 @@ def test_reminders_resend_admin_only(
     assert reminder.status == Reminder.Status.QUEUED
     assert reminder.attempts == 0
     assert reminder.last_error == ""
+
+
+@pytest.mark.django_db
+def test_reminder_preferences_crud_clinic_scoped(
+    api_client, receptionist, clinic_admin, clinic, client_with_membership
+):
+    api_client.force_authenticate(user=clinic_admin)
+    create = api_client.post(
+        "/api/reminder-preferences/",
+        {
+            "client": client_with_membership.id,
+            "allow_email": True,
+            "allow_sms": False,
+            "preferred_channel": "email",
+            "timezone": "UTC",
+            "quiet_hours_start": "22:00:00",
+            "quiet_hours_end": "08:00:00",
+        },
+        format="json",
+    )
+    assert create.status_code == 201
+    pref_id = create.data["id"]
+
+    api_client.force_authenticate(user=receptionist)
+    list_response = api_client.get("/api/reminder-preferences/")
+    assert list_response.status_code == 200
+    assert any(row["id"] == pref_id for row in list_response.data)
+
+    api_client.force_authenticate(user=clinic_admin)
+    patch = api_client.patch(
+        f"/api/reminder-preferences/{pref_id}/",
+        {"allow_sms": True, "preferred_channel": "sms"},
+        format="json",
+    )
+    assert patch.status_code == 200
+    assert patch.data["allow_sms"] is True
+    assert patch.data["preferred_channel"] == "sms"
+
+
+@pytest.mark.django_db
+def test_webhook_updates_reminder_status(api_client, clinic, patient, client_with_membership):
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        provider_message_id="email-123",
+        provider_status="accepted",
+        recipient="owner@example.com",
+        scheduled_for=timezone.now(),
+        status=Reminder.Status.SENT,
+    )
+
+    response = api_client.post(
+        "/api/reminders/webhooks/sendgrid/",
+        {"message_id": "email-123", "status": "delivered"},
+        format="json",
+    )
+    assert response.status_code == 200
+    reminder.refresh_from_db()
+    assert reminder.status == Reminder.Status.SENT
+    assert reminder.provider_status == "delivered"
+    assert reminder.delivered_at is not None
+
+
+@pytest.mark.django_db
+def test_reminder_preferences_write_requires_admin(
+    api_client, receptionist, client_with_membership
+):
+    api_client.force_authenticate(user=receptionist)
+    response = api_client.post(
+        "/api/reminder-preferences/",
+        {
+            "client": client_with_membership.id,
+            "allow_email": True,
+            "allow_sms": False,
+            "preferred_channel": "email",
+            "timezone": "UTC",
+        },
+        format="json",
+    )
+    assert response.status_code == 403
