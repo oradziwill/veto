@@ -99,6 +99,9 @@ Admin: http://localhost:8000/admin/
 | `POSTGRES_PASSWORD` | With `POSTGRES_DB` | PostgreSQL password |
 | `POSTGRES_HOST` | No | PostgreSQL host (default `127.0.0.1`) |
 | `POSTGRES_PORT` | No | PostgreSQL port (default `5432`) |
+| `REMINDER_EMAIL_PROVIDER` | No | Reminder email provider (`internal` or `sendgrid`) |
+| `REMINDER_SMS_PROVIDER` | No | Reminder SMS provider (`internal` or `twilio`) |
+| `REMINDER_WEBHOOK_TOKEN` | No | Shared secret for reminder provider webhooks |
 
 Create `.env` in project root or `backend/` and add variables as needed.
 
@@ -218,6 +221,8 @@ API errors use a standardized envelope:
 | GET | `/api/reminders/` | Clinic-scoped reminder queue and delivery history. Filters: `?status=`, `?type=`, `?channel=` |
 | GET | `/api/reminders/<id>/` | Reminder details |
 | POST | `/api/reminders/<id>/resend/` | Re-queue reminder for retry (clinic admin only) |
+| GET/POST/PATCH | `/api/reminder-preferences/` | Client consent/channel preferences and quiet-hours settings |
+| POST | `/api/reminders/webhooks/<provider>/` | Provider callback for delivery status updates |
 
 ## Apps and Responsibilities
 
@@ -282,6 +287,7 @@ pytest
 - Production logging includes `request_id`, `user_id`, and `clinic_id` context.
 - Overdue invoice status updates are scheduled via EventBridge/ECS (`terraform/ops.tf`).
 - Reminder queue can be hydrated/processed with management commands: `enqueue_reminders` and `process_reminders`.
+- Reminder delivery config: `REMINDER_EMAIL_PROVIDER`, `REMINDER_SMS_PROVIDER`, `REMINDER_WEBHOOK_TOKEN`.
 - Deploy workflow runs post-deploy smoke checks on `/health/` and a protected API route.
 - After rotating `OPENAI_API_KEY` in Secrets Manager, force a new backend ECS deployment.
 
