@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.medical.apps.MedicalConfig",
     "apps.billing.apps.BillingConfig",
     "apps.labs.apps.LabsConfig",
+    "apps.reminders.apps.RemindersConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
