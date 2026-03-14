@@ -45,6 +45,12 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "RDS_PORT", value = tostring(aws_db_instance.main.port) },
       { name = "RDS_DB_NAME", value = aws_db_instance.main.db_name },
       { name = "RDS_USERNAME", value = aws_db_instance.main.username },
+      { name = "REMINDER_EMAIL_PROVIDER", value = var.reminder_email_provider },
+      { name = "REMINDER_SMS_PROVIDER", value = var.reminder_sms_provider },
+      { name = "REMINDER_SENDGRID_FROM_EMAIL", value = var.reminder_sendgrid_from_email },
+      { name = "REMINDER_SENDGRID_FROM_NAME", value = var.reminder_sendgrid_from_name },
+      { name = "REMINDER_TWILIO_FROM_NUMBER", value = var.reminder_twilio_from_number },
+      { name = "REMINDER_TWILIO_STATUS_CALLBACK_URL", value = var.reminder_twilio_status_callback_url },
       # Disable until HTTPS is configured on the ALB
       { name = "SECURE_SSL_REDIRECT", value = "False" },
     ]
@@ -54,6 +60,12 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "RDS_PASSWORD", valueFrom = aws_secretsmanager_secret.db_password.arn },
       { name = "CORS_ALLOWED_ORIGINS", valueFrom = aws_secretsmanager_secret.cors_allowed_origins.arn },
       { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.openai_api_key.arn },
+      { name = "REMINDER_SENDGRID_API_KEY", valueFrom = aws_secretsmanager_secret.reminder_sendgrid_api_key.arn },
+      { name = "REMINDER_SENDGRID_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.reminder_sendgrid_webhook_secret.arn },
+      { name = "REMINDER_TWILIO_ACCOUNT_SID", valueFrom = aws_secretsmanager_secret.reminder_twilio_account_sid.arn },
+      { name = "REMINDER_TWILIO_AUTH_TOKEN", valueFrom = aws_secretsmanager_secret.reminder_twilio_auth_token.arn },
+      { name = "REMINDER_TWILIO_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.reminder_twilio_webhook_secret.arn },
+      { name = "REMINDER_WEBHOOK_TOKEN", valueFrom = aws_secretsmanager_secret.reminder_webhook_token.arn },
     ]
 
     logConfiguration = {
