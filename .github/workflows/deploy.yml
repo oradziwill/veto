@@ -172,6 +172,12 @@ jobs:
             --task-definition "$TASK_DEF_ARN" \
             --query "taskDefinition.containerDefinitions[?name=='backend'].secrets[*].name" \
             --output text)
+          echo "Backend secret names (raw): $BACKEND_SECRET_NAMES"
+
+          declare -A BACKEND_SECRETS_MAP=()
+          for name in $BACKEND_SECRET_NAMES; do
+            BACKEND_SECRETS_MAP["$name"]=1
+          done
 
           REQUIRED_SECRET_NAMES=(
             SECRET_KEY
@@ -186,7 +192,7 @@ jobs:
             REMINDER_WEBHOOK_TOKEN
           )
           for secret_name in "${REQUIRED_SECRET_NAMES[@]}"; do
-            if [[ " $BACKEND_SECRET_NAMES " != *" ${secret_name} "* ]]; then
+            if [[ -z "${BACKEND_SECRETS_MAP[$secret_name]}" ]]; then
               echo "Missing required backend secret injection: $secret_name"
               exit 1
             fi
