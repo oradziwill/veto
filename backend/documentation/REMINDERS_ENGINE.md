@@ -112,6 +112,34 @@ Behavior:
 - on success: marks `sent`
 - on failure: increments attempts and either re-queues (`queued`) or terminally fails (`failed`) when attempts reach `max_attempts`
 
+### Queue health snapshot
+
+```bash
+python manage.py reminder_queue_health
+```
+
+Outputs a single JSON line with queue counters and oldest queued age for dashboards/alerts.
+
+### Replay dead-letter reminders
+
+```bash
+python manage.py replay_failed_reminders --limit 200 --older-than-minutes 15
+```
+
+Re-queues failed reminders in bulk (operational replay).
+
+## Scheduling and alerts
+
+Terraform (`terraform/ops.tf`) schedules the reminder commands with EventBridge:
+
+- `enqueue_reminders` on `var.reminder_enqueue_schedule_expression`
+- `process_reminders` on `var.reminder_process_schedule_expression`
+
+CloudWatch alarms:
+
+- `enqueue_reminders` failed invocations
+- `process_reminders` failed invocations
+
 ## Provider and security settings
 
 Configure in environment:

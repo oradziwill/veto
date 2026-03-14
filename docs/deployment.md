@@ -78,6 +78,7 @@ Key resources:
 - `secrets.tf` — Secrets Manager secrets (`db_password`, `django_secret_key`, `cors_allowed_origins`, `openai_api_key`)
 - `iam.tf` — GitHub Actions OIDC provider + IAM role
 - `alb.tf` — Application Load Balancer, listeners, target groups
+- `ops.tf` — EventBridge schedules and CloudWatch alarms for recurring ops jobs
 
 ### Important: Secrets lifecycle
 
@@ -154,3 +155,28 @@ aws ecs describe-task-definition \
 ## Rollback
 
 To roll back to a previous image, re-run the deploy workflow on an earlier commit, or manually update the ECS service in the AWS console to use a previous task definition revision.
+
+---
+
+## Reminder Operations
+
+Reminder engine recurring jobs are scheduled via EventBridge to run ECS one-off tasks:
+
+- `enqueue_reminders` (hydrates reminder queue)
+- `process_reminders` (delivery + retries + quiet-hours deferral)
+
+Schedules are configured in Terraform variables:
+
+- `reminder_enqueue_schedule_expression` (default: `rate(30 minutes)`)
+- `reminder_process_schedule_expression` (default: `rate(5 minutes)`)
+
+CloudWatch alarms detect failed rule invocations:
+
+- `veto-<env>-enqueue-reminders-failed`
+- `veto-<env>-process-reminders-failed`
+
+Operational recovery command:
+
+```bash
+python manage.py replay_failed_reminders --limit 200 --older-than-minutes 15
+```

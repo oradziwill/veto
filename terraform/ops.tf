@@ -85,6 +85,76 @@ resource "aws_cloudwatch_event_target" "mark_overdue_invoices_daily" {
   })
 }
 
+resource "aws_cloudwatch_event_rule" "enqueue_reminders" {
+  name                = "${local.name}-enqueue-reminders"
+  description         = "Runs enqueue_reminders command on schedule"
+  schedule_expression = var.reminder_enqueue_schedule_expression
+}
+
+resource "aws_cloudwatch_event_target" "enqueue_reminders" {
+  rule      = aws_cloudwatch_event_rule.enqueue_reminders.name
+  target_id = "enqueue-reminders"
+  arn       = aws_ecs_cluster.main.arn
+  role_arn  = aws_iam_role.eventbridge_ecs_runner.arn
+
+  ecs_target {
+    launch_type         = "FARGATE"
+    task_count          = 1
+    task_definition_arn = aws_ecs_task_definition.backend.arn
+    platform_version    = "LATEST"
+
+    network_configuration {
+      subnets          = aws_subnet.private[*].id
+      security_groups  = [aws_security_group.ecs.id]
+      assign_public_ip = false
+    }
+  }
+
+  input = jsonencode({
+    containerOverrides = [
+      {
+        name    = "backend"
+        command = ["python", "manage.py", "enqueue_reminders"]
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "process_reminders" {
+  name                = "${local.name}-process-reminders"
+  description         = "Runs process_reminders command on schedule"
+  schedule_expression = var.reminder_process_schedule_expression
+}
+
+resource "aws_cloudwatch_event_target" "process_reminders" {
+  rule      = aws_cloudwatch_event_rule.process_reminders.name
+  target_id = "process-reminders"
+  arn       = aws_ecs_cluster.main.arn
+  role_arn  = aws_iam_role.eventbridge_ecs_runner.arn
+
+  ecs_target {
+    launch_type         = "FARGATE"
+    task_count          = 1
+    task_definition_arn = aws_ecs_task_definition.backend.arn
+    platform_version    = "LATEST"
+
+    network_configuration {
+      subnets          = aws_subnet.private[*].id
+      security_groups  = [aws_security_group.ecs.id]
+      assign_public_ip = false
+    }
+  }
+
+  input = jsonencode({
+    containerOverrides = [
+      {
+        name    = "backend"
+        command = ["python", "manage.py", "process_reminders"]
+      }
+    ]
+  })
+}
+
 resource "aws_cloudwatch_metric_alarm" "alb_backend_5xx" {
   alarm_name          = "${local.name}-alb-backend-5xx"
   alarm_description   = "Backend target 5xx errors are above threshold"
@@ -154,5 +224,39 @@ resource "aws_cloudwatch_metric_alarm" "ecs_backend_running_tasks_low" {
   dimensions = {
     ClusterName = aws_ecs_cluster.main.name
     ServiceName = aws_ecs_service.backend.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "enqueue_reminders_failed_invocations" {
+  alarm_name          = "${local.name}-enqueue-reminders-failed"
+  alarm_description   = "enqueue_reminders EventBridge rule has failed invocations"
+  namespace           = "AWS/Events"
+  metric_name         = "FailedInvocations"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    RuleName = aws_cloudwatch_event_rule.enqueue_reminders.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "process_reminders_failed_invocations" {
+  alarm_name          = "${local.name}-process-reminders-failed"
+  alarm_description   = "process_reminders EventBridge rule has failed invocations"
+  namespace           = "AWS/Events"
+  metric_name         = "FailedInvocations"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    RuleName = aws_cloudwatch_event_rule.process_reminders.name
   }
 }
