@@ -101,3 +101,15 @@ variable "overdue_invoices_schedule_expression" {
   type        = string
   default     = "cron(0 1 * * ? *)"
 }
+
+variable "reminder_enqueue_schedule_expression" {
+  description = "EventBridge schedule for enqueue_reminders command"
+  type        = string
+  default     = "rate(30 minutes)"
+}
+
+variable "reminder_process_schedule_expression" {
+  description = "EventBridge schedule for process_reminders command"
+  type        = string
+  default     = "rate(5 minutes)"
+}
