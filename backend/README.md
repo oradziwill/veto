@@ -101,6 +101,9 @@ Admin: http://localhost:8000/admin/
 
 Create `.env` in project root or `backend/` and add variables as needed.
 
+For ECS deployments, `OPENAI_API_KEY` should be injected from AWS Secrets Manager
+(`veto-<env>/openai-api-key`) via Terraform (`terraform/secrets.tf` + `terraform/ecs.tf`).
+
 ## API Overview
 
 All endpoints except auth require: `Authorization: Bearer <access_token>`
@@ -270,6 +273,7 @@ pytest
 - Production logging includes `request_id`, `user_id`, and `clinic_id` context.
 - Overdue invoice status updates are scheduled via EventBridge/ECS (`terraform/ops.tf`).
 - Deploy workflow runs post-deploy smoke checks on `/health/` and a protected API route.
+- After rotating `OPENAI_API_KEY` in Secrets Manager, force a new backend ECS deployment.
 
 ## Code Quality
 

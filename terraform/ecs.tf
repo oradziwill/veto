@@ -53,6 +53,7 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.django_secret_key.arn },
       { name = "RDS_PASSWORD", valueFrom = aws_secretsmanager_secret.db_password.arn },
       { name = "CORS_ALLOWED_ORIGINS", valueFrom = aws_secretsmanager_secret.cors_allowed_origins.arn },
+      { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.openai_api_key.arn },
     ]
 
     logConfiguration = {
