@@ -147,6 +147,18 @@ Configure in environment:
 - `REMINDER_EMAIL_PROVIDER=internal|sendgrid`
 - `REMINDER_SMS_PROVIDER=internal|twilio`
 - `REMINDER_WEBHOOK_TOKEN=<shared-secret>`
+- `REMINDER_SENDGRID_API_KEY`, `REMINDER_SENDGRID_FROM_EMAIL`, `REMINDER_SENDGRID_FROM_NAME`
+- `REMINDER_TWILIO_ACCOUNT_SID`, `REMINDER_TWILIO_AUTH_TOKEN`, `REMINDER_TWILIO_FROM_NUMBER`
+- `REMINDER_TWILIO_STATUS_CALLBACK_URL` (optional)
+- `REMINDER_SENDGRID_WEBHOOK_SECRET` and/or `REMINDER_TWILIO_WEBHOOK_SECRET`
+
+Webhook signature verification supports HMAC SHA256 with:
+
+- `X-Webhook-Timestamp`
+- `X-Webhook-Signature`
+- signed payload: `<timestamp>.<raw_request_body>`
+
+If provider-specific secret is not configured, endpoint falls back to `REMINDER_WEBHOOK_TOKEN` header validation (`X-Reminder-Webhook-Token`).
 
 ## Tests
 

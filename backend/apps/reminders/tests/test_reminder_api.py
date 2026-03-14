@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 from datetime import timedelta
 
 import pytest
@@ -187,6 +189,82 @@ def test_webhook_updates_reminder_status(api_client, clinic, patient, client_wit
     assert response.status_code == 200
     reminder.refresh_from_db()
     assert reminder.status == Reminder.Status.SENT
+    assert reminder.provider_status == "delivered"
+    assert reminder.delivered_at is not None
+
+
+@pytest.mark.django_db
+def test_webhook_signature_required_when_secret_set(
+    api_client, clinic, patient, client_with_membership, settings
+):
+    settings.REMINDER_SENDGRID_WEBHOOK_SECRET = "secret"
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        provider_message_id="email-999",
+        provider_status="accepted",
+        recipient="owner@example.com",
+        scheduled_for=timezone.now(),
+        status=Reminder.Status.SENT,
+    )
+    response = api_client.post(
+        "/api/reminders/webhooks/sendgrid/",
+        {"message_id": "email-999", "status": "delivered"},
+        format="json",
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_webhook_sendgrid_signature_and_event_list(
+    api_client, clinic, patient, client_with_membership, settings
+):
+    settings.REMINDER_SENDGRID_WEBHOOK_SECRET = "secret"
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        provider_message_id="sg-event-1",
+        provider_status="accepted",
+        recipient="owner@example.com",
+        scheduled_for=timezone.now(),
+        status=Reminder.Status.SENT,
+    )
+    timestamp = "1710000000"
+    raw = '[{"sg_message_id":"sg-event-1.filter1","event":"delivered"}]'
+    signature = hmac.new(
+        b"secret",
+        f"{timestamp}.{raw}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    response = api_client.post(
+        "/api/reminders/webhooks/sendgrid/",
+        raw,
+        content_type="application/json",
+        HTTP_X_WEBHOOK_TIMESTAMP=timestamp,
+        HTTP_X_WEBHOOK_SIGNATURE=signature,
+    )
+    assert response.status_code == 200
+    reminder.refresh_from_db()
     assert reminder.provider_status == "delivered"
     assert reminder.delivered_at is not None
 
