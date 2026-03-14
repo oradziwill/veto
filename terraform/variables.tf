@@ -25,8 +25,8 @@ variable "db_password" {
   type        = string
   sensitive   = true
   validation {
-    condition     = length(trimspace(var.db_password)) > 0
-    error_message = "db_password must be provided (use -var-file=secrets.tfvars or TF_VAR_db_password)."
+    condition     = length(trimspace(var.db_password)) >= 8
+    error_message = "db_password must be at least 8 characters (use TF_VAR_db_password with the real existing RDS password)."
   }
 }
 
@@ -86,6 +86,13 @@ variable "django_secret_key" {
 variable "cors_allowed_origins" {
   description = "Comma-separated CORS_ALLOWED_ORIGINS for the backend (e.g. https://app.example.com)"
   type        = string
+  default     = ""
+}
+
+variable "openai_api_key" {
+  description = "OpenAI API key for AI patient summary endpoint (set in Secrets Manager after first apply)"
+  type        = string
+  sensitive   = true
   default     = ""
 }
 

@@ -75,7 +75,7 @@ Key resources:
 - `ecs.tf` — ECS cluster, services, task definitions
 - `ecr.tf` — ECR repositories for backend and frontend
 - `rds.tf` — PostgreSQL RDS instance
-- `secrets.tf` — Secrets Manager secrets (`db_password`, `django_secret_key`, `cors_allowed_origins`)
+- `secrets.tf` — Secrets Manager secrets (`db_password`, `django_secret_key`, `cors_allowed_origins`, `openai_api_key`)
 - `iam.tf` — GitHub Actions OIDC provider + IAM role
 - `alb.tf` — Application Load Balancer, listeners, target groups
 
@@ -119,15 +119,34 @@ Secrets are stored in AWS Secrets Manager and injected into ECS tasks as environ
 
 | Secret | Key | Used by |
 |---|---|---|
-| `veto-<env>-db-password` | `DB_PASSWORD` | Django DATABASE_URL |
-| `veto-<env>-django-secret` | `DJANGO_SECRET_KEY` | Django settings |
-| `veto-<env>-cors` | `CORS_ALLOWED_ORIGINS` | Django CORS config |
+| `veto-<env>/db-password` | `RDS_PASSWORD` | Django database config |
+| `veto-<env>/django-secret-key` | `SECRET_KEY` | Django settings |
+| `veto-<env>/cors-allowed-origins` | `CORS_ALLOWED_ORIGINS` | Django CORS config |
+| `veto-<env>/openai-api-key` | `OPENAI_API_KEY` | AI patient summary endpoint |
 
 To update a secret value:
 ```bash
 aws secretsmanager put-secret-value \
-  --secret-id veto-dev-db-password \
-  --secret-string "new-password-here"
+  --secret-id veto-dev/openai-api-key \
+  --secret-string "sk-..."
+```
+
+After rotating secret values, force backend deployment so ECS picks the latest value:
+
+```bash
+aws ecs update-service \
+  --cluster veto-dev-cluster \
+  --service veto-dev-backend \
+  --force-new-deployment
+```
+
+Verify the backend task definition includes `OPENAI_API_KEY` secret injection:
+
+```bash
+aws ecs describe-task-definition \
+  --task-definition veto-dev-backend \
+  --query "taskDefinition.containerDefinitions[?name=='backend'].secrets[*].name" \
+  --output text
 ```
 
 ---

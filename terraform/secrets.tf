@@ -39,3 +39,19 @@ resource "aws_secretsmanager_secret_version" "cors_allowed_origins" {
     ignore_changes = [secret_string]
   }
 }
+
+resource "aws_secretsmanager_secret" "openai_api_key" {
+  name                    = "${local.name}/openai-api-key"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "openai_api_key" {
+  count = length(trimspace(var.openai_api_key)) > 0 ? 1 : 0
+
+  secret_id     = aws_secretsmanager_secret.openai_api_key.id
+  secret_string = var.openai_api_key
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
