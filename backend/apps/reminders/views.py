@@ -13,8 +13,20 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsClinicAdmin, IsStaffOrVet
 
-from .models import Reminder, ReminderEvent, ReminderPreference
-from .serializers import ReminderPreferenceSerializer, ReminderReadSerializer
+from .models import (
+    Reminder,
+    ReminderEvent,
+    ReminderPreference,
+    ReminderTemplate,
+    ReminderTemplateVersion,
+)
+from .serializers import (
+    ReminderPreferenceSerializer,
+    ReminderReadSerializer,
+    ReminderTemplatePreviewSerializer,
+    ReminderTemplateSerializer,
+)
+from .services import render_message_template
 
 
 class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
@@ -83,6 +95,90 @@ class ReminderPreferenceViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(clinic_id=self.request.user.clinic_id)
+
+
+class ReminderTemplateViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    serializer_class = ReminderTemplateSerializer
+
+    def get_queryset(self):
+        return (
+            ReminderTemplate.objects.filter(clinic_id=self.request.user.clinic_id)
+            .select_related("updated_by")
+            .prefetch_related("versions", "versions__changed_by")
+        )
+
+    def get_permissions(self):
+        if self.action in ("create", "update", "partial_update", "destroy", "preview"):
+            permission_classes = [IsAuthenticated, HasClinic, IsClinicAdmin]
+        else:
+            permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+        return [permission() for permission in permission_classes]
+
+    def perform_create(self, serializer):
+        template = serializer.save(
+            clinic_id=self.request.user.clinic_id,
+            updated_by=self.request.user,
+        )
+        self._create_version_snapshot(template, self.request.user)
+
+    def perform_update(self, serializer):
+        template = serializer.save(
+            clinic_id=self.request.user.clinic_id,
+            updated_by=self.request.user,
+        )
+        self._create_version_snapshot(template, self.request.user)
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="preview",
+        permission_classes=[IsAuthenticated, HasClinic, IsClinicAdmin],
+    )
+    def preview(self, request):
+        payload = ReminderTemplatePreviewSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        data = payload.validated_data
+        template = None
+        template_id = data.get("template_id")
+        if template_id:
+            template = ReminderTemplate.objects.filter(
+                id=template_id,
+                clinic_id=request.user.clinic_id,
+            ).first()
+            if not template:
+                return Response({"detail": "Template not found."}, status=404)
+        subject_template = data.get("subject_template", "")
+        body_template = data.get("body_template", "")
+        if template:
+            subject_template = template.subject_template
+            body_template = template.body_template
+        context = data.get("context", {})
+        subject = render_message_template(subject_template, context)
+        body = render_message_template(body_template, context)
+        return Response(
+            {
+                "subject": subject,
+                "body": body,
+                "context": context,
+                "missing_keys_render_as_empty": True,
+            },
+            status=200,
+        )
+
+    @staticmethod
+    def _create_version_snapshot(template: ReminderTemplate, changed_by):
+        latest_version = (
+            ReminderTemplateVersion.objects.filter(template=template).order_by("-version").first()
+        )
+        next_version = (latest_version.version if latest_version else 0) + 1
+        ReminderTemplateVersion.objects.create(
+            template=template,
+            version=next_version,
+            subject_template=template.subject_template,
+            body_template=template.body_template,
+            changed_by=changed_by,
+        )
 
 
 class ReminderWebhookView(APIView):

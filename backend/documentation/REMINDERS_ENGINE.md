@@ -1,12 +1,13 @@
 # Reminder Engine MVP
 
-This document describes the first backend reminder pipeline for appointments, vaccinations, and invoices.
+This document describes the reminder pipeline for appointments, vaccinations, and invoices.
 
 ## Scope
 
 - Reminder queue model (`apps.reminders.models.Reminder`)
 - Read/resend API (`/api/reminders/`)
 - Consent/preferences API (`/api/reminder-preferences/`)
+- Template API and preview (`/api/reminder-templates/`, `/api/reminder-templates/preview/`)
 - Queue hydration command (`enqueue_reminders`)
 - Delivery processing command (`process_reminders`)
 - Delivery channel abstraction with provider-agnostic placeholders (`email`, `sms`)
@@ -34,7 +35,22 @@ Key fields:
 - `allow_email`, `allow_sms`
 - `preferred_channel` (`auto|email|sms`)
 - `timezone`
+- `locale` (e.g. `en`, `pl`)
 - `quiet_hours_start`, `quiet_hours_end`
+
+`ReminderTemplate` stores clinic-scoped, localized message templates by
+`(clinic, reminder_type, channel, locale)`. Templates support placeholders and
+are versioned through `ReminderTemplateVersion` snapshots on each create/update.
+
+Supported placeholders:
+
+- `{clinic_name}`
+- `{patient_name}`
+- `{owner_name}`
+- `{appointment_start}`
+- `{due_date}`
+- `{vaccine_name}`
+- `{invoice_number}`
 
 ## API
 
@@ -63,6 +79,23 @@ Resend resets attempts/errors and sets status to `queued` with immediate schedul
 `GET/POST/PATCH /api/reminder-preferences/`
 
 Preferences are clinic-scoped. Client must be an active member of the clinic.
+
+### Reminder templates
+
+`GET/POST/PATCH /api/reminder-templates/`
+
+Templates are clinic-scoped. Write access is admin-only.
+
+### Template preview
+
+`POST /api/reminder-templates/preview/`
+
+Preview accepts either:
+
+- `template_id` (existing template in your clinic), or
+- inline `subject_template` + `body_template`
+
+Missing placeholders render as empty strings so preview is non-blocking.
 
 ### Provider webhook callback
 
@@ -96,6 +129,7 @@ Behavior:
 - invoices: sent/overdue invoices due within configured window
 - duplicate enqueue is prevented for existing non-cancelled reminders of the same source/channel/type
 - channel and recipient are chosen from preference + consent + available owner contact
+- subject/body are rendered from active localized template (`locale` from `ReminderPreference`) with safe fallback templates
 
 ### Process queue
 
@@ -174,4 +208,5 @@ Run targeted tests:
 ```bash
 pytest apps/reminders/tests/test_reminder_commands.py -v
 pytest apps/reminders/tests/test_reminder_api.py -v
+pytest apps/reminders/tests/test_reminder_templates.py -v
 ```

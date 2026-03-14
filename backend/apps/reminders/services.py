@@ -10,9 +10,14 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from django.utils import timezone
 
-from .models import Reminder, ReminderPreference
+from .models import Reminder, ReminderPreference, ReminderTemplate
 
 logger = logging.getLogger(__name__)
+
+
+class _SafeTemplateDict(dict):
+    def __missing__(self, key):
+        return ""
 
 
 def send_reminder(reminder: Reminder) -> tuple[str, str]:
@@ -135,6 +140,81 @@ def _next_allowed_local_datetime(local_now, start, end):
     if local_now.timetz().replace(tzinfo=None) >= start:
         return today_end + timedelta(days=1)
     return today_end
+
+
+def render_message_template(template: str, context: dict[str, object]) -> str:
+    return (template or "").format_map(_SafeTemplateDict(context or {})).strip()
+
+
+def get_fallback_templates(reminder_type: str) -> tuple[str, str]:
+    if reminder_type == Reminder.ReminderType.APPOINTMENT:
+        return (
+            "Upcoming appointment for {patient_name}",
+            "Appointment starts at {appointment_start}.",
+        )
+    if reminder_type == Reminder.ReminderType.VACCINATION:
+        return (
+            "Vaccination due soon for {patient_name}",
+            "Next dose due at {due_date} for {vaccine_name}.",
+        )
+    if reminder_type == Reminder.ReminderType.INVOICE:
+        return (
+            "Invoice reminder for {patient_name}",
+            "Invoice #{invoice_number} is due on {due_date}.",
+        )
+    return ("Clinic reminder", "You have an upcoming clinic reminder.")
+
+
+def build_reminder_context(
+    *,
+    clinic_name: str = "",
+    patient_name: str = "",
+    owner_name: str = "",
+    due_date: str = "",
+    appointment_start: str = "",
+    vaccine_name: str = "",
+    invoice_number: str = "",
+) -> dict[str, str]:
+    return {
+        "clinic_name": clinic_name,
+        "patient_name": patient_name,
+        "owner_name": owner_name,
+        "due_date": due_date,
+        "appointment_start": appointment_start,
+        "vaccine_name": vaccine_name,
+        "invoice_number": invoice_number,
+    }
+
+
+def render_reminder_content(
+    *,
+    clinic_id: int,
+    reminder_type: str,
+    channel: str,
+    locale: str,
+    context: dict[str, object],
+) -> tuple[str, str]:
+    template = (
+        ReminderTemplate.objects.filter(
+            clinic_id=clinic_id,
+            reminder_type=reminder_type,
+            channel=channel,
+            locale=(locale or ReminderTemplate.Locale.EN),
+            is_active=True,
+        )
+        .only("subject_template", "body_template")
+        .first()
+    )
+    if template:
+        subject = render_message_template(template.subject_template, context)
+        body = render_message_template(template.body_template, context)
+        return subject, body
+
+    fallback_subject, fallback_body = get_fallback_templates(reminder_type)
+    return (
+        render_message_template(fallback_subject, context),
+        render_message_template(fallback_body, context),
+    )
 
 
 def _send_via_sendgrid(reminder: Reminder) -> tuple[str, str]:
