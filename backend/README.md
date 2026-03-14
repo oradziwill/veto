@@ -102,6 +102,15 @@ Admin: http://localhost:8000/admin/
 | `REMINDER_EMAIL_PROVIDER` | No | Reminder email provider (`internal` or `sendgrid`) |
 | `REMINDER_SMS_PROVIDER` | No | Reminder SMS provider (`internal` or `twilio`) |
 | `REMINDER_WEBHOOK_TOKEN` | No | Shared secret for reminder provider webhooks |
+| `REMINDER_SENDGRID_API_KEY` | With SendGrid | SendGrid API key |
+| `REMINDER_SENDGRID_FROM_EMAIL` | With SendGrid | Sender email for reminder messages |
+| `REMINDER_SENDGRID_FROM_NAME` | No | Sender display name for SendGrid |
+| `REMINDER_SENDGRID_WEBHOOK_SECRET` | Recommended | HMAC secret for SendGrid webhook signature |
+| `REMINDER_TWILIO_ACCOUNT_SID` | With Twilio | Twilio Account SID |
+| `REMINDER_TWILIO_AUTH_TOKEN` | With Twilio | Twilio auth token |
+| `REMINDER_TWILIO_FROM_NUMBER` | With Twilio | Twilio sender phone number |
+| `REMINDER_TWILIO_STATUS_CALLBACK_URL` | No | Optional Twilio status callback URL |
+| `REMINDER_TWILIO_WEBHOOK_SECRET` | Recommended | HMAC secret for Twilio webhook signature |
 
 Create `.env` in project root or `backend/` and add variables as needed.
 
