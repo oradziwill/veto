@@ -29,6 +29,7 @@ backend/
 │   ├── inventory/          # Items and stock movements
 │   ├── billing/            # Services, invoices, payments
 │   ├── labs/               # Labs, lab tests, lab orders, results
+│   ├── reminders/          # Reminder queue, delivery processing, reminder API
 │   └── tenancy/            # Clinics, holidays (models only)
 ├── documentation/          # API docs and handoffs
 ├── conftest.py             # Shared pytest fixtures
@@ -210,6 +211,14 @@ API errors use a standardized envelope:
 | POST | `/api/lab-orders/<id>/send/` | Send order to lab |
 | POST/PATCH | `/api/lab-orders/<id>/enter-result/` | Enter/update result (Doctor/Admin) |
 
+### Reminders
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/reminders/` | Clinic-scoped reminder queue and delivery history. Filters: `?status=`, `?type=`, `?channel=` |
+| GET | `/api/reminders/<id>/` | Reminder details |
+| POST | `/api/reminders/<id>/resend/` | Re-queue reminder for retry (clinic admin only) |
+
 ## Apps and Responsibilities
 
 | App | Purpose |
@@ -272,6 +281,7 @@ pytest
 - Each API response includes `X-Request-ID` for request tracing.
 - Production logging includes `request_id`, `user_id`, and `clinic_id` context.
 - Overdue invoice status updates are scheduled via EventBridge/ECS (`terraform/ops.tf`).
+- Reminder queue can be hydrated/processed with management commands: `enqueue_reminders` and `process_reminders`.
 - Deploy workflow runs post-deploy smoke checks on `/health/` and a protected API route.
 - After rotating `OPENAI_API_KEY` in Secrets Manager, force a new backend ECS deployment.
 
@@ -292,3 +302,4 @@ Config in `pyproject.toml`.
 - `documentation/CLINICAL_EXAM_DOCUMENTATION.md` – Clinical exam API
 - `documentation/VISIT_CLOSE_WORKFLOW.md` – Visit close flow
 - `documentation/HOW_TO_ADD_DATA.md` – Sample data and admin usage
+- `documentation/REMINDERS_ENGINE.md` – Reminder engine commands and API
