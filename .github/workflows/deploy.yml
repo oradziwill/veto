@@ -174,23 +174,48 @@ jobs:
             --output text)
           echo "Backend secret names (raw): $BACKEND_SECRET_NAMES"
 
+          BACKEND_ENV_PAIRS=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF_ARN" \
+            --query "taskDefinition.containerDefinitions[?name=='backend'].environment[].[name,value]" \
+            --output text)
+          echo "Backend env pairs (raw): $BACKEND_ENV_PAIRS"
+
           declare -A BACKEND_SECRETS_MAP=()
           for name in $BACKEND_SECRET_NAMES; do
             BACKEND_SECRETS_MAP["$name"]=1
           done
+
+          declare -A BACKEND_ENV_MAP=()
+          while read -r env_name env_value; do
+            [[ -z "$env_name" ]] && continue
+            BACKEND_ENV_MAP["$env_name"]="$env_value"
+          done <<< "$BACKEND_ENV_PAIRS"
 
           REQUIRED_SECRET_NAMES=(
             SECRET_KEY
             RDS_PASSWORD
             CORS_ALLOWED_ORIGINS
             OPENAI_API_KEY
-            REMINDER_SENDGRID_API_KEY
-            REMINDER_SENDGRID_WEBHOOK_SECRET
-            REMINDER_TWILIO_ACCOUNT_SID
-            REMINDER_TWILIO_AUTH_TOKEN
-            REMINDER_TWILIO_WEBHOOK_SECRET
-            REMINDER_WEBHOOK_TOKEN
           )
+
+          EMAIL_PROVIDER="${BACKEND_ENV_MAP[REMINDER_EMAIL_PROVIDER]:-internal}"
+          SMS_PROVIDER="${BACKEND_ENV_MAP[REMINDER_SMS_PROVIDER]:-internal}"
+
+          if [[ "$EMAIL_PROVIDER" == "sendgrid" ]]; then
+            REQUIRED_SECRET_NAMES+=(
+              REMINDER_SENDGRID_API_KEY
+              REMINDER_SENDGRID_WEBHOOK_SECRET
+            )
+          fi
+
+          if [[ "$SMS_PROVIDER" == "twilio" ]]; then
+            REQUIRED_SECRET_NAMES+=(
+              REMINDER_TWILIO_ACCOUNT_SID
+              REMINDER_TWILIO_AUTH_TOKEN
+              REMINDER_TWILIO_WEBHOOK_SECRET
+            )
+          fi
+
           for secret_name in "${REQUIRED_SECRET_NAMES[@]}"; do
             if [[ -z "${BACKEND_SECRETS_MAP[$secret_name]}" ]]; then
               echo "Missing required backend secret injection: $secret_name"
