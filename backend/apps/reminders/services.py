@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -215,6 +216,23 @@ def render_reminder_content(
         render_message_template(fallback_subject, context),
         render_message_template(fallback_body, context),
     )
+
+
+def resolve_experiment_variant(
+    *,
+    reminder_type: str,
+    source_object_id: int | None,
+    patient_id: int | None,
+) -> tuple[str, str]:
+    """
+    Returns (experiment_key, variant_label).
+    For now we run a deterministic A/B split for appointment reminders.
+    """
+    if reminder_type != Reminder.ReminderType.APPOINTMENT:
+        return "", "control"
+    token = f"{patient_id or 0}:{source_object_id or 0}".encode()
+    bucket = int(hashlib.sha256(token).hexdigest(), 16) % 2
+    return "appointment_copy_v1", ("A" if bucket == 0 else "B")
 
 
 def resolve_email_provider(*, clinic_id: int | None) -> str:

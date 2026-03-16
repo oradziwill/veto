@@ -535,7 +535,16 @@
       "failed": "Nieudane",
       "deliveryRate": "Skuteczność",
       "volumeTrend": "Trend wolumenu przypomnień",
-      "deliveryRateTrend": "Trend skuteczności dostarczeń"
+      "deliveryRateTrend": "Trend skuteczności dostarczeń",
+      "experimentImpact": "Atrybucja wyników eksperymentu A/B",
+      "sampleHint": "Minimalna próba do stabilnego odczytu: {{count}} wizyt na wariant",
+      "variant": "Wariant",
+      "reminders": "Przypomnienia",
+      "appointments": "Wizyty",
+      "noShowRate": "Wskaźnik nieobecności",
+      "sampleWarning": "Jakość próby",
+      "lowSample": "Niska próba",
+      "okSample": "OK"
     },
     "apptStatus": {
       "scheduled": "Zaplanowana",

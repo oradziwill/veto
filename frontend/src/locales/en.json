@@ -535,7 +535,16 @@
       "failed": "Failed",
       "deliveryRate": "Delivery rate",
       "volumeTrend": "Reminder volume trend",
-      "deliveryRateTrend": "Delivery rate trend"
+      "deliveryRateTrend": "Delivery rate trend",
+      "experimentImpact": "A/B experiment outcome attribution",
+      "sampleHint": "Minimum sample size for stable read: {{count}} appointments per variant",
+      "variant": "Variant",
+      "reminders": "Reminders",
+      "appointments": "Appointments",
+      "noShowRate": "No-show rate",
+      "sampleWarning": "Sample quality",
+      "lowSample": "Low sample",
+      "okSample": "OK"
     },
     "apptStatus": {
       "scheduled": "Scheduled",

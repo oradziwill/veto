@@ -12,6 +12,7 @@ from apps.reminders.services import (
     build_reminder_context,
     pick_channel_and_recipient,
     render_reminder_content,
+    resolve_experiment_variant,
 )
 from apps.scheduling.models import Appointment
 
@@ -87,6 +88,11 @@ class Command(BaseCommand):
                 locale=locale,
                 context=context,
             )
+            experiment_key, experiment_variant = resolve_experiment_variant(
+                reminder_type=Reminder.ReminderType.APPOINTMENT,
+                source_object_id=appointment.id,
+                patient_id=appointment.patient_id,
+            )
             reminder = Reminder.objects.create(
                 clinic_id=appointment.clinic_id,
                 patient_id=appointment.patient_id,
@@ -96,6 +102,8 @@ class Command(BaseCommand):
                 recipient=recipient,
                 subject=subject,
                 body=body,
+                experiment_key=experiment_key,
+                experiment_variant=experiment_variant,
                 scheduled_for=scheduled_for,
             )
             ReminderEvent.objects.create(

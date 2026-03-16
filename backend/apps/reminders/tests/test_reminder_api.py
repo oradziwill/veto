@@ -12,6 +12,7 @@ from apps.billing.models import Invoice
 from apps.clients.models import Client, ClientClinic
 from apps.patients.models import Patient
 from apps.reminders.models import Reminder, ReminderProviderConfig
+from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
 
 
@@ -367,6 +368,83 @@ def test_reminder_analytics_rejects_invalid_period(api_client, clinic_admin):
     api_client.force_authenticate(user=clinic_admin)
     response = api_client.get("/api/reminders/analytics/", {"period": "weekly"})
     assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_reminder_experiment_attribution_groups_variants_and_outcomes(
+    api_client, clinic_admin, clinic, patient, doctor
+):
+    now = timezone.now()
+    appt_a = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(days=1),
+        ends_at=now + timedelta(days=1, minutes=30),
+        status=Appointment.Status.COMPLETED,
+        reason="Control check",
+    )
+    appt_b = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(days=2),
+        ends_at=now + timedelta(days=2, minutes=30),
+        status=Appointment.Status.NO_SHOW,
+        reason="Variant check",
+    )
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appt_a,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        status=Reminder.Status.SENT,
+        recipient="owner@example.com",
+        scheduled_for=now,
+        delivered_at=now,
+        experiment_key="appointment_copy_v1",
+        experiment_variant="A",
+    )
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appt_b,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        status=Reminder.Status.SENT,
+        recipient="owner@example.com",
+        scheduled_for=now,
+        experiment_key="appointment_copy_v1",
+        experiment_variant="B",
+    )
+
+    api_client.force_authenticate(user=clinic_admin)
+    response = api_client.get(
+        "/api/reminders/experiment-attribution/",
+        {"minimum_sample_size": 2, "channel": "email", "provider": "sendgrid"},
+    )
+    assert response.status_code == 200
+    assert response.data["kind"] == "reminder_experiment_attribution"
+    assert response.data["overall"]["appointments_total"] == 2
+    assert response.data["overall"]["appointments_no_show"] == 1
+    assert response.data["overall"]["no_show_rate"] == 0.5
+    variants = {row["variant"]: row for row in response.data["variants"]}
+    assert variants["A"]["appointments_completed"] == 1
+    assert variants["A"]["appointments_no_show"] == 0
+    assert variants["A"]["sample_warning"] is True
+    assert variants["B"]["appointments_completed"] == 0
+    assert variants["B"]["appointments_no_show"] == 1
+    assert variants["B"]["no_show_rate"] == 1.0
+
+
+@pytest.mark.django_db
+def test_reminder_experiment_attribution_requires_admin(api_client, receptionist):
+    api_client.force_authenticate(user=receptionist)
+    response = api_client.get("/api/reminders/experiment-attribution/")
+    assert response.status_code == 403
 
 
 @pytest.mark.django_db

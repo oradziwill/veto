@@ -48,7 +48,12 @@ def test_enqueue_reminders_creates_records_for_core_workflows(
     call_command("enqueue_reminders", appointment_hours=24, vaccination_days=30, invoice_days=7)
 
     assert Reminder.objects.filter(clinic=clinic).count() == 3
-    assert Reminder.objects.filter(reminder_type=Reminder.ReminderType.APPOINTMENT).exists()
+    appointment_reminder = Reminder.objects.filter(
+        reminder_type=Reminder.ReminderType.APPOINTMENT
+    ).first()
+    assert appointment_reminder is not None
+    assert appointment_reminder.experiment_key == "appointment_copy_v1"
+    assert appointment_reminder.experiment_variant in {"A", "B"}
     assert Reminder.objects.filter(reminder_type=Reminder.ReminderType.VACCINATION).exists()
     assert Reminder.objects.filter(reminder_type=Reminder.ReminderType.INVOICE).exists()
 

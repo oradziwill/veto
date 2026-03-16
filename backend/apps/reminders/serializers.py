@@ -35,6 +35,8 @@ class ReminderReadSerializer(serializers.ModelSerializer):
             "provider",
             "provider_message_id",
             "provider_status",
+            "experiment_key",
+            "experiment_variant",
             "recipient",
             "subject",
             "body",
