@@ -11,7 +11,7 @@ from apps.accounts.models import User
 from apps.billing.models import Invoice
 from apps.clients.models import Client, ClientClinic
 from apps.patients.models import Patient
-from apps.reminders.models import Reminder, ReminderProviderConfig
+from apps.reminders.models import Reminder, ReminderInboundReply, ReminderProviderConfig
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
 
@@ -592,6 +592,195 @@ def test_webhook_sendgrid_signature_and_event_list(
     reminder.refresh_from_db()
     assert reminder.provider_status == "delivered"
     assert reminder.delivered_at is not None
+
+
+@pytest.mark.django_db
+def test_reply_webhook_confirm_updates_appointment_and_is_idempotent(
+    api_client, clinic, patient, client_with_membership, doctor
+):
+    now = timezone.now()
+    appointment = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(days=1),
+        ends_at=now + timedelta(days=1, minutes=30),
+        status=Appointment.Status.SCHEDULED,
+        reason="Checkup",
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.SMS,
+        provider=Reminder.Provider.TWILIO,
+        provider_message_id="tw-message-1",
+        recipient="+48111111111",
+        scheduled_for=now,
+        status=Reminder.Status.SENT,
+    )
+
+    payload = {
+        "SmsSid": "tw-reply-1",
+        "OriginalRepliedMessageSid": "tw-message-1",
+        "Body": "YES",
+    }
+    response = api_client.post("/api/reminders/replies/twilio/", payload, format="json")
+    assert response.status_code == 200
+    appointment.refresh_from_db()
+    assert appointment.status == Appointment.Status.CONFIRMED
+    reply = ReminderInboundReply.objects.get(reminder=reminder)
+    assert reply.normalized_intent == ReminderInboundReply.Intent.CONFIRM
+    assert reply.action_status == ReminderInboundReply.ActionStatus.APPLIED
+
+    duplicate = api_client.post("/api/reminders/replies/twilio/", payload, format="json")
+    assert duplicate.status_code == 200
+    assert duplicate.data["duplicates"] == 1
+    assert ReminderInboundReply.objects.filter(reminder=reminder).count() == 1
+
+
+@pytest.mark.django_db
+def test_reply_webhook_reschedule_creates_unresolved_item(api_client, clinic, patient, doctor):
+    now = timezone.now()
+    appointment = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(days=2),
+        ends_at=now + timedelta(days=2, minutes=30),
+        status=Appointment.Status.CONFIRMED,
+        reason="Follow-up",
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        provider_message_id="sg-message-1",
+        recipient="owner@example.com",
+        scheduled_for=now,
+        status=Reminder.Status.SENT,
+    )
+
+    response = api_client.post(
+        "/api/reminders/replies/sendgrid/",
+        {"reply_id": "sg-reply-1", "message_id": "sg-message-1", "text": "reschedule"},
+        format="json",
+    )
+    assert response.status_code == 200
+    appointment.refresh_from_db()
+    assert appointment.status == Appointment.Status.CONFIRMED
+    reply = ReminderInboundReply.objects.get(reminder=reminder)
+    assert reply.normalized_intent == ReminderInboundReply.Intent.RESCHEDULE
+    assert reply.action_status == ReminderInboundReply.ActionStatus.NEEDS_REVIEW
+    assert reply.resolved_at is None
+
+
+@pytest.mark.django_db
+def test_reminder_replies_list_requires_auth_and_is_clinic_scoped(
+    api_client, receptionist, clinic, patient, doctor
+):
+    now = timezone.now()
+    appointment = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(days=3),
+        ends_at=now + timedelta(days=3, minutes=30),
+        status=Appointment.Status.SCHEDULED,
+        reason="Scope check",
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        provider_message_id="scope-message-1",
+        recipient="owner@example.com",
+        scheduled_for=now,
+        status=Reminder.Status.SENT,
+    )
+    own_reply = ReminderInboundReply.objects.create(
+        clinic=clinic,
+        reminder=reminder,
+        provider=Reminder.Provider.SENDGRID,
+        provider_reply_id="scope-reply-1",
+        provider_message_id="scope-message-1",
+        raw_text="reschedule",
+        normalized_intent=ReminderInboundReply.Intent.RESCHEDULE,
+        action_status=ReminderInboundReply.ActionStatus.NEEDS_REVIEW,
+    )
+
+    other_clinic = Clinic.objects.create(
+        name="Clinic D",
+        address="Street 4",
+        phone="+48444444444",
+        email="d@example.com",
+    )
+    other_owner = Client.objects.create(
+        first_name="Other", last_name="Owner", email="other.reply@example.com"
+    )
+    ClientClinic.objects.create(client=other_owner, clinic=other_clinic, is_active=True)
+    other_doctor = User.objects.create_user(
+        username="doctor_other_replies",
+        password="pass",
+        clinic=other_clinic,
+        role=User.Role.DOCTOR,
+        is_vet=True,
+    )
+    other_patient = Patient.objects.create(
+        clinic=other_clinic,
+        owner=other_owner,
+        name="OtherPet",
+        species="Dog",
+        primary_vet=other_doctor,
+    )
+    other_appointment = Appointment.objects.create(
+        clinic=other_clinic,
+        patient=other_patient,
+        vet=other_doctor,
+        starts_at=now + timedelta(days=4),
+        ends_at=now + timedelta(days=4, minutes=30),
+        status=Appointment.Status.SCHEDULED,
+        reason="Other scope",
+    )
+    other_reminder = Reminder.objects.create(
+        clinic=other_clinic,
+        patient=other_patient,
+        appointment=other_appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        provider_message_id="scope-message-2",
+        recipient="other@example.com",
+        scheduled_for=now,
+        status=Reminder.Status.SENT,
+    )
+    ReminderInboundReply.objects.create(
+        clinic=other_clinic,
+        reminder=other_reminder,
+        provider=Reminder.Provider.SENDGRID,
+        provider_reply_id="scope-reply-2",
+        provider_message_id="scope-message-2",
+        raw_text="reschedule",
+        normalized_intent=ReminderInboundReply.Intent.RESCHEDULE,
+        action_status=ReminderInboundReply.ActionStatus.NEEDS_REVIEW,
+    )
+
+    unauth = api_client.get("/api/reminder-replies/")
+    assert unauth.status_code == 401
+
+    api_client.force_authenticate(user=receptionist)
+    scoped = api_client.get("/api/reminder-replies/")
+    assert scoped.status_code == 200
+    returned_ids = {row["id"] for row in scoped.data}
+    assert own_reply.id in returned_ids
+    assert len(returned_ids) == 1
 
 
 @pytest.mark.django_db

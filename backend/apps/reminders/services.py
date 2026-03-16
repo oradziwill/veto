@@ -235,6 +235,27 @@ def resolve_experiment_variant(
     return "appointment_copy_v1", ("A" if bucket == 0 else "B")
 
 
+def parse_reply_intent(text: str) -> str:
+    normalized = " ".join((text or "").strip().lower().split())
+    if not normalized:
+        return "unknown"
+    if normalized in {"yes", "y", "ok", "confirm", "potwierdzam", "tak"}:
+        return "confirm"
+    if normalized in {"no", "n", "cancel", "cancelled", "odwolaj", "odwołaj", "nie"}:
+        return "cancel"
+    if normalized in {
+        "reschedule",
+        "change",
+        "change time",
+        "przeloz",
+        "przełóż",
+        "zmien termin",
+        "zmień termin",
+    }:
+        return "reschedule"
+    return "unknown"
+
+
 def resolve_email_provider(*, clinic_id: int | None) -> str:
     if clinic_id:
         config = (

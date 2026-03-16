@@ -21,19 +21,21 @@ from apps.scheduling.models import Appointment
 from .models import (
     Reminder,
     ReminderEvent,
+    ReminderInboundReply,
     ReminderPreference,
     ReminderProviderConfig,
     ReminderTemplate,
     ReminderTemplateVersion,
 )
 from .serializers import (
+    ReminderInboundReplySerializer,
     ReminderPreferenceSerializer,
     ReminderProviderConfigSerializer,
     ReminderReadSerializer,
     ReminderTemplatePreviewSerializer,
     ReminderTemplateSerializer,
 )
-from .services import render_message_template
+from .services import parse_reply_intent, render_message_template
 
 
 class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
@@ -502,6 +504,231 @@ class ReminderProviderConfigViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save(clinic_id=self.request.user.clinic_id, updated_by=self.request.user)
+
+
+class ReminderInboundReplyViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    serializer_class = ReminderInboundReplySerializer
+
+    def get_queryset(self):
+        qs = (
+            ReminderInboundReply.objects.filter(clinic_id=self.request.user.clinic_id)
+            .select_related("reminder", "reminder__appointment", "reminder__patient")
+            .order_by("-created_at", "-id")
+        )
+        action_status = self.request.query_params.get("action_status")
+        if action_status:
+            qs = qs.filter(action_status=action_status)
+        else:
+            qs = qs.filter(action_status=ReminderInboundReply.ActionStatus.NEEDS_REVIEW)
+        return qs
+
+
+class ReminderReplyWebhookView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, provider):
+        if not self._authorize_webhook(request, provider):
+            return Response({"detail": "Unauthorized webhook signature/token."}, status=401)
+
+        replies = self._extract_replies(provider, request.data)
+        if not replies:
+            return Response({"detail": "No valid reminder replies in payload."}, status=400)
+
+        processed = 0
+        duplicates = 0
+        missing = 0
+        for reply in replies:
+            reminder = Reminder.objects.filter(provider_message_id=reply["message_id"]).first()
+            if not reminder:
+                missing += 1
+                continue
+
+            inbound_reply, created = ReminderInboundReply.objects.get_or_create(
+                provider=provider,
+                provider_reply_id=reply["provider_reply_id"],
+                defaults={
+                    "clinic_id": reminder.clinic_id,
+                    "reminder_id": reminder.id,
+                    "provider_message_id": reply["message_id"],
+                    "raw_text": reply["text"],
+                    "payload": request.data,
+                },
+            )
+            if not created:
+                duplicates += 1
+                continue
+
+            intent = parse_reply_intent(reply["text"])
+            action_status, action_note, resolved_at = self._apply_reply_intent(reminder, intent)
+            inbound_reply.normalized_intent = intent
+            inbound_reply.action_status = action_status
+            inbound_reply.action_note = action_note
+            inbound_reply.resolved_at = resolved_at
+            inbound_reply.save(
+                update_fields=[
+                    "normalized_intent",
+                    "action_status",
+                    "action_note",
+                    "resolved_at",
+                    "updated_at",
+                ]
+            )
+            ReminderEvent.objects.create(
+                reminder=reminder,
+                event_type=ReminderEvent.EventType.REPLY_RECEIVED,
+                payload={
+                    "provider": provider,
+                    "provider_reply_id": reply["provider_reply_id"],
+                    "provider_message_id": reply["message_id"],
+                    "raw_text": reply["text"],
+                    "intent": intent,
+                    "action_status": action_status,
+                    "action_note": action_note,
+                },
+            )
+            processed += 1
+
+        return Response(
+            {"ok": True, "processed": processed, "duplicates": duplicates, "missing": missing},
+            status=200,
+        )
+
+    def _authorize_webhook(self, request, provider: str) -> bool:
+        raw_body = request.body or b""
+        timestamp = request.headers.get("X-Webhook-Timestamp", "")
+        signature = request.headers.get("X-Webhook-Signature", "")
+
+        provider_secret_map = {
+            "sendgrid": str(getattr(settings, "REMINDER_SENDGRID_WEBHOOK_SECRET", "")),
+            "twilio": str(getattr(settings, "REMINDER_TWILIO_WEBHOOK_SECRET", "")),
+        }
+        secret = provider_secret_map.get(provider, "")
+        if secret:
+            if not (timestamp and signature):
+                return False
+            signed_payload = f"{timestamp}.{raw_body.decode('utf-8', errors='ignore')}"
+            expected = hmac.new(
+                secret.encode("utf-8"),
+                signed_payload.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            return hmac.compare_digest(expected, signature)
+
+        token = str(getattr(settings, "REMINDER_WEBHOOK_TOKEN", ""))
+        if token:
+            header_token = request.headers.get("X-Reminder-Webhook-Token", "")
+            return hmac.compare_digest(token, header_token)
+        return True
+
+    def _extract_replies(self, provider: str, payload):
+        items = payload if isinstance(payload, list) else [payload]
+        replies = []
+        for item in items:
+            if provider == "twilio":
+                provider_reply_id = (
+                    item.get("SmsSid")
+                    or item.get("MessageSid")
+                    or item.get("provider_reply_id")
+                    or ""
+                )
+                message_id = (
+                    item.get("OriginalRepliedMessageSid")
+                    or item.get("InReplyTo")
+                    or item.get("message_id")
+                    or item.get("parent_message_id")
+                    or ""
+                )
+                text = item.get("Body") or item.get("text") or item.get("message") or ""
+            else:
+                provider_reply_id = (
+                    item.get("reply_id") or item.get("event_id") or item.get("id") or ""
+                )
+                message_id = (
+                    item.get("message_id")
+                    or item.get("in_reply_to")
+                    or item.get("parent_message_id")
+                    or ""
+                )
+                text = item.get("text") or item.get("body") or item.get("response") or ""
+
+            provider_reply_id = str(provider_reply_id).strip()
+            message_id = str(message_id).strip()
+            text = str(text).strip()
+            if not message_id:
+                continue
+            if not provider_reply_id:
+                provider_reply_id = hashlib.sha256(
+                    f"{provider}|{message_id}|{text}".encode()
+                ).hexdigest()
+            replies.append(
+                {
+                    "provider_reply_id": provider_reply_id,
+                    "message_id": message_id,
+                    "text": text,
+                }
+            )
+        return replies
+
+    @staticmethod
+    def _apply_reply_intent(reminder: Reminder, intent: str):
+        now = timezone.now()
+        if (
+            reminder.reminder_type != Reminder.ReminderType.APPOINTMENT
+            or not reminder.appointment_id
+        ):
+            if intent in {
+                ReminderInboundReply.Intent.RESCHEDULE,
+                ReminderInboundReply.Intent.UNKNOWN,
+            }:
+                return (
+                    ReminderInboundReply.ActionStatus.NEEDS_REVIEW,
+                    "Manual follow-up required.",
+                    None,
+                )
+            return (
+                ReminderInboundReply.ActionStatus.IGNORED,
+                "No appointment linked to reminder.",
+                now,
+            )
+
+        appointment = reminder.appointment
+        if intent == ReminderInboundReply.Intent.CONFIRM:
+            if appointment.status == Appointment.Status.SCHEDULED:
+                appointment.status = Appointment.Status.CONFIRMED
+                appointment.save(update_fields=["status", "updated_at"])
+                return ReminderInboundReply.ActionStatus.APPLIED, "Appointment confirmed.", now
+            if appointment.status == Appointment.Status.CONFIRMED:
+                return (
+                    ReminderInboundReply.ActionStatus.APPLIED,
+                    "Appointment already confirmed.",
+                    now,
+                )
+            return (
+                ReminderInboundReply.ActionStatus.IGNORED,
+                f"Cannot confirm appointment in status '{appointment.status}'.",
+                now,
+            )
+
+        if intent == ReminderInboundReply.Intent.CANCEL:
+            if appointment.status in {
+                Appointment.Status.SCHEDULED,
+                Appointment.Status.CONFIRMED,
+                Appointment.Status.CHECKED_IN,
+            }:
+                appointment.status = Appointment.Status.CANCELLED
+                appointment.save(update_fields=["status", "updated_at"])
+                return ReminderInboundReply.ActionStatus.APPLIED, "Appointment cancelled.", now
+            return (
+                ReminderInboundReply.ActionStatus.IGNORED,
+                f"Cannot cancel appointment in status '{appointment.status}'.",
+                now,
+            )
+
+        if intent == ReminderInboundReply.Intent.RESCHEDULE:
+            return ReminderInboundReply.ActionStatus.NEEDS_REVIEW, "Reschedule requested.", None
+
+        return ReminderInboundReply.ActionStatus.NEEDS_REVIEW, "Reply intent unclear.", None
 
 
 class ReminderWebhookView(APIView):
