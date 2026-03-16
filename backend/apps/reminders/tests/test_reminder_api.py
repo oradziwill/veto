@@ -13,6 +13,8 @@ from apps.clients.models import Client, ClientClinic
 from apps.patients.models import Patient
 from apps.reminders.models import (
     Reminder,
+    ReminderEscalationExecution,
+    ReminderEscalationRule,
     ReminderInboundReply,
     ReminderPortalActionToken,
     ReminderProviderConfig,
@@ -972,3 +974,82 @@ def test_reminder_provider_configs_validate_external_provider_requirements(
     assert valid.status_code == 201
     assert valid.data["email_provider"] == "sendgrid"
     assert valid.data["sms_provider"] == "twilio"
+
+
+@pytest.mark.django_db
+def test_reminder_escalation_rule_crud_permissions(api_client, clinic_admin, receptionist, clinic):
+    api_client.force_authenticate(user=receptionist)
+    forbidden = api_client.post(
+        "/api/reminder-escalation-rules/",
+        {
+            "name": "No confirm after 120m",
+            "trigger_type": "appointment_unconfirmed",
+            "delay_minutes": 120,
+            "action_type": "enqueue_followup",
+            "is_active": True,
+            "max_executions_per_target": 1,
+        },
+        format="json",
+    )
+    assert forbidden.status_code == 403
+
+    api_client.force_authenticate(user=clinic_admin)
+    created = api_client.post(
+        "/api/reminder-escalation-rules/",
+        {
+            "name": "No confirm after 120m",
+            "trigger_type": "appointment_unconfirmed",
+            "delay_minutes": 120,
+            "action_type": "enqueue_followup",
+            "is_active": True,
+            "max_executions_per_target": 1,
+        },
+        format="json",
+    )
+    assert created.status_code == 201
+    rule_id = created.data["id"]
+    assert created.data["clinic"] == clinic.id
+
+    api_client.force_authenticate(user=receptionist)
+    listing = api_client.get("/api/reminder-escalation-rules/")
+    assert listing.status_code == 200
+    assert {row["id"] for row in listing.data} == {rule_id}
+
+
+@pytest.mark.django_db
+def test_reminder_escalation_metrics_admin_only_and_scoped(
+    api_client, clinic_admin, receptionist, clinic, patient
+):
+    rule = ReminderEscalationRule.objects.create(
+        clinic=clinic,
+        name="Metrics rule",
+        trigger_type=ReminderEscalationRule.TriggerType.APPOINTMENT_UNCONFIRMED,
+        delay_minutes=30,
+        action_type=ReminderEscalationRule.ActionType.ENQUEUE_FOLLOWUP,
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        status=Reminder.Status.SENT,
+        recipient="owner@example.com",
+        scheduled_for=timezone.now(),
+    )
+    ReminderEscalationExecution.objects.create(
+        clinic=clinic,
+        rule=rule,
+        reminder=reminder,
+        target_key=f"appointment:{reminder.appointment_id or reminder.id}",
+        status=ReminderEscalationExecution.Status.APPLIED,
+    )
+
+    api_client.force_authenticate(user=receptionist)
+    forbidden = api_client.get("/api/reminder-escalation-metrics/")
+    assert forbidden.status_code == 403
+
+    api_client.force_authenticate(user=clinic_admin)
+    metrics = api_client.get("/api/reminder-escalation-metrics/")
+    assert metrics.status_code == 200
+    assert metrics.data["kind"] == "reminder_escalation_metrics"
+    assert metrics.data["applied_total"] == 1

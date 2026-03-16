@@ -7,6 +7,8 @@ from apps.clients.models import ClientClinic
 
 from .models import (
     Reminder,
+    ReminderEscalationExecution,
+    ReminderEscalationRule,
     ReminderInboundReply,
     ReminderPreference,
     ReminderProviderConfig,
@@ -253,5 +255,54 @@ class ReminderInboundReplySerializer(serializers.ModelSerializer):
             "payload",
             "created_at",
             "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ReminderEscalationRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReminderEscalationRule
+        fields = [
+            "id",
+            "clinic",
+            "name",
+            "trigger_type",
+            "delay_minutes",
+            "action_type",
+            "is_active",
+            "max_executions_per_target",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["clinic", "created_at", "updated_at"]
+
+    def validate_delay_minutes(self, value):
+        if value < 1:
+            raise serializers.ValidationError("delay_minutes must be at least 1.")
+        return value
+
+    def validate_max_executions_per_target(self, value):
+        if value < 1:
+            raise serializers.ValidationError("max_executions_per_target must be at least 1.")
+        return value
+
+
+class ReminderEscalationExecutionSerializer(serializers.ModelSerializer):
+    rule_name = serializers.CharField(source="rule.name", read_only=True)
+    reminder_type = serializers.CharField(source="reminder.reminder_type", read_only=True)
+
+    class Meta:
+        model = ReminderEscalationExecution
+        fields = [
+            "id",
+            "clinic",
+            "rule",
+            "rule_name",
+            "reminder",
+            "reminder_type",
+            "target_key",
+            "status",
+            "reason",
+            "created_at",
         ]
         read_only_fields = fields

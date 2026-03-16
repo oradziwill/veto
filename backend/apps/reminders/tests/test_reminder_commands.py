@@ -13,6 +13,9 @@ from apps.medical.models import Vaccination
 from apps.patients.models import Patient
 from apps.reminders.models import (
     Reminder,
+    ReminderEscalationExecution,
+    ReminderEscalationRule,
+    ReminderInboundReply,
     ReminderPortalActionToken,
     ReminderPreference,
     ReminderTemplate,
@@ -306,3 +309,110 @@ def test_enqueue_appointments_includes_portal_links_in_template(clinic, patient,
     assert reminder is not None
     assert "https://portal.example.com/api/reminders/portal/" in reminder.body
     assert ReminderPortalActionToken.objects.filter(reminder=reminder).count() == 3
+
+
+@pytest.mark.django_db
+def test_run_reminder_escalations_enqueues_followup_for_unconfirmed_appointment(
+    clinic, patient, doctor
+):
+    appointment = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=timezone.now() + timedelta(hours=4),
+        ends_at=timezone.now() + timedelta(hours=5),
+        status=Appointment.Status.SCHEDULED,
+    )
+    source = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        status=Reminder.Status.SENT,
+        recipient="owner@example.com",
+        subject="Please confirm appointment",
+        body="Tap to confirm.",
+        sent_at=timezone.now() - timedelta(minutes=180),
+        scheduled_for=timezone.now() - timedelta(minutes=180),
+    )
+    ReminderEscalationRule.objects.create(
+        clinic=clinic,
+        name="Appt no confirmation 2h",
+        trigger_type=ReminderEscalationRule.TriggerType.APPOINTMENT_UNCONFIRMED,
+        delay_minutes=120,
+        action_type=ReminderEscalationRule.ActionType.ENQUEUE_FOLLOWUP,
+        max_executions_per_target=1,
+    )
+
+    call_command("run_reminder_escalations")
+
+    followups = Reminder.objects.filter(
+        clinic=clinic,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+    ).exclude(id=source.id)
+    assert followups.count() == 1
+    followup = followups.first()
+    assert followup is not None
+    assert followup.subject.startswith("[Follow-up]")
+    assert (
+        ReminderEscalationExecution.objects.filter(
+            reminder=source, status=ReminderEscalationExecution.Status.APPLIED
+        ).count()
+        == 1
+    )
+
+    call_command("run_reminder_escalations")
+    assert ReminderEscalationExecution.objects.filter(reminder=source).count() == 1
+
+
+@pytest.mark.django_db
+def test_run_reminder_escalations_flags_unresolved_reschedule_reply(clinic, patient, doctor):
+    appointment = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=timezone.now() + timedelta(hours=8),
+        ends_at=timezone.now() + timedelta(hours=9),
+        status=Appointment.Status.SCHEDULED,
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.SMS,
+        status=Reminder.Status.SENT,
+        recipient="+48111111111",
+        subject="Appointment reminder",
+        body="Reply RESCHEDULE to change time.",
+        sent_at=timezone.now() - timedelta(minutes=80),
+        scheduled_for=timezone.now() - timedelta(minutes=80),
+    )
+    reply = ReminderInboundReply.objects.create(
+        clinic=clinic,
+        reminder=reminder,
+        provider=Reminder.Provider.TWILIO,
+        provider_reply_id="reply-escalation-1",
+        provider_message_id="msg-1",
+        raw_text="reschedule",
+        normalized_intent=ReminderInboundReply.Intent.RESCHEDULE,
+        action_status=ReminderInboundReply.ActionStatus.NEEDS_REVIEW,
+    )
+    ReminderEscalationRule.objects.create(
+        clinic=clinic,
+        name="Reschedule > 30m",
+        trigger_type=ReminderEscalationRule.TriggerType.RESCHEDULE_UNRESOLVED,
+        delay_minutes=0,
+        action_type=ReminderEscalationRule.ActionType.FLAG_FOR_REVIEW,
+        max_executions_per_target=2,
+    )
+
+    call_command("run_reminder_escalations")
+    reply.refresh_from_db()
+
+    assert "Escalated by automated playbook." in reply.action_note
+    assert ReminderEscalationExecution.objects.filter(
+        reminder=reminder, status=ReminderEscalationExecution.Status.APPLIED
+    ).exists()

@@ -234,6 +234,9 @@ API errors use a standardized envelope:
 | GET | `/api/reminders/metrics/` | Clinic-scoped reminder metrics snapshot (status/provider counts, failed last 24h, oldest queued age) |
 | GET | `/api/reminders/analytics/` | Admin-only reminder delivery analytics. Filters: `?period=daily|monthly`, `?from=YYYY-MM-DD`, `?to=YYYY-MM-DD`, `?channel=`, `?provider=`, `?type=` |
 | GET | `/api/reminders/experiment-attribution/` | Admin-only appointment reminder A/B attribution. Filters: `?from=YYYY-MM-DD`, `?to=YYYY-MM-DD`, `?channel=`, `?provider=`, `?minimum_sample_size=` |
+| GET/POST/PATCH/DELETE | `/api/reminder-escalation-rules/` | Clinic escalation playbooks (staff read, admin write): trigger + delay + action |
+| GET | `/api/reminder-escalation-executions/` | Clinic escalation execution log for audit/ops. Filter: `?status=applied|skipped` |
+| GET | `/api/reminder-escalation-metrics/` | Admin-only escalation metrics for last 24h (`triggered_total`, `applied_total`, `skipped_total`, `by_rule`) |
 | GET | `/api/reminder-replies/` | Staff queue of inbound reminder replies (default: unresolved only). Filter: `?action_status=` |
 | POST | `/api/reminders/replies/<provider>/` | Public webhook for inbound owner replies (`YES/NO/RESCHEDULE`) with idempotent processing |
 | GET/POST | `/api/reminders/portal/<token>/` | Public owner portal token preview/execute endpoint for `confirm`, `cancel`, `reschedule_request` |
@@ -306,7 +309,7 @@ pytest
 - Each API response includes `X-Request-ID` for request tracing.
 - Production logging includes `request_id`, `user_id`, and `clinic_id` context.
 - Overdue invoice status updates are scheduled via EventBridge/ECS (`terraform/ops.tf`).
-- Reminder queue can be hydrated/processed with management commands: `enqueue_reminders` and `process_reminders`.
+- Reminder queue can be hydrated/processed with management commands: `enqueue_reminders`, `process_reminders`, and `run_reminder_escalations`.
 - Reminder delivery config: `REMINDER_EMAIL_PROVIDER`, `REMINDER_SMS_PROVIDER`, `REMINDER_WEBHOOK_TOKEN`.
 - Deploy workflow runs post-deploy smoke checks on `/health/` and a protected API route.
 - After rotating `OPENAI_API_KEY` in Secrets Manager, force a new backend ECS deployment.

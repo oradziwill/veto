@@ -156,6 +156,7 @@ class ReminderEvent(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         WEBHOOK_UPDATE = "webhook_update", "Webhook update"
         REPLY_RECEIVED = "reply_received", "Reply received"
+        ESCALATED = "escalated", "Escalated"
 
     reminder = models.ForeignKey(
         Reminder,
@@ -271,6 +272,94 @@ class ReminderPortalActionToken(models.Model):
         return (
             f"ReminderPortalActionToken(reminder={self.reminder_id}, action={self.action}, "
             f"used={self.used_at is not None})"
+        )
+
+
+class ReminderEscalationRule(models.Model):
+    class TriggerType(models.TextChoices):
+        APPOINTMENT_UNCONFIRMED = "appointment_unconfirmed", "Appointment unconfirmed"
+        RESCHEDULE_UNRESOLVED = "reschedule_unresolved", "Reschedule unresolved"
+        INVOICE_OVERDUE = "invoice_overdue", "Invoice overdue"
+
+    class ActionType(models.TextChoices):
+        ENQUEUE_FOLLOWUP = "enqueue_followup", "Enqueue follow-up reminder"
+        FLAG_FOR_REVIEW = "flag_for_review", "Flag unresolved for review"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name="reminder_escalation_rules",
+    )
+    name = models.CharField(max_length=120)
+    trigger_type = models.CharField(max_length=40, choices=TriggerType.choices)
+    delay_minutes = models.PositiveIntegerField(default=60)
+    action_type = models.CharField(max_length=30, choices=ActionType.choices)
+    is_active = models.BooleanField(default=True)
+    max_executions_per_target = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["clinic", "is_active", "trigger_type"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clinic", "name"],
+                name="reminders_escalation_rule_clinic_name_uniq",
+            )
+        ]
+        ordering = ["clinic_id", "name", "id"]
+
+    def __str__(self) -> str:
+        return (
+            f"ReminderEscalationRule(clinic={self.clinic_id}, name={self.name}, "
+            f"trigger={self.trigger_type}, active={self.is_active})"
+        )
+
+
+class ReminderEscalationExecution(models.Model):
+    class Status(models.TextChoices):
+        APPLIED = "applied", "Applied"
+        SKIPPED = "skipped", "Skipped"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name="reminder_escalation_executions",
+    )
+    rule = models.ForeignKey(
+        ReminderEscalationRule,
+        on_delete=models.CASCADE,
+        related_name="executions",
+    )
+    reminder = models.ForeignKey(
+        Reminder,
+        on_delete=models.CASCADE,
+        related_name="escalation_executions",
+    )
+    target_key = models.CharField(max_length=120)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.APPLIED)
+    reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["clinic", "created_at"]),
+            models.Index(fields=["rule", "target_key"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rule", "reminder"],
+                name="reminders_escalation_rule_reminder_uniq",
+            )
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return (
+            f"ReminderEscalationExecution(rule={self.rule_id}, reminder={self.reminder_id}, "
+            f"status={self.status})"
         )
 
 
