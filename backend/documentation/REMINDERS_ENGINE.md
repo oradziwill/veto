@@ -80,6 +80,25 @@ Clinic-scoped mini observability payload:
 - `failed_last_24h`
 - `oldest_queued_age_seconds`
 
+### Reminder delivery analytics (admin only)
+
+`GET /api/reminders/analytics/`
+
+Query params:
+
+- `period=monthly|daily` (default: `monthly`)
+- `from=YYYY-MM-DD`
+- `to=YYYY-MM-DD`
+- optional filters: `channel`, `provider`, `type`
+
+Payload includes:
+
+- `totals` (`total`, `sent`, `delivered`, `failed`, `cancelled`)
+- `rates` (`delivery_rate`, `failure_rate`)
+- `by_period[]` trend rows with `label`, status counts, and `delivery_rate`
+
+This endpoint is clinic-scoped and restricted to clinic admin users.
+
 ### Resend reminder (admin only)
 
 `POST /api/reminders/<id>/resend/`

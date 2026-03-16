@@ -482,6 +482,7 @@
     "tabVisits": "Wizyty",
     "tabRevenue": "Przychody",
     "tabPatients": "Pacjenci",
+    "tabReminders": "Przypomnienia",
     "visitsByMonth": "Wizyty na miesiąc (ostatnie 6 miesięcy)",
     "visitStatusThisMonth": "Statusy wizyt w tym miesiącu",
     "visitsByWeekday": "Zakończone wizyty wg dnia tygodnia",
@@ -515,6 +516,26 @@
         "sendgrid": "SendGrid",
         "twilio": "Twilio"
       }
+    },
+    "reminderAnalytics": {
+      "title": "Analityka dostarczania przypomnień",
+      "loadError": "Nie udało się załadować analityki przypomnień.",
+      "period": "Okres",
+      "monthly": "Miesięcznie",
+      "daily": "Dziennie",
+      "from": "Od",
+      "to": "Do",
+      "channel": "Kanał",
+      "provider": "Dostawca",
+      "type": "Typ",
+      "all": "Wszystkie",
+      "apply": "Zastosuj filtry",
+      "total": "Łącznie",
+      "delivered": "Dostarczone",
+      "failed": "Nieudane",
+      "deliveryRate": "Skuteczność",
+      "volumeTrend": "Trend wolumenu przypomnień",
+      "deliveryRateTrend": "Trend skuteczności dostarczeń"
     },
     "apptStatus": {
       "scheduled": "Zaplanowana",

@@ -482,6 +482,7 @@
     "tabVisits": "Visits",
     "tabRevenue": "Revenue",
     "tabPatients": "Patients",
+    "tabReminders": "Reminders",
     "visitsByMonth": "Visits per month (last 6 months)",
     "visitStatusThisMonth": "Visit statuses this month",
     "visitsByWeekday": "Completed visits by weekday",
@@ -515,6 +516,26 @@
         "sendgrid": "SendGrid",
         "twilio": "Twilio"
       }
+    },
+    "reminderAnalytics": {
+      "title": "Reminder delivery analytics",
+      "loadError": "Failed to load reminder analytics.",
+      "period": "Period",
+      "monthly": "Monthly",
+      "daily": "Daily",
+      "from": "From",
+      "to": "To",
+      "channel": "Channel",
+      "provider": "Provider",
+      "type": "Type",
+      "all": "All",
+      "apply": "Apply filters",
+      "total": "Total",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "deliveryRate": "Delivery rate",
+      "volumeTrend": "Reminder volume trend",
+      "deliveryRateTrend": "Delivery rate trend"
     },
     "apptStatus": {
       "scheduled": "Scheduled",
