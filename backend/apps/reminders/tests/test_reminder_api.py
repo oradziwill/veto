@@ -219,6 +219,157 @@ def test_reminder_metrics_requires_authentication(api_client):
 
 
 @pytest.mark.django_db
+def test_reminder_analytics_clinic_scoped_and_filtered(
+    api_client, clinic_admin, clinic, patient, client_with_membership
+):
+    now = timezone.now()
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    delivered = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        status=Reminder.Status.SENT,
+        recipient="owner@example.com",
+        scheduled_for=now,
+        delivered_at=now,
+    )
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        status=Reminder.Status.FAILED,
+        recipient="owner@example.com",
+        scheduled_for=now,
+    )
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.SMS,
+        provider=Reminder.Provider.TWILIO,
+        status=Reminder.Status.CANCELLED,
+        recipient="+48111111111",
+        scheduled_for=now,
+    )
+
+    other_clinic = Clinic.objects.create(
+        name="Clinic Analytics B",
+        address="Street 12",
+        phone="+48888888888",
+        email="analytics-b@example.com",
+    )
+    other_owner = Client.objects.create(
+        first_name="Other", last_name="Owner", email="other.analytics@example.com"
+    )
+    ClientClinic.objects.create(client=other_owner, clinic=other_clinic, is_active=True)
+    other_doctor = User.objects.create_user(
+        username="doctor_other_analytics",
+        password="pass",
+        clinic=other_clinic,
+        role=User.Role.DOCTOR,
+        is_vet=True,
+    )
+    other_patient = Patient.objects.create(
+        clinic=other_clinic,
+        owner=other_owner,
+        name="OtherPet",
+        species="Dog",
+        primary_vet=other_doctor,
+    )
+    other_invoice = Invoice.objects.create(
+        clinic=other_clinic,
+        client=other_owner,
+        patient=other_patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    Reminder.objects.create(
+        clinic=other_clinic,
+        patient=other_patient,
+        invoice=other_invoice,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        status=Reminder.Status.SENT,
+        recipient="other@example.com",
+        scheduled_for=now,
+        delivered_at=now,
+    )
+
+    from_str = (timezone.localdate() - timedelta(days=1)).isoformat()
+    to_str = (timezone.localdate() + timedelta(days=1)).isoformat()
+    api_client.force_authenticate(user=clinic_admin)
+    response = api_client.get(
+        "/api/reminders/analytics/",
+        {
+            "period": "daily",
+            "from": from_str,
+            "to": to_str,
+            "channel": "email",
+            "provider": "sendgrid",
+            "type": "appointment",
+        },
+    )
+    assert response.status_code == 200
+    assert response.data["kind"] == "reminder_analytics"
+    assert response.data["totals"]["total"] == 2
+    assert response.data["totals"]["delivered"] == 1
+    assert response.data["totals"]["failed"] == 1
+    assert response.data["totals"]["cancelled"] == 0
+    assert response.data["rates"]["delivery_rate"] == 0.5
+    assert response.data["filters"] == {
+        "channel": "email",
+        "provider": "sendgrid",
+        "type": "appointment",
+    }
+    labels = [row["label"] for row in response.data["by_period"]]
+    assert from_str in labels and to_str in labels
+    today_bucket = next(
+        row
+        for row in response.data["by_period"]
+        if row["label"] == timezone.localdate().isoformat()
+    )
+    assert today_bucket["total"] == 2
+    assert today_bucket["delivered"] == 1
+
+    # sanity check the delivered reminder belongs to the authenticated clinic data only
+    assert delivered.clinic_id == clinic_admin.clinic_id
+
+
+@pytest.mark.django_db
+def test_reminder_analytics_requires_authentication(api_client):
+    response = api_client.get("/api/reminders/analytics/")
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
+def test_reminder_analytics_requires_admin(api_client, receptionist):
+    api_client.force_authenticate(user=receptionist)
+    response = api_client.get("/api/reminders/analytics/")
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_reminder_analytics_rejects_invalid_period(api_client, clinic_admin):
+    api_client.force_authenticate(user=clinic_admin)
+    response = api_client.get("/api/reminders/analytics/", {"period": "weekly"})
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
 def test_reminder_preferences_crud_clinic_scoped(
     api_client, receptionist, clinic_admin, clinic, client_with_membership
 ):

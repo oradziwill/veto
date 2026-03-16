@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.conf import settings
-from django.db.models import Count, Min
+from django.db.models import Count, Min, Q
+from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -121,6 +123,141 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
             "generated_at": now.isoformat(),
         }
         return Response(payload, status=200)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="analytics",
+        permission_classes=[IsAuthenticated, HasClinic, IsClinicAdmin],
+    )
+    def analytics(self, request):
+        period = request.query_params.get("period", "monthly")
+        if period not in {"monthly", "daily"}:
+            return Response(
+                {"detail": "Invalid period. Use 'monthly' or 'daily'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        today = timezone.localdate()
+        default_from = date(today.year, today.month, 1) - timedelta(days=150)
+        from_date = parse_date(request.query_params.get("from", "")) or default_from
+        to_date = parse_date(request.query_params.get("to", "")) or today
+        if from_date > to_date:
+            return Response(
+                {"detail": "'from' must be earlier than or equal to 'to'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        clinic_qs = Reminder.objects.filter(
+            clinic_id=request.user.clinic_id,
+            created_at__date__gte=from_date,
+            created_at__date__lte=to_date,
+        )
+        channel = request.query_params.get("channel")
+        provider = request.query_params.get("provider")
+        reminder_type = request.query_params.get("type")
+        if channel:
+            clinic_qs = clinic_qs.filter(channel=channel)
+        if provider:
+            clinic_qs = clinic_qs.filter(provider=provider)
+        if reminder_type:
+            clinic_qs = clinic_qs.filter(reminder_type=reminder_type)
+
+        total = clinic_qs.count()
+        sent = clinic_qs.filter(status=Reminder.Status.SENT).count()
+        failed = clinic_qs.filter(status=Reminder.Status.FAILED).count()
+        cancelled = clinic_qs.filter(status=Reminder.Status.CANCELLED).count()
+        delivered = clinic_qs.filter(delivered_at__isnull=False).count()
+
+        trunc = TruncMonth("created_at") if period == "monthly" else TruncDate("created_at")
+        grouped_rows = (
+            clinic_qs.annotate(bucket=trunc)
+            .values("bucket")
+            .annotate(
+                total=Count("id"),
+                sent=Count("id", filter=Q(status=Reminder.Status.SENT)),
+                delivered=Count("id", filter=Q(delivered_at__isnull=False)),
+                failed=Count("id", filter=Q(status=Reminder.Status.FAILED)),
+                cancelled=Count("id", filter=Q(status=Reminder.Status.CANCELLED)),
+            )
+            .order_by("bucket")
+        )
+        grouped_map = {
+            row["bucket"].date() if hasattr(row["bucket"], "date") else row["bucket"]: row
+            for row in grouped_rows
+        }
+        by_period = []
+        for bucket_date in self._period_points(from_date, to_date, period):
+            row = grouped_map.get(bucket_date, {})
+            label = (
+                f"{bucket_date.year:04d}-{bucket_date.month:02d}"
+                if period == "monthly"
+                else bucket_date.isoformat()
+            )
+            bucket_total = int(row.get("total", 0) or 0)
+            bucket_sent = int(row.get("sent", 0) or 0)
+            bucket_delivered = int(row.get("delivered", 0) or 0)
+            bucket_failed = int(row.get("failed", 0) or 0)
+            bucket_cancelled = int(row.get("cancelled", 0) or 0)
+            by_period.append(
+                {
+                    "label": label,
+                    "total": bucket_total,
+                    "sent": bucket_sent,
+                    "delivered": bucket_delivered,
+                    "failed": bucket_failed,
+                    "cancelled": bucket_cancelled,
+                    "delivery_rate": round(
+                        (bucket_delivered / bucket_total) if bucket_total else 0.0, 4
+                    ),
+                }
+            )
+
+        payload = {
+            "kind": "reminder_analytics",
+            "clinic_id": request.user.clinic_id,
+            "period": period,
+            "from": from_date.isoformat(),
+            "to": to_date.isoformat(),
+            "filters": {
+                "channel": channel or "",
+                "provider": provider or "",
+                "type": reminder_type or "",
+            },
+            "totals": {
+                "total": total,
+                "sent": sent,
+                "delivered": delivered,
+                "failed": failed,
+                "cancelled": cancelled,
+            },
+            "rates": {
+                "delivery_rate": round((delivered / total) if total else 0.0, 4),
+                "failure_rate": round((failed / total) if total else 0.0, 4),
+            },
+            "by_period": by_period,
+        }
+        return Response(payload, status=200)
+
+    @staticmethod
+    def _period_points(from_date: date, to_date: date, period: str) -> list[date]:
+        points = []
+        if period == "monthly":
+            cursor = date(from_date.year, from_date.month, 1)
+            end = date(to_date.year, to_date.month, 1)
+            while cursor <= end:
+                points.append(cursor)
+                if cursor.month == 12:
+                    cursor = date(cursor.year + 1, 1, 1)
+                else:
+                    cursor = date(cursor.year, cursor.month + 1, 1)
+            return points
+
+        cursor = from_date
+        while cursor <= to_date:
+            points.append(cursor)
+            cursor += timedelta(days=1)
+        return points
 
 
 class ReminderPreferenceViewSet(viewsets.ModelViewSet):

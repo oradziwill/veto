@@ -5,6 +5,7 @@ import {
   AreaChart, Area, PieChart, Pie,
 } from 'recharts'
 import { invoicesAPI, servicesAPI, clientsAPI, patientsAPI, appointmentsAPI } from '../../services/api'
+import ReminderAnalyticsPanel from './ReminderAnalyticsPanel'
 import ReminderOpsHealthWidget from './ReminderOpsHealthWidget'
 import './Tabs.css'
 
@@ -197,6 +198,7 @@ const OwnerDashboardTab = () => {
     { id: 'visits', label: t('ownerDashboard.tabVisits') },
     { id: 'revenue', label: t('ownerDashboard.tabRevenue') },
     { id: 'patients', label: t('ownerDashboard.tabPatients') },
+    { id: 'reminders', label: t('ownerDashboard.tabReminders') },
   ]
 
   return (
@@ -449,6 +451,9 @@ const OwnerDashboardTab = () => {
                 </div>
               </div>
             )}
+
+            {/* ── REMINDERS ── */}
+            {activeTab === 'reminders' && <ReminderAnalyticsPanel />}
           </>
         )}
       </div>

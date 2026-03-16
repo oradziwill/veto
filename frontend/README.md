@@ -13,6 +13,7 @@ React frontend application for the Veto veterinary clinic management system.
   - **Owner Dashboard**:
     - Reminder operational health widget (consumes `GET /api/reminders/metrics/`)
     - Health state derived from queue age, queue size, and failed reminders in last 24h
+    - Reminder analytics tab with filterable delivery trend charts (`GET /api/reminders/analytics/`)
 
 ## Getting Started
 
@@ -109,6 +110,18 @@ Health state is currently marked as "needs attention" when one of these is true:
 - queued reminders >= 20
 
 You can adjust thresholds in `src/utils/reminderMetrics.js`.
+
+### Reminder Analytics Tab
+
+Owner dashboard includes a `Reminders` subtab with delivery analytics:
+
+- filters: `period`, `from`, `to`, `channel`, `provider`, `type`
+- totals: total, delivered, failed, delivery rate
+- trend charts: volume and delivery-rate trend
+
+The tab consumes:
+
+- `GET /api/reminders/analytics/?period=monthly|daily&from=YYYY-MM-DD&to=YYYY-MM-DD`
 
 ## Frontend Checks
 

@@ -131,6 +131,7 @@ export const queueAPI = {
 
 export const remindersAPI = {
   metrics: () => api.get("/reminders/metrics/"),
+  analytics: (params) => api.get("/reminders/analytics/", { params }),
 };
 
 export const patientHistoryAPI = {
