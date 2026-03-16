@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     ReminderPreferenceViewSet,
+    ReminderProviderConfigViewSet,
     ReminderTemplateViewSet,
     ReminderViewSet,
     ReminderWebhookView,
@@ -11,6 +12,11 @@ from .views import (
 router = DefaultRouter()
 router.register(r"reminders", ReminderViewSet, basename="reminders")
 router.register(r"reminder-preferences", ReminderPreferenceViewSet, basename="reminder-preferences")
+router.register(
+    r"reminder-provider-configs",
+    ReminderProviderConfigViewSet,
+    basename="reminder-provider-configs",
+)
 router.register(r"reminder-templates", ReminderTemplateViewSet, basename="reminder-templates")
 
 urlpatterns = [

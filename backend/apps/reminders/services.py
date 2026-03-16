@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from django.conf import settings
 from django.utils import timezone
 
-from .models import Reminder, ReminderPreference, ReminderTemplate
+from .models import Reminder, ReminderPreference, ReminderProviderConfig, ReminderTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def send_reminder(reminder: Reminder) -> tuple[str, str]:
 def _send_email(reminder: Reminder) -> tuple[str, str]:
     if not reminder.recipient:
         raise ValueError("Cannot send email reminder without recipient.")
-    provider = str(getattr(settings, "REMINDER_EMAIL_PROVIDER", "internal")).lower()
+    provider = resolve_email_provider(clinic_id=reminder.clinic_id)
     reminder.provider = (
         Reminder.Provider.SENDGRID
         if provider == Reminder.Provider.SENDGRID
@@ -55,7 +55,7 @@ def _send_email(reminder: Reminder) -> tuple[str, str]:
 def _send_sms(reminder: Reminder) -> tuple[str, str]:
     if not reminder.recipient:
         raise ValueError("Cannot send SMS reminder without recipient.")
-    provider = str(getattr(settings, "REMINDER_SMS_PROVIDER", "internal")).lower()
+    provider = resolve_sms_provider(clinic_id=reminder.clinic_id)
     reminder.provider = (
         Reminder.Provider.TWILIO
         if provider == Reminder.Provider.TWILIO
@@ -215,6 +215,28 @@ def render_reminder_content(
         render_message_template(fallback_subject, context),
         render_message_template(fallback_body, context),
     )
+
+
+def resolve_email_provider(*, clinic_id: int | None) -> str:
+    if clinic_id:
+        config = (
+            ReminderProviderConfig.objects.filter(clinic_id=clinic_id)
+            .only("email_provider")
+            .first()
+        )
+        if config:
+            return str(config.email_provider).lower()
+    return str(getattr(settings, "REMINDER_EMAIL_PROVIDER", "internal")).lower()
+
+
+def resolve_sms_provider(*, clinic_id: int | None) -> str:
+    if clinic_id:
+        config = (
+            ReminderProviderConfig.objects.filter(clinic_id=clinic_id).only("sms_provider").first()
+        )
+        if config:
+            return str(config.sms_provider).lower()
+    return str(getattr(settings, "REMINDER_SMS_PROVIDER", "internal")).lower()
 
 
 def _send_via_sendgrid(reminder: Reminder) -> tuple[str, str]:

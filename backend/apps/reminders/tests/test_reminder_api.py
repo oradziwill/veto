@@ -11,7 +11,7 @@ from apps.accounts.models import User
 from apps.billing.models import Invoice
 from apps.clients.models import Client, ClientClinic
 from apps.patients.models import Patient
-from apps.reminders.models import Reminder
+from apps.reminders.models import Reminder, ReminderProviderConfig
 from apps.tenancy.models import Clinic
 
 
@@ -286,3 +286,93 @@ def test_reminder_preferences_write_requires_admin(
         format="json",
     )
     assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_reminder_provider_configs_permissions_and_clinic_scoped(
+    api_client, clinic_admin, receptionist, clinic, settings
+):
+    settings.REMINDER_SENDGRID_API_KEY = "sg-key"
+    settings.REMINDER_SENDGRID_FROM_EMAIL = "noreply@example.com"
+    settings.REMINDER_SENDGRID_WEBHOOK_SECRET = "sg-secret"
+
+    api_client.force_authenticate(user=clinic_admin)
+    create = api_client.post(
+        "/api/reminder-provider-configs/",
+        {"email_provider": "sendgrid", "sms_provider": "internal"},
+        format="json",
+    )
+    assert create.status_code == 201
+    config_id = create.data["id"]
+
+    api_client.force_authenticate(user=receptionist)
+    list_response = api_client.get("/api/reminder-provider-configs/")
+    assert list_response.status_code == 200
+    assert [row["id"] for row in list_response.data] == [config_id]
+
+    forbidden = api_client.post(
+        "/api/reminder-provider-configs/",
+        {"email_provider": "internal", "sms_provider": "twilio"},
+        format="json",
+    )
+    assert forbidden.status_code == 403
+
+    other_clinic = Clinic.objects.create(
+        name="Clinic C",
+        address="Street 3",
+        phone="+48333333333",
+        email="c@example.com",
+    )
+    other_admin = User.objects.create_user(
+        username="other_admin_provider_cfg",
+        password="pass",
+        clinic=other_clinic,
+        role=User.Role.ADMIN,
+        is_staff=True,
+    )
+    other_config = ReminderProviderConfig.objects.create(
+        clinic=other_clinic,
+        email_provider=ReminderProviderConfig.EmailProvider.INTERNAL,
+        sms_provider=ReminderProviderConfig.SmsProvider.INTERNAL,
+        updated_by=other_admin,
+    )
+    list_response = api_client.get("/api/reminder-provider-configs/")
+    returned_ids = {row["id"] for row in list_response.data}
+    assert config_id in returned_ids
+    assert other_config.id not in returned_ids
+
+
+@pytest.mark.django_db
+def test_reminder_provider_configs_validate_external_provider_requirements(
+    api_client, clinic_admin, settings
+):
+    settings.REMINDER_SENDGRID_API_KEY = ""
+    settings.REMINDER_SENDGRID_FROM_EMAIL = ""
+    settings.REMINDER_SENDGRID_WEBHOOK_SECRET = ""
+
+    api_client.force_authenticate(user=clinic_admin)
+    invalid = api_client.post(
+        "/api/reminder-provider-configs/",
+        {"email_provider": "sendgrid", "sms_provider": "internal"},
+        format="json",
+    )
+    assert invalid.status_code == 400
+    assert invalid.data["code"] == "validation_error"
+    assert "REMINDER_SENDGRID_API_KEY" in invalid.data["details"]["missing_settings"]
+
+    settings.REMINDER_SENDGRID_API_KEY = "sg-key"
+    settings.REMINDER_SENDGRID_FROM_EMAIL = "noreply@example.com"
+    settings.REMINDER_SENDGRID_WEBHOOK_SECRET = "sg-secret"
+    settings.REMINDER_TWILIO_ACCOUNT_SID = "AC123"
+    settings.REMINDER_TWILIO_AUTH_TOKEN = "auth"
+    settings.REMINDER_TWILIO_FROM_NUMBER = "+48111111111"
+    settings.REMINDER_TWILIO_WEBHOOK_SECRET = "tw-secret"
+
+    valid = api_client.post(
+        "/api/reminder-provider-configs/",
+        {"email_provider": "sendgrid", "sms_provider": "twilio"},
+        format="json",
+    )
+    assert valid.status_code == 201
+    assert valid.data["email_provider"] == "sendgrid"
+    assert valid.data["sms_provider"] == "twilio"

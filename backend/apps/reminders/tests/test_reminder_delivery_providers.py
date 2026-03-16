@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.billing.models import Invoice
 from apps.reminders import services
-from apps.reminders.models import Reminder
+from apps.reminders.models import Reminder, ReminderProviderConfig
 
 
 class _FakeResponse:
@@ -131,3 +131,44 @@ def test_sendgrid_http_error_raises_validation(
     monkeypatch.setattr(services.request, "urlopen", _fake_urlopen)
     with pytest.raises(ValueError):
         services.send_reminder(reminder)
+
+
+@pytest.mark.django_db
+def test_clinic_provider_config_overrides_global_provider(
+    clinic, patient, client_with_membership, monkeypatch, settings
+):
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        recipient="owner@example.com",
+        subject="Invoice reminder",
+        body="Please pay",
+        scheduled_for=timezone.now(),
+    )
+    ReminderProviderConfig.objects.create(
+        clinic=clinic,
+        email_provider=ReminderProviderConfig.EmailProvider.SENDGRID,
+        sms_provider=ReminderProviderConfig.SmsProvider.INTERNAL,
+    )
+    settings.REMINDER_EMAIL_PROVIDER = "internal"
+    settings.REMINDER_SENDGRID_API_KEY = "sg-key"
+    settings.REMINDER_SENDGRID_FROM_EMAIL = "noreply@example.com"
+
+    def _fake_urlopen(_req, timeout=15):
+        return _FakeResponse(status=202, headers={"X-Message-Id": "sg-msg-override"})
+
+    monkeypatch.setattr(services.request, "urlopen", _fake_urlopen)
+    message_id, provider_status = services.send_reminder(reminder)
+    assert message_id == "sg-msg-override"
+    assert provider_status == "accepted"
+    assert reminder.provider == Reminder.Provider.SENDGRID

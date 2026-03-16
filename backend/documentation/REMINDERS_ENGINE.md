@@ -7,6 +7,7 @@ This document describes the reminder pipeline for appointments, vaccinations, an
 - Reminder queue model (`apps.reminders.models.Reminder`)
 - Read/resend API (`/api/reminders/`)
 - Consent/preferences API (`/api/reminder-preferences/`)
+- Provider config API (`/api/reminder-provider-configs/`)
 - Template API and preview (`/api/reminder-templates/`, `/api/reminder-templates/preview/`)
 - Queue hydration command (`enqueue_reminders`)
 - Delivery processing command (`process_reminders`)
@@ -96,6 +97,22 @@ Preview accepts either:
 - inline `subject_template` + `body_template`
 
 Missing placeholders render as empty strings so preview is non-blocking.
+
+### Reminder provider config
+
+`GET/POST/PATCH /api/reminder-provider-configs/`
+
+Stores clinic-level delivery provider selection:
+
+- `email_provider`: `internal|sendgrid`
+- `sms_provider`: `internal|twilio`
+
+Write access is admin-only. When enabling external providers, API validates runtime prerequisites:
+
+- SendGrid: `REMINDER_SENDGRID_API_KEY`, `REMINDER_SENDGRID_FROM_EMAIL`, `REMINDER_SENDGRID_WEBHOOK_SECRET`
+- Twilio: `REMINDER_TWILIO_ACCOUNT_SID`, `REMINDER_TWILIO_AUTH_TOKEN`, `REMINDER_TWILIO_FROM_NUMBER`, `REMINDER_TWILIO_WEBHOOK_SECRET`
+
+Delivery resolution uses clinic config when present, otherwise falls back to global environment provider settings.
 
 ### Provider webhook callback
 
@@ -209,4 +226,5 @@ Run targeted tests:
 pytest apps/reminders/tests/test_reminder_commands.py -v
 pytest apps/reminders/tests/test_reminder_api.py -v
 pytest apps/reminders/tests/test_reminder_templates.py -v
+pytest apps/reminders/tests/test_reminder_delivery_providers.py -v
 ```
