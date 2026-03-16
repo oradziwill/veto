@@ -213,6 +213,12 @@ def test_reminder_metrics_clinic_scoped(
 
 
 @pytest.mark.django_db
+def test_reminder_metrics_requires_authentication(api_client):
+    response = api_client.get("/api/reminders/metrics/")
+    assert response.status_code == 401
+
+
+@pytest.mark.django_db
 def test_reminder_preferences_crud_clinic_scoped(
     api_client, receptionist, clinic_admin, clinic, client_with_membership
 ):

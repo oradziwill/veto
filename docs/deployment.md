@@ -173,7 +173,15 @@ Reminder provider runtime variables are split into:
 - plain ECS env vars: provider selectors and non-secret sender metadata
 - ECS secret env vars: provider credentials/tokens/signing secrets
 
-Deploy workflow smoke checks now fail fast if required backend secret injections are missing.
+Deploy workflow smoke checks are provider-aware:
+
+- always required: core backend secrets (`SECRET_KEY`, `RDS_PASSWORD`, `CORS_ALLOWED_ORIGINS`, `OPENAI_API_KEY`)
+- if `REMINDER_EMAIL_PROVIDER=sendgrid`: requires sendgrid secret injections and `REMINDER_SENDGRID_FROM_EMAIL` env
+- if `REMINDER_SMS_PROVIDER=twilio`: requires twilio secret injections and `REMINDER_TWILIO_FROM_NUMBER` env
+
+Post-deploy smoke checks also validate reminder metrics endpoint availability and auth behavior:
+
+- `GET /api/reminders/metrics/` must return `401` or `403` without credentials (route exists and is protected)
 
 ---
 

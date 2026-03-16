@@ -20,6 +20,10 @@ backend_task_memory = 1024
 frontend_task_cpu    = 256
 frontend_task_memory = 512
 
+# Reminder providers (guardrails + smoke checks are provider-aware)
+reminder_email_provider = "internal"
+reminder_sms_provider   = "internal"
+
 # Sensitive values — pass via environment variables at apply time:
 #   export TF_VAR_db_password="..."
 #   export TF_VAR_django_secret_key="..."
