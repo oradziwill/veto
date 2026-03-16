@@ -202,6 +202,11 @@ jobs:
           SMS_PROVIDER="${BACKEND_ENV_MAP[REMINDER_SMS_PROVIDER]:-internal}"
 
           if [[ "$EMAIL_PROVIDER" == "sendgrid" ]]; then
+            SENDGRID_FROM_EMAIL="${BACKEND_ENV_MAP[REMINDER_SENDGRID_FROM_EMAIL]:-}"
+            if [[ -z "$SENDGRID_FROM_EMAIL" ]]; then
+              echo "Missing required backend env injection for sendgrid: REMINDER_SENDGRID_FROM_EMAIL"
+              exit 1
+            fi
             REQUIRED_SECRET_NAMES+=(
               REMINDER_SENDGRID_API_KEY
               REMINDER_SENDGRID_WEBHOOK_SECRET
@@ -209,6 +214,11 @@ jobs:
           fi
 
           if [[ "$SMS_PROVIDER" == "twilio" ]]; then
+            TWILIO_FROM_NUMBER="${BACKEND_ENV_MAP[REMINDER_TWILIO_FROM_NUMBER]:-}"
+            if [[ -z "$TWILIO_FROM_NUMBER" ]]; then
+              echo "Missing required backend env injection for twilio: REMINDER_TWILIO_FROM_NUMBER"
+              exit 1
+            fi
             REQUIRED_SECRET_NAMES+=(
               REMINDER_TWILIO_ACCOUNT_SID
               REMINDER_TWILIO_AUTH_TOKEN
@@ -233,3 +243,6 @@ jobs:
 
           STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$ALB_DNS/api/clients/")
           test "$STATUS" = "401" -o "$STATUS" = "403"
+
+          METRICS_STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$ALB_DNS/api/reminders/metrics/")
+          test "$METRICS_STATUS" = "401" -o "$METRICS_STATUS" = "403"

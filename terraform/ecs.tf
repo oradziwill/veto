@@ -55,18 +55,26 @@ resource "aws_ecs_task_definition" "backend" {
       { name = "SECURE_SSL_REDIRECT", value = "False" },
     ]
 
-    secrets = [
-      { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.django_secret_key.arn },
-      { name = "RDS_PASSWORD", valueFrom = aws_secretsmanager_secret.db_password.arn },
-      { name = "CORS_ALLOWED_ORIGINS", valueFrom = aws_secretsmanager_secret.cors_allowed_origins.arn },
-      { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.openai_api_key.arn },
-      { name = "REMINDER_SENDGRID_API_KEY", valueFrom = aws_secretsmanager_secret.reminder_sendgrid_api_key.arn },
-      { name = "REMINDER_SENDGRID_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.reminder_sendgrid_webhook_secret.arn },
-      { name = "REMINDER_TWILIO_ACCOUNT_SID", valueFrom = aws_secretsmanager_secret.reminder_twilio_account_sid.arn },
-      { name = "REMINDER_TWILIO_AUTH_TOKEN", valueFrom = aws_secretsmanager_secret.reminder_twilio_auth_token.arn },
-      { name = "REMINDER_TWILIO_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.reminder_twilio_webhook_secret.arn },
-      { name = "REMINDER_WEBHOOK_TOKEN", valueFrom = aws_secretsmanager_secret.reminder_webhook_token.arn },
-    ]
+    secrets = concat(
+      [
+        { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.django_secret_key.arn },
+        { name = "RDS_PASSWORD", valueFrom = aws_secretsmanager_secret.db_password.arn },
+        { name = "CORS_ALLOWED_ORIGINS", valueFrom = aws_secretsmanager_secret.cors_allowed_origins.arn },
+        { name = "OPENAI_API_KEY", valueFrom = aws_secretsmanager_secret.openai_api_key.arn },
+      ],
+      var.reminder_email_provider == "sendgrid" ? [
+        { name = "REMINDER_SENDGRID_API_KEY", valueFrom = aws_secretsmanager_secret.reminder_sendgrid_api_key.arn },
+        { name = "REMINDER_SENDGRID_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.reminder_sendgrid_webhook_secret.arn },
+      ] : [],
+      var.reminder_sms_provider == "twilio" ? [
+        { name = "REMINDER_TWILIO_ACCOUNT_SID", valueFrom = aws_secretsmanager_secret.reminder_twilio_account_sid.arn },
+        { name = "REMINDER_TWILIO_AUTH_TOKEN", valueFrom = aws_secretsmanager_secret.reminder_twilio_auth_token.arn },
+        { name = "REMINDER_TWILIO_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.reminder_twilio_webhook_secret.arn },
+      ] : [],
+      length(trimspace(var.reminder_webhook_token)) > 0 ? [
+        { name = "REMINDER_WEBHOOK_TOKEN", valueFrom = aws_secretsmanager_secret.reminder_webhook_token.arn },
+      ] : [],
+    )
 
     logConfiguration = {
       logDriver = "awslogs"
