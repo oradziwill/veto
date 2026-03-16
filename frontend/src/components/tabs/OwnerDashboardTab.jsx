@@ -5,6 +5,7 @@ import {
   AreaChart, Area, PieChart, Pie,
 } from 'recharts'
 import { invoicesAPI, servicesAPI, clientsAPI, patientsAPI, appointmentsAPI } from '../../services/api'
+import ReminderOpsHealthWidget from './ReminderOpsHealthWidget'
 import './Tabs.css'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -218,6 +219,7 @@ const OwnerDashboardTab = () => {
             {/* ── OVERVIEW ── */}
             {activeTab === 'overview' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <ReminderOpsHealthWidget />
                 <div>
                   <div style={SEC_LABEL}>{t('ownerDashboard.sectionClinic')}</div>
                   <div className="inventory-stats">

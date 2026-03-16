@@ -498,6 +498,24 @@
     "paid": "Zapłacone",
     "newPatients": "Nowi pacjenci",
     "newClients": "Nowi właściciele",
+    "reminderOps": {
+      "title": "Stan operacyjny przypomnień",
+      "loadError": "Nie udało się załadować metryk przypomnień.",
+      "queued": "W kolejce",
+      "failed": "Nieudane",
+      "failedLast24h": "Nieudane (24h)",
+      "oldestQueuedAge": "Najstarsze oczekiwanie",
+      "state": {
+        "healthy": "Zdrowy",
+        "degraded": "Wymaga uwagi",
+        "unknown": "Nieznany"
+      },
+      "providers": {
+        "internal": "Wewnętrzny",
+        "sendgrid": "SendGrid",
+        "twilio": "Twilio"
+      }
+    },
     "apptStatus": {
       "scheduled": "Zaplanowana",
       "confirmed": "Potwierdzona",
