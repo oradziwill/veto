@@ -9,11 +9,19 @@ from urllib import error, parse, request
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
+from django.core import signing
 from django.utils import timezone
 
-from .models import Reminder, ReminderPreference, ReminderProviderConfig, ReminderTemplate
+from .models import (
+    Reminder,
+    ReminderPortalActionToken,
+    ReminderPreference,
+    ReminderProviderConfig,
+    ReminderTemplate,
+)
 
 logger = logging.getLogger(__name__)
+PORTAL_SIGNING_SALT = "reminders.portal_action.v1"
 
 
 class _SafeTemplateDict(dict):
@@ -175,6 +183,9 @@ def build_reminder_context(
     appointment_start: str = "",
     vaccine_name: str = "",
     invoice_number: str = "",
+    confirm_url: str = "",
+    cancel_url: str = "",
+    reschedule_url: str = "",
 ) -> dict[str, str]:
     return {
         "clinic_name": clinic_name,
@@ -184,6 +195,9 @@ def build_reminder_context(
         "appointment_start": appointment_start,
         "vaccine_name": vaccine_name,
         "invoice_number": invoice_number,
+        "confirm_url": confirm_url,
+        "cancel_url": cancel_url,
+        "reschedule_url": reschedule_url,
     }
 
 
@@ -254,6 +268,55 @@ def parse_reply_intent(text: str) -> str:
     }:
         return "reschedule"
     return "unknown"
+
+
+def generate_portal_action_token(reminder: Reminder, action: str) -> str:
+    ttl_hours = int(str(getattr(settings, "REMINDER_PORTAL_TOKEN_TTL_HOURS", "72")).strip() or "72")
+    expires_at = timezone.now() + timedelta(hours=max(1, ttl_hours))
+    token_row = ReminderPortalActionToken.objects.create(
+        clinic_id=reminder.clinic_id,
+        reminder_id=reminder.id,
+        action=action,
+        expires_at=expires_at,
+    )
+    payload = {
+        "tid": str(token_row.token_id),
+        "rid": reminder.id,
+        "act": action,
+    }
+    return signing.dumps(payload, salt=PORTAL_SIGNING_SALT)
+
+
+def decode_portal_action_token(token: str) -> dict[str, str] | None:
+    ttl_hours = int(str(getattr(settings, "REMINDER_PORTAL_TOKEN_TTL_HOURS", "72")).strip() or "72")
+    try:
+        payload = signing.loads(token, salt=PORTAL_SIGNING_SALT, max_age=max(1, ttl_hours) * 3600)
+    except signing.BadSignature:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return {
+        "tid": str(payload.get("tid", "")),
+        "rid": str(payload.get("rid", "")),
+        "act": str(payload.get("act", "")),
+    }
+
+
+def build_portal_action_urls(reminder: Reminder) -> dict[str, str]:
+    base_url = str(getattr(settings, "REMINDER_PORTAL_BASE_URL", "")).strip().rstrip("/")
+    if not base_url or reminder.reminder_type != Reminder.ReminderType.APPOINTMENT:
+        return {"confirm_url": "", "cancel_url": "", "reschedule_url": ""}
+
+    confirm_token = generate_portal_action_token(reminder, ReminderPortalActionToken.Action.CONFIRM)
+    cancel_token = generate_portal_action_token(reminder, ReminderPortalActionToken.Action.CANCEL)
+    reschedule_token = generate_portal_action_token(
+        reminder, ReminderPortalActionToken.Action.RESCHEDULE_REQUEST
+    )
+    return {
+        "confirm_url": f"{base_url}/api/reminders/portal/{confirm_token}/",
+        "cancel_url": f"{base_url}/api/reminders/portal/{cancel_token}/",
+        "reschedule_url": f"{base_url}/api/reminders/portal/{reschedule_token}/",
+    }
 
 
 def resolve_email_provider(*, clinic_id: int | None) -> str:

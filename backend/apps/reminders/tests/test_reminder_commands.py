@@ -11,7 +11,12 @@ from apps.billing.models import Invoice
 from apps.clients.models import Client, ClientClinic
 from apps.medical.models import Vaccination
 from apps.patients.models import Patient
-from apps.reminders.models import Reminder, ReminderPreference
+from apps.reminders.models import (
+    Reminder,
+    ReminderPortalActionToken,
+    ReminderPreference,
+    ReminderTemplate,
+)
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
 
@@ -269,3 +274,35 @@ def test_process_reminders_defers_when_quiet_hours(clinic, patient, client_with_
     reminder.refresh_from_db()
     assert reminder.status == Reminder.Status.DEFERRED
     assert reminder.scheduled_for > now
+
+
+@pytest.mark.django_db
+def test_enqueue_appointments_includes_portal_links_in_template(clinic, patient, doctor, settings):
+    settings.REMINDER_PORTAL_BASE_URL = "https://portal.example.com"
+    now = timezone.now()
+    Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(hours=2),
+        ends_at=now + timedelta(hours=2, minutes=30),
+        status=Appointment.Status.SCHEDULED,
+    )
+    ReminderTemplate.objects.create(
+        clinic=clinic,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        locale=ReminderTemplate.Locale.EN,
+        subject_template="Confirm your visit",
+        body_template=(
+            "Confirm: {confirm_url}\nCancel: {cancel_url}\nReschedule: {reschedule_url}"
+        ),
+        is_active=True,
+    )
+
+    call_command("enqueue_reminders", appointment_hours=24)
+
+    reminder = Reminder.objects.filter(reminder_type=Reminder.ReminderType.APPOINTMENT).first()
+    assert reminder is not None
+    assert "https://portal.example.com/api/reminders/portal/" in reminder.body
+    assert ReminderPortalActionToken.objects.filter(reminder=reminder).count() == 3

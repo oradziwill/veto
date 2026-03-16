@@ -11,7 +11,13 @@ from apps.accounts.models import User
 from apps.billing.models import Invoice
 from apps.clients.models import Client, ClientClinic
 from apps.patients.models import Patient
-from apps.reminders.models import Reminder, ReminderInboundReply, ReminderProviderConfig
+from apps.reminders.models import (
+    Reminder,
+    ReminderInboundReply,
+    ReminderPortalActionToken,
+    ReminderProviderConfig,
+)
+from apps.reminders.services import generate_portal_action_token
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
 
@@ -781,6 +787,82 @@ def test_reminder_replies_list_requires_auth_and_is_clinic_scoped(
     returned_ids = {row["id"] for row in scoped.data}
     assert own_reply.id in returned_ids
     assert len(returned_ids) == 1
+
+
+@pytest.mark.django_db
+def test_portal_action_confirm_preview_and_execute(api_client, clinic, patient, doctor):
+    now = timezone.now()
+    appointment = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(days=1),
+        ends_at=now + timedelta(days=1, minutes=30),
+        status=Appointment.Status.SCHEDULED,
+        reason="Portal confirm",
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.INTERNAL,
+        provider_message_id="portal-msg-1",
+        recipient="owner@example.com",
+        scheduled_for=now,
+        status=Reminder.Status.SENT,
+    )
+    token = generate_portal_action_token(reminder, ReminderPortalActionToken.Action.CONFIRM)
+
+    preview = api_client.get(f"/api/reminders/portal/{token}/")
+    assert preview.status_code == 200
+    assert preview.data["token_action"] == ReminderPortalActionToken.Action.CONFIRM
+    assert preview.data["appointment"]["status"] == Appointment.Status.SCHEDULED
+
+    execute = api_client.post(f"/api/reminders/portal/{token}/", {}, format="json")
+    assert execute.status_code == 200
+    assert execute.data["action_status"] == "applied"
+    appointment.refresh_from_db()
+    assert appointment.status == Appointment.Status.CONFIRMED
+
+    reused = api_client.post(f"/api/reminders/portal/{token}/", {}, format="json")
+    assert reused.status_code == 410
+
+
+@pytest.mark.django_db
+def test_portal_action_expired_token_returns_410(api_client, clinic, patient, doctor):
+    now = timezone.now()
+    appointment = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=doctor,
+        starts_at=now + timedelta(days=2),
+        ends_at=now + timedelta(days=2, minutes=30),
+        status=Appointment.Status.SCHEDULED,
+        reason="Portal expired",
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        appointment=appointment,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.INTERNAL,
+        provider_message_id="portal-msg-2",
+        recipient="owner@example.com",
+        scheduled_for=now,
+        status=Reminder.Status.SENT,
+    )
+    token = generate_portal_action_token(
+        reminder, ReminderPortalActionToken.Action.RESCHEDULE_REQUEST
+    )
+    token_row = ReminderPortalActionToken.objects.get(reminder=reminder)
+    token_row.expires_at = now - timedelta(minutes=1)
+    token_row.save(update_fields=["expires_at", "updated_at"])
+
+    expired = api_client.post(f"/api/reminders/portal/{token}/", {}, format="json")
+    assert expired.status_code == 410
 
 
 @pytest.mark.django_db

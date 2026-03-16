@@ -53,6 +53,9 @@ Supported placeholders:
 - `{due_date}`
 - `{vaccine_name}`
 - `{invoice_number}`
+- `{confirm_url}` (appointment reminders, when portal base URL configured)
+- `{cancel_url}` (appointment reminders, when portal base URL configured)
+- `{reschedule_url}` (appointment reminders, when portal base URL configured)
 
 ## API
 
@@ -146,6 +149,28 @@ Behavior:
 
 Clinic-scoped staff endpoint with unresolved items by default (`action_status=needs_review`).
 Use `?action_status=` to inspect all reply outcomes (`applied`, `needs_review`, `ignored`).
+
+### Owner portal action links
+
+`GET/POST /api/reminders/portal/<token>/`
+
+Tokenized, unauthenticated owner action endpoint for reminder self-service:
+
+- `confirm`
+- `cancel`
+- `reschedule_request`
+
+Token behavior:
+
+- signed payload with expiry (`REMINDER_PORTAL_TOKEN_TTL_HOURS`)
+- database-backed one-time usage guard (`used_at`)
+- strict action/reminder binding
+
+Execution rules:
+
+- `confirm` / `cancel`: update linked appointment if transition is valid
+- `reschedule_request`: creates unresolved staff follow-up item
+- each execution writes reminder event audit payload (`source=owner_portal`)
 
 ### Resend reminder (admin only)
 
@@ -281,6 +306,8 @@ Configure in environment:
 - `REMINDER_TWILIO_ACCOUNT_SID`, `REMINDER_TWILIO_AUTH_TOKEN`, `REMINDER_TWILIO_FROM_NUMBER`
 - `REMINDER_TWILIO_STATUS_CALLBACK_URL` (optional)
 - `REMINDER_SENDGRID_WEBHOOK_SECRET` and/or `REMINDER_TWILIO_WEBHOOK_SECRET`
+- `REMINDER_PORTAL_BASE_URL` (e.g. frontend/base host for link generation)
+- `REMINDER_PORTAL_TOKEN_TTL_HOURS` (default `72`)
 
 Webhook signature verification supports HMAC SHA256 with:
 

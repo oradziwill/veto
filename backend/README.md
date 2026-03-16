@@ -111,6 +111,8 @@ Admin: http://localhost:8000/admin/
 | `REMINDER_TWILIO_FROM_NUMBER` | With Twilio | Twilio sender phone number |
 | `REMINDER_TWILIO_STATUS_CALLBACK_URL` | No | Optional Twilio status callback URL |
 | `REMINDER_TWILIO_WEBHOOK_SECRET` | Recommended | HMAC secret for Twilio webhook signature |
+| `REMINDER_PORTAL_BASE_URL` | Optional | Base URL used to generate owner self-service action links in reminders |
+| `REMINDER_PORTAL_TOKEN_TTL_HOURS` | No | Expiry window for owner portal action tokens (default `72`) |
 
 Create `.env` in project root or `backend/` and add variables as needed.
 
@@ -234,6 +236,7 @@ API errors use a standardized envelope:
 | GET | `/api/reminders/experiment-attribution/` | Admin-only appointment reminder A/B attribution. Filters: `?from=YYYY-MM-DD`, `?to=YYYY-MM-DD`, `?channel=`, `?provider=`, `?minimum_sample_size=` |
 | GET | `/api/reminder-replies/` | Staff queue of inbound reminder replies (default: unresolved only). Filter: `?action_status=` |
 | POST | `/api/reminders/replies/<provider>/` | Public webhook for inbound owner replies (`YES/NO/RESCHEDULE`) with idempotent processing |
+| GET/POST | `/api/reminders/portal/<token>/` | Public owner portal token preview/execute endpoint for `confirm`, `cancel`, `reschedule_request` |
 | POST | `/api/reminders/<id>/resend/` | Re-queue reminder for retry (clinic admin only) |
 | GET/POST/PATCH | `/api/reminder-preferences/` | Client consent/channel preferences, locale (`en/pl`), and quiet-hours settings |
 | GET/POST/PATCH | `/api/reminder-provider-configs/` | Clinic-scoped reminder provider config (staff read, admin write). Validates external provider prerequisites |

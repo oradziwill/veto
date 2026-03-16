@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -231,6 +233,44 @@ class ReminderInboundReply(models.Model):
         return (
             f"ReminderInboundReply(reminder={self.reminder_id}, provider={self.provider}, "
             f"intent={self.normalized_intent})"
+        )
+
+
+class ReminderPortalActionToken(models.Model):
+    class Action(models.TextChoices):
+        CONFIRM = "confirm", "Confirm"
+        CANCEL = "cancel", "Cancel"
+        RESCHEDULE_REQUEST = "reschedule_request", "Reschedule request"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="reminder_portal_tokens",
+    )
+    reminder = models.ForeignKey(
+        Reminder,
+        on_delete=models.CASCADE,
+        related_name="portal_tokens",
+    )
+    action = models.CharField(max_length=24, choices=Action.choices)
+    token_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    used_payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["clinic", "action", "expires_at"]),
+            models.Index(fields=["reminder", "action"]),
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return (
+            f"ReminderPortalActionToken(reminder={self.reminder_id}, action={self.action}, "
+            f"used={self.used_at is not None})"
         )
 
 
