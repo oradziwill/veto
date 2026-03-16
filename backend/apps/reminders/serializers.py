@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from django.conf import settings
 from rest_framework import serializers
 
 from apps.clients.models import ClientClinic
 
-from .models import Reminder, ReminderPreference, ReminderTemplate, ReminderTemplateVersion
+from .models import (
+    Reminder,
+    ReminderPreference,
+    ReminderProviderConfig,
+    ReminderTemplate,
+    ReminderTemplateVersion,
+)
 
 
 class ReminderReadSerializer(serializers.ModelSerializer):
@@ -155,3 +162,62 @@ class ReminderTemplatePreviewSerializer(serializers.Serializer):
     subject_template = serializers.CharField(required=False, allow_blank=True, default="")
     body_template = serializers.CharField(required=False, allow_blank=True, default="")
     context = serializers.DictField(required=False, default=dict)
+
+
+class ReminderProviderConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReminderProviderConfig
+        fields = [
+            "id",
+            "clinic",
+            "email_provider",
+            "sms_provider",
+            "updated_by",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["clinic", "updated_by", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        email_provider = attrs.get(
+            "email_provider",
+            getattr(instance, "email_provider", ReminderProviderConfig.EmailProvider.INTERNAL),
+        )
+        sms_provider = attrs.get(
+            "sms_provider",
+            getattr(instance, "sms_provider", ReminderProviderConfig.SmsProvider.INTERNAL),
+        )
+
+        missing_requirements = []
+        if email_provider == ReminderProviderConfig.EmailProvider.SENDGRID:
+            if not self._setting("REMINDER_SENDGRID_API_KEY"):
+                missing_requirements.append("REMINDER_SENDGRID_API_KEY")
+            if not self._setting("REMINDER_SENDGRID_FROM_EMAIL"):
+                missing_requirements.append("REMINDER_SENDGRID_FROM_EMAIL")
+            if not self._setting("REMINDER_SENDGRID_WEBHOOK_SECRET"):
+                missing_requirements.append("REMINDER_SENDGRID_WEBHOOK_SECRET")
+
+        if sms_provider == ReminderProviderConfig.SmsProvider.TWILIO:
+            if not self._setting("REMINDER_TWILIO_ACCOUNT_SID"):
+                missing_requirements.append("REMINDER_TWILIO_ACCOUNT_SID")
+            if not self._setting("REMINDER_TWILIO_AUTH_TOKEN"):
+                missing_requirements.append("REMINDER_TWILIO_AUTH_TOKEN")
+            if not self._setting("REMINDER_TWILIO_FROM_NUMBER"):
+                missing_requirements.append("REMINDER_TWILIO_FROM_NUMBER")
+            if not self._setting("REMINDER_TWILIO_WEBHOOK_SECRET"):
+                missing_requirements.append("REMINDER_TWILIO_WEBHOOK_SECRET")
+
+        if missing_requirements:
+            raise serializers.ValidationError(
+                {
+                    "code": "provider_requirements_missing",
+                    "missing_settings": sorted(set(missing_requirements)),
+                    "detail": "Cannot enable external provider without required runtime settings.",
+                }
+            )
+        return attrs
+
+    @staticmethod
+    def _setting(name: str) -> str:
+        return str(getattr(settings, name, "")).strip()

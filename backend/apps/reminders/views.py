@@ -17,11 +17,13 @@ from .models import (
     Reminder,
     ReminderEvent,
     ReminderPreference,
+    ReminderProviderConfig,
     ReminderTemplate,
     ReminderTemplateVersion,
 )
 from .serializers import (
     ReminderPreferenceSerializer,
+    ReminderProviderConfigSerializer,
     ReminderReadSerializer,
     ReminderTemplatePreviewSerializer,
     ReminderTemplateSerializer,
@@ -179,6 +181,27 @@ class ReminderTemplateViewSet(viewsets.ModelViewSet):
             body_template=template.body_template,
             changed_by=changed_by,
         )
+
+
+class ReminderProviderConfigViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    serializer_class = ReminderProviderConfigSerializer
+
+    def get_queryset(self):
+        return ReminderProviderConfig.objects.filter(clinic_id=self.request.user.clinic_id)
+
+    def get_permissions(self):
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            permission_classes = [IsAuthenticated, HasClinic, IsClinicAdmin]
+        else:
+            permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+        return [permission() for permission in permission_classes]
+
+    def perform_create(self, serializer):
+        serializer.save(clinic_id=self.request.user.clinic_id, updated_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(clinic_id=self.request.user.clinic_id, updated_by=self.request.user)
 
 
 class ReminderWebhookView(APIView):

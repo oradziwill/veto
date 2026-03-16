@@ -241,3 +241,47 @@ class ReminderTemplateVersion(models.Model):
 
     def __str__(self) -> str:
         return f"ReminderTemplateVersion(template={self.template_id}, version={self.version})"
+
+
+class ReminderProviderConfig(models.Model):
+    class EmailProvider(models.TextChoices):
+        INTERNAL = "internal", "Internal"
+        SENDGRID = "sendgrid", "SendGrid"
+
+    class SmsProvider(models.TextChoices):
+        INTERNAL = "internal", "Internal"
+        TWILIO = "twilio", "Twilio"
+
+    clinic = models.OneToOneField(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name="reminder_provider_config",
+    )
+    email_provider = models.CharField(
+        max_length=20,
+        choices=EmailProvider.choices,
+        default=EmailProvider.INTERNAL,
+    )
+    sms_provider = models.CharField(
+        max_length=20,
+        choices=SmsProvider.choices,
+        default=SmsProvider.INTERNAL,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_reminder_provider_configs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["clinic", "email_provider", "sms_provider"])]
+
+    def __str__(self) -> str:
+        return (
+            f"ReminderProviderConfig(clinic={self.clinic_id}, email={self.email_provider}, "
+            f"sms={self.sms_provider})"
+        )
