@@ -153,6 +153,7 @@ class ReminderEvent(models.Model):
         FAILED = "failed", "Failed"
         CANCELLED = "cancelled", "Cancelled"
         WEBHOOK_UPDATE = "webhook_update", "Webhook update"
+        REPLY_RECEIVED = "reply_received", "Reply received"
 
     reminder = models.ForeignKey(
         Reminder,
@@ -169,6 +170,68 @@ class ReminderEvent(models.Model):
 
     def __str__(self) -> str:
         return f"ReminderEvent(reminder={self.reminder_id}, type={self.event_type})"
+
+
+class ReminderInboundReply(models.Model):
+    class Intent(models.TextChoices):
+        CONFIRM = "confirm", "Confirm"
+        CANCEL = "cancel", "Cancel"
+        RESCHEDULE = "reschedule", "Reschedule"
+        UNKNOWN = "unknown", "Unknown"
+
+    class ActionStatus(models.TextChoices):
+        APPLIED = "applied", "Applied"
+        NEEDS_REVIEW = "needs_review", "Needs review"
+        IGNORED = "ignored", "Ignored"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="reminder_inbound_replies",
+    )
+    reminder = models.ForeignKey(
+        Reminder,
+        on_delete=models.CASCADE,
+        related_name="inbound_replies",
+    )
+    provider = models.CharField(max_length=20, choices=Reminder.Provider.choices)
+    provider_reply_id = models.CharField(max_length=255)
+    provider_message_id = models.CharField(max_length=255, blank=True)
+    raw_text = models.TextField(blank=True)
+    normalized_intent = models.CharField(
+        max_length=20,
+        choices=Intent.choices,
+        default=Intent.UNKNOWN,
+    )
+    action_status = models.CharField(
+        max_length=20,
+        choices=ActionStatus.choices,
+        default=ActionStatus.NEEDS_REVIEW,
+    )
+    action_note = models.CharField(max_length=255, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "provider_reply_id"],
+                name="reminders_reply_provider_reply_id_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["clinic", "action_status", "created_at"]),
+            models.Index(fields=["reminder", "created_at"]),
+        ]
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return (
+            f"ReminderInboundReply(reminder={self.reminder_id}, provider={self.provider}, "
+            f"intent={self.normalized_intent})"
+        )
 
 
 class ReminderTemplate(models.Model):

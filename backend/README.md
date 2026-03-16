@@ -232,6 +232,8 @@ API errors use a standardized envelope:
 | GET | `/api/reminders/metrics/` | Clinic-scoped reminder metrics snapshot (status/provider counts, failed last 24h, oldest queued age) |
 | GET | `/api/reminders/analytics/` | Admin-only reminder delivery analytics. Filters: `?period=daily|monthly`, `?from=YYYY-MM-DD`, `?to=YYYY-MM-DD`, `?channel=`, `?provider=`, `?type=` |
 | GET | `/api/reminders/experiment-attribution/` | Admin-only appointment reminder A/B attribution. Filters: `?from=YYYY-MM-DD`, `?to=YYYY-MM-DD`, `?channel=`, `?provider=`, `?minimum_sample_size=` |
+| GET | `/api/reminder-replies/` | Staff queue of inbound reminder replies (default: unresolved only). Filter: `?action_status=` |
+| POST | `/api/reminders/replies/<provider>/` | Public webhook for inbound owner replies (`YES/NO/RESCHEDULE`) with idempotent processing |
 | POST | `/api/reminders/<id>/resend/` | Re-queue reminder for retry (clinic admin only) |
 | GET/POST/PATCH | `/api/reminder-preferences/` | Client consent/channel preferences, locale (`en/pl`), and quiet-hours settings |
 | GET/POST/PATCH | `/api/reminder-provider-configs/` | Clinic-scoped reminder provider config (staff read, admin write). Validates external provider prerequisites |

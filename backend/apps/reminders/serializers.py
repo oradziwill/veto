@@ -7,6 +7,7 @@ from apps.clients.models import ClientClinic
 
 from .models import (
     Reminder,
+    ReminderInboundReply,
     ReminderPreference,
     ReminderProviderConfig,
     ReminderTemplate,
@@ -223,3 +224,34 @@ class ReminderProviderConfigSerializer(serializers.ModelSerializer):
     @staticmethod
     def _setting(name: str) -> str:
         return str(getattr(settings, name, "")).strip()
+
+
+class ReminderInboundReplySerializer(serializers.ModelSerializer):
+    reminder_status = serializers.CharField(source="reminder.status", read_only=True)
+    reminder_type = serializers.CharField(source="reminder.reminder_type", read_only=True)
+    appointment_id = serializers.IntegerField(source="reminder.appointment_id", read_only=True)
+    patient_name = serializers.CharField(source="reminder.patient.name", read_only=True)
+
+    class Meta:
+        model = ReminderInboundReply
+        fields = [
+            "id",
+            "clinic",
+            "reminder",
+            "reminder_status",
+            "reminder_type",
+            "appointment_id",
+            "patient_name",
+            "provider",
+            "provider_reply_id",
+            "provider_message_id",
+            "raw_text",
+            "normalized_intent",
+            "action_status",
+            "action_note",
+            "resolved_at",
+            "payload",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields

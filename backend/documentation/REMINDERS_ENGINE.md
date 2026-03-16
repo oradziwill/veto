@@ -120,6 +120,33 @@ Returns variant-level attribution rows for appointment reminders:
 
 Current deterministic experiment assignment is `appointment_copy_v1` with variants `A` and `B`.
 
+### Inbound owner replies (two-way reminders)
+
+`POST /api/reminders/replies/<provider>/`
+
+Supported intent parsing from reply text:
+
+- `confirm` (e.g. `YES`, `confirm`, `tak`)
+- `cancel` (e.g. `NO`, `cancel`, `odwołaj`)
+- `reschedule` (e.g. `reschedule`, `zmień termin`)
+- fallback `unknown`
+
+Behavior:
+
+- idempotent processing keyed by `(provider, provider_reply_id)`
+- for appointment reminders:
+  - `confirm` -> appointment status `confirmed` when schedulable
+  - `cancel` -> appointment status `cancelled` when schedulable
+  - `reschedule` / `unknown` -> unresolved queue item for staff follow-up
+- every processed reply creates `ReminderEvent(event_type=reply_received)`
+
+### Inbound reply staff queue
+
+`GET /api/reminder-replies/`
+
+Clinic-scoped staff endpoint with unresolved items by default (`action_status=needs_review`).
+Use `?action_status=` to inspect all reply outcomes (`applied`, `needs_review`, `ignored`).
+
 ### Resend reminder (admin only)
 
 `POST /api/reminders/<id>/resend/`
