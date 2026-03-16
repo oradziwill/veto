@@ -9,6 +9,7 @@ from apps.billing.models import Invoice
 from apps.medical.models import Vaccination
 from apps.reminders.models import Reminder, ReminderEvent, ReminderPreference
 from apps.reminders.services import (
+    build_portal_action_urls,
     build_reminder_context,
     pick_channel_and_recipient,
     render_reminder_content,
@@ -106,6 +107,17 @@ class Command(BaseCommand):
                 experiment_variant=experiment_variant,
                 scheduled_for=scheduled_for,
             )
+            portal_links = build_portal_action_urls(reminder)
+            if any(portal_links.values()):
+                context.update(portal_links)
+                reminder.subject, reminder.body = render_reminder_content(
+                    clinic_id=appointment.clinic_id,
+                    reminder_type=Reminder.ReminderType.APPOINTMENT,
+                    channel=channel,
+                    locale=locale,
+                    context=context,
+                )
+                reminder.save(update_fields=["subject", "body", "updated_at"])
             ReminderEvent.objects.create(
                 reminder=reminder, event_type=ReminderEvent.EventType.ENQUEUED
             )

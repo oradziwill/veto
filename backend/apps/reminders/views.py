@@ -5,6 +5,7 @@ import hmac
 from datetime import date, timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Count, Min, Q
 from django.db.models.functions import TruncDate, TruncMonth
 from django.utils import timezone
@@ -22,6 +23,7 @@ from .models import (
     Reminder,
     ReminderEvent,
     ReminderInboundReply,
+    ReminderPortalActionToken,
     ReminderPreference,
     ReminderProviderConfig,
     ReminderTemplate,
@@ -35,7 +37,7 @@ from .serializers import (
     ReminderTemplatePreviewSerializer,
     ReminderTemplateSerializer,
 )
-from .services import parse_reply_intent, render_message_template
+from .services import decode_portal_action_token, parse_reply_intent, render_message_template
 
 
 class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
@@ -729,6 +731,161 @@ class ReminderReplyWebhookView(APIView):
             return ReminderInboundReply.ActionStatus.NEEDS_REVIEW, "Reschedule requested.", None
 
         return ReminderInboundReply.ActionStatus.NEEDS_REVIEW, "Reply intent unclear.", None
+
+
+class ReminderPortalActionView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
+        resolved = self._resolve_token(token, lock=False)
+        if resolved["error"]:
+            return Response({"detail": resolved["error"]}, status=resolved["status_code"])
+        token_row: ReminderPortalActionToken = resolved["token_row"]
+        reminder: Reminder = resolved["reminder"]
+        appointment = reminder.appointment
+        return Response(
+            {
+                "ok": True,
+                "token_action": token_row.action,
+                "expires_at": token_row.expires_at.isoformat(),
+                "used_at": token_row.used_at.isoformat() if token_row.used_at else None,
+                "reminder": {
+                    "id": reminder.id,
+                    "type": reminder.reminder_type,
+                    "channel": reminder.channel,
+                },
+                "appointment": (
+                    {
+                        "id": appointment.id,
+                        "status": appointment.status,
+                        "starts_at": appointment.starts_at.isoformat(),
+                    }
+                    if appointment
+                    else None
+                ),
+            },
+            status=200,
+        )
+
+    def post(self, request, token):
+        with transaction.atomic():
+            resolved = self._resolve_token(token, lock=True)
+            if resolved["error"]:
+                return Response({"detail": resolved["error"]}, status=resolved["status_code"])
+            token_row: ReminderPortalActionToken = resolved["token_row"]
+            reminder: Reminder = resolved["reminder"]
+            action_status, action_note = self._apply_portal_action(reminder, token_row.action)
+
+            now = timezone.now()
+            token_row.used_at = now
+            token_row.used_payload = {
+                "action_status": action_status,
+                "action_note": action_note,
+                "ip": request.META.get("REMOTE_ADDR", ""),
+            }
+            token_row.save(update_fields=["used_at", "used_payload", "updated_at"])
+
+            ReminderEvent.objects.create(
+                reminder=reminder,
+                event_type=ReminderEvent.EventType.REPLY_RECEIVED,
+                payload={
+                    "source": "owner_portal",
+                    "token_id": str(token_row.token_id),
+                    "action": token_row.action,
+                    "action_status": action_status,
+                    "action_note": action_note,
+                },
+            )
+        return Response(
+            {
+                "ok": True,
+                "action": token_row.action,
+                "action_status": action_status,
+                "action_note": action_note,
+            },
+            status=200,
+        )
+
+    def _resolve_token(self, token: str, *, lock: bool):
+        payload = decode_portal_action_token(token)
+        if not payload:
+            return {"error": "Invalid or expired token signature.", "status_code": 400}
+        token_id = payload.get("tid", "")
+        if not token_id:
+            return {"error": "Malformed token payload.", "status_code": 400}
+
+        token_qs = ReminderPortalActionToken.objects.select_related(
+            "reminder", "reminder__appointment"
+        )
+        if lock:
+            token_qs = token_qs.select_for_update()
+        token_row = token_qs.filter(token_id=token_id).first()
+        if not token_row:
+            return {"error": "Token not found.", "status_code": 404}
+        if str(token_row.reminder_id) != payload.get("rid"):
+            return {"error": "Token reminder mismatch.", "status_code": 400}
+        if str(token_row.action) != payload.get("act"):
+            return {"error": "Token action mismatch.", "status_code": 400}
+
+        now = timezone.now()
+        if token_row.expires_at <= now:
+            return {"error": "Token expired.", "status_code": 410}
+        if token_row.used_at is not None:
+            return {"error": "Token already used.", "status_code": 410}
+
+        return {
+            "error": "",
+            "status_code": 200,
+            "token_row": token_row,
+            "reminder": token_row.reminder,
+        }
+
+    @staticmethod
+    def _apply_portal_action(reminder: Reminder, action: str) -> tuple[str, str]:
+        if (
+            reminder.reminder_type != Reminder.ReminderType.APPOINTMENT
+            or not reminder.appointment_id
+        ):
+            return "ignored", "No appointment linked to reminder."
+        appointment = reminder.appointment
+        now = timezone.now()
+
+        if action == ReminderPortalActionToken.Action.CONFIRM:
+            if appointment.status == Appointment.Status.SCHEDULED:
+                appointment.status = Appointment.Status.CONFIRMED
+                appointment.save(update_fields=["status", "updated_at"])
+                return "applied", "Appointment confirmed via portal."
+            if appointment.status == Appointment.Status.CONFIRMED:
+                return "applied", "Appointment already confirmed."
+            return "ignored", f"Cannot confirm appointment in status '{appointment.status}'."
+
+        if action == ReminderPortalActionToken.Action.CANCEL:
+            if appointment.status in {
+                Appointment.Status.SCHEDULED,
+                Appointment.Status.CONFIRMED,
+                Appointment.Status.CHECKED_IN,
+            }:
+                appointment.status = Appointment.Status.CANCELLED
+                appointment.save(update_fields=["status", "updated_at"])
+                return "applied", "Appointment cancelled via portal."
+            return "ignored", f"Cannot cancel appointment in status '{appointment.status}'."
+
+        if action == ReminderPortalActionToken.Action.RESCHEDULE_REQUEST:
+            ReminderInboundReply.objects.create(
+                clinic_id=reminder.clinic_id,
+                reminder_id=reminder.id,
+                provider=Reminder.Provider.INTERNAL,
+                provider_reply_id=f"portal-{reminder.id}-{int(now.timestamp())}",
+                provider_message_id=reminder.provider_message_id,
+                raw_text="reschedule_request",
+                normalized_intent=ReminderInboundReply.Intent.RESCHEDULE,
+                action_status=ReminderInboundReply.ActionStatus.NEEDS_REVIEW,
+                action_note="Reschedule requested via portal link.",
+                payload={"source": "owner_portal"},
+            )
+            return "needs_review", "Reschedule request queued for staff follow-up."
+
+        return "ignored", "Unsupported portal action."
 
 
 class ReminderWebhookView(APIView):

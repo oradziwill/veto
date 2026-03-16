@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     ReminderInboundReplyViewSet,
+    ReminderPortalActionView,
     ReminderPreferenceViewSet,
     ReminderProviderConfigViewSet,
     ReminderReplyWebhookView,
@@ -23,6 +24,11 @@ router.register(
 router.register(r"reminder-templates", ReminderTemplateViewSet, basename="reminder-templates")
 
 urlpatterns = [
+    path(
+        "reminders/portal/<str:token>/",
+        ReminderPortalActionView.as_view(),
+        name="reminder-portal-action",
+    ),
     path(
         "reminders/replies/<str:provider>/",
         ReminderReplyWebhookView.as_view(),
