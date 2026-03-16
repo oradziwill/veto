@@ -11,6 +11,7 @@ This document describes the reminder pipeline for appointments, vaccinations, an
 - Template API and preview (`/api/reminder-templates/`, `/api/reminder-templates/preview/`)
 - Queue hydration command (`enqueue_reminders`)
 - Delivery processing command (`process_reminders`)
+- Escalation playbook command (`run_reminder_escalations`)
 - Delivery channel abstraction with provider-agnostic placeholders (`email`, `sms`)
 - Provider webhook endpoint for delivery status updates
 
@@ -172,6 +173,30 @@ Execution rules:
 - `reschedule_request`: creates unresolved staff follow-up item
 - each execution writes reminder event audit payload (`source=owner_portal`)
 
+### Escalation playbooks
+
+`GET/POST/PATCH/DELETE /api/reminder-escalation-rules/`
+
+Clinic-scoped rule CRUD:
+
+- trigger types: `appointment_unconfirmed`, `reschedule_unresolved`, `invoice_overdue`
+- action types: `enqueue_followup`, `flag_for_review`
+- guardrails: `is_active`, `delay_minutes`, `max_executions_per_target`
+- write access is clinic-admin only
+
+`GET /api/reminder-escalation-executions/`
+
+Read-only execution log for staff/admin with optional `?status=applied|skipped`.
+
+`GET /api/reminder-escalation-metrics/` (admin only)
+
+24h ops payload:
+
+- `triggered_total`
+- `applied_total`
+- `skipped_total`
+- `by_rule[]`
+
 ### Resend reminder (admin only)
 
 `POST /api/reminders/<id>/resend/`
@@ -275,6 +300,20 @@ python manage.py reminder_queue_health
 Outputs a single JSON line with queue counters and oldest queued age for dashboards/alerts.
 Includes `failed_last_24h` and `provider_counts` for fast diagnostics.
 
+### Run escalation playbooks
+
+```bash
+python manage.py run_reminder_escalations
+python manage.py run_reminder_escalations --clinic-id 12 --limit 200
+```
+
+Behavior:
+
+- evaluates active clinic rules against reminder/reply/invoice state
+- enforces idempotency via `(rule, reminder)` execution uniqueness
+- enforces target guardrail (`max_executions_per_target`)
+- writes `ReminderEscalationExecution` audit rows and `ReminderEvent(event_type=escalated)`
+
 ### Replay dead-letter reminders
 
 ```bash
@@ -289,11 +328,13 @@ Terraform (`terraform/ops.tf`) schedules the reminder commands with EventBridge:
 
 - `enqueue_reminders` on `var.reminder_enqueue_schedule_expression`
 - `process_reminders` on `var.reminder_process_schedule_expression`
+- `run_reminder_escalations` (recommended every 5-15 minutes)
 
 CloudWatch alarms:
 
 - `enqueue_reminders` failed invocations
 - `process_reminders` failed invocations
+- `run_reminder_escalations` failed invocations
 
 ## Provider and security settings
 

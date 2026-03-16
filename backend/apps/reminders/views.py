@@ -21,6 +21,8 @@ from apps.scheduling.models import Appointment
 
 from .models import (
     Reminder,
+    ReminderEscalationExecution,
+    ReminderEscalationRule,
     ReminderEvent,
     ReminderInboundReply,
     ReminderPortalActionToken,
@@ -30,6 +32,8 @@ from .models import (
     ReminderTemplateVersion,
 )
 from .serializers import (
+    ReminderEscalationExecutionSerializer,
+    ReminderEscalationRuleSerializer,
     ReminderInboundReplySerializer,
     ReminderPreferenceSerializer,
     ReminderProviderConfigSerializer,
@@ -524,6 +528,73 @@ class ReminderInboundReplyViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             qs = qs.filter(action_status=ReminderInboundReply.ActionStatus.NEEDS_REVIEW)
         return qs
+
+
+class ReminderEscalationRuleViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    serializer_class = ReminderEscalationRuleSerializer
+
+    def get_queryset(self):
+        return ReminderEscalationRule.objects.filter(
+            clinic_id=self.request.user.clinic_id
+        ).order_by("name", "id")
+
+    def get_permissions(self):
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            permission_classes = [IsAuthenticated, HasClinic, IsClinicAdmin]
+        else:
+            permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+        return [permission() for permission in permission_classes]
+
+    def perform_create(self, serializer):
+        serializer.save(clinic_id=self.request.user.clinic_id)
+
+    def perform_update(self, serializer):
+        serializer.save(clinic_id=self.request.user.clinic_id)
+
+
+class ReminderEscalationExecutionViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+    serializer_class = ReminderEscalationExecutionSerializer
+
+    def get_queryset(self):
+        qs = ReminderEscalationExecution.objects.filter(
+            clinic_id=self.request.user.clinic_id
+        ).select_related("rule", "reminder")
+        status_value = self.request.query_params.get("status")
+        if status_value:
+            qs = qs.filter(status=status_value)
+        return qs.order_by("-created_at", "-id")
+
+
+class ReminderEscalationMetricsView(APIView):
+    permission_classes = [IsAuthenticated, HasClinic, IsClinicAdmin]
+
+    def get(self, request):
+        now = timezone.now()
+        since = now - timedelta(hours=24)
+        base_qs = ReminderEscalationExecution.objects.filter(
+            clinic_id=request.user.clinic_id, created_at__gte=since
+        )
+        payload = {
+            "kind": "reminder_escalation_metrics",
+            "clinic_id": request.user.clinic_id,
+            "window_hours": 24,
+            "triggered_total": base_qs.count(),
+            "applied_total": base_qs.filter(
+                status=ReminderEscalationExecution.Status.APPLIED
+            ).count(),
+            "skipped_total": base_qs.filter(
+                status=ReminderEscalationExecution.Status.SKIPPED
+            ).count(),
+            "by_rule": list(
+                base_qs.values("rule_id", "rule__name")
+                .annotate(total=Count("id"))
+                .order_by("rule__name", "rule_id")
+            ),
+            "generated_at": now.isoformat(),
+        }
+        return Response(payload, status=200)
 
 
 class ReminderReplyWebhookView(APIView):
