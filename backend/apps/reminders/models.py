@@ -70,6 +70,8 @@ class Reminder(models.Model):
     provider = models.CharField(max_length=20, choices=Provider.choices, default=Provider.INTERNAL)
     provider_message_id = models.CharField(max_length=255, blank=True)
     provider_status = models.CharField(max_length=64, blank=True)
+    experiment_key = models.CharField(max_length=64, blank=True)
+    experiment_variant = models.CharField(max_length=32, default="control")
 
     recipient = models.CharField(max_length=255, blank=True)
     subject = models.CharField(max_length=255, blank=True)
@@ -92,6 +94,7 @@ class Reminder(models.Model):
             models.Index(fields=["clinic", "status", "scheduled_for"]),
             models.Index(fields=["clinic", "reminder_type", "status"]),
             models.Index(fields=["clinic", "channel", "status"]),
+            models.Index(fields=["clinic", "experiment_key", "experiment_variant"]),
         ]
 
     def __str__(self) -> str:

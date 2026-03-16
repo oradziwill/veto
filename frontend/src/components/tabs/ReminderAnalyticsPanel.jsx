@@ -46,6 +46,7 @@ export default function ReminderAnalyticsPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [data, setData] = useState(null)
+  const [attribution, setAttribution] = useState(null)
 
   const load = async () => {
     try {
@@ -59,7 +60,14 @@ export default function ReminderAnalyticsPanel() {
         provider: provider || undefined,
         type: type || undefined,
       })
+      const attributionRes = await remindersAPI.experimentAttribution({
+        from: fromDate,
+        to: toDate,
+        channel: channel || undefined,
+        provider: provider || undefined,
+      })
       setData(res.data)
+      setAttribution(attributionRes.data)
     } catch {
       setError(t("ownerDashboard.reminderAnalytics.loadError"))
     } finally {
@@ -70,6 +78,8 @@ export default function ReminderAnalyticsPanel() {
   const rows = data?.by_period || []
   const totals = data?.totals || {}
   const rates = data?.rates || {}
+  const attributionRows = attribution?.variants || []
+  const sampleSize = attribution?.minimum_sample_size || 0
 
   useEffect(() => {
     load()
@@ -204,6 +214,80 @@ export default function ReminderAnalyticsPanel() {
                 />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+
+          <div style={CARD}>
+            <h3 style={{ margin: "0 0 0.4rem", fontSize: "1rem", fontWeight: 600, color: "#2d3748" }}>
+              {t("ownerDashboard.reminderAnalytics.experimentImpact")}
+            </h3>
+            <p style={{ margin: "0 0 0.9rem", color: "#718096", fontSize: "0.82rem" }}>
+              {t("ownerDashboard.reminderAnalytics.sampleHint", { count: sampleSize })}
+            </p>
+            {attributionRows.length === 0 ? (
+              <p style={{ margin: 0, color: "#718096", fontSize: "0.9rem" }}>
+                {t("ownerDashboard.noData")}
+              </p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={attributionRows}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="variant" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} domain={[0, 1]} tickFormatter={fmtPct} />
+                    <Tooltip formatter={(v) => fmtPct(v)} />
+                    <Legend />
+                    <Bar
+                      dataKey="delivery_rate"
+                      name={t("ownerDashboard.reminderAnalytics.deliveryRate")}
+                      fill="#4299e1"
+                    />
+                    <Bar
+                      dataKey="no_show_rate"
+                      name={t("ownerDashboard.reminderAnalytics.noShowRate")}
+                      fill="#f56565"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div style={{ marginTop: "0.75rem" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                    <thead>
+                      <tr style={{ color: "#718096", textAlign: "left" }}>
+                        <th style={{ padding: "0.35rem 0.3rem" }}>
+                          {t("ownerDashboard.reminderAnalytics.variant")}
+                        </th>
+                        <th style={{ padding: "0.35rem 0.3rem" }}>
+                          {t("ownerDashboard.reminderAnalytics.reminders")}
+                        </th>
+                        <th style={{ padding: "0.35rem 0.3rem" }}>
+                          {t("ownerDashboard.reminderAnalytics.appointments")}
+                        </th>
+                        <th style={{ padding: "0.35rem 0.3rem" }}>
+                          {t("ownerDashboard.reminderAnalytics.noShowRate")}
+                        </th>
+                        <th style={{ padding: "0.35rem 0.3rem" }}>
+                          {t("ownerDashboard.reminderAnalytics.sampleWarning")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attributionRows.map((row) => (
+                        <tr key={row.variant} style={{ borderTop: "1px solid #edf2f7" }}>
+                          <td style={{ padding: "0.35rem 0.3rem", fontWeight: 600 }}>{row.variant}</td>
+                          <td style={{ padding: "0.35rem 0.3rem" }}>{row.reminders_total}</td>
+                          <td style={{ padding: "0.35rem 0.3rem" }}>{row.appointments_total}</td>
+                          <td style={{ padding: "0.35rem 0.3rem" }}>{fmtPct(row.no_show_rate)}</td>
+                          <td style={{ padding: "0.35rem 0.3rem", color: row.sample_warning ? "#c53030" : "#276749" }}>
+                            {row.sample_warning
+                              ? t("ownerDashboard.reminderAnalytics.lowSample")
+                              : t("ownerDashboard.reminderAnalytics.okSample")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

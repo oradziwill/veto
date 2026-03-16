@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsClinicAdmin, IsStaffOrVet
+from apps.scheduling.models import Appointment
 
 from .models import (
     Reminder,
@@ -236,6 +237,121 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
                 "failure_rate": round((failed / total) if total else 0.0, 4),
             },
             "by_period": by_period,
+        }
+        return Response(payload, status=200)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="experiment-attribution",
+        permission_classes=[IsAuthenticated, HasClinic, IsClinicAdmin],
+    )
+    def experiment_attribution(self, request):
+        today = timezone.localdate()
+        default_from = date(today.year, today.month, 1) - timedelta(days=90)
+        from_date = parse_date(request.query_params.get("from", "")) or default_from
+        to_date = parse_date(request.query_params.get("to", "")) or today
+        if from_date > to_date:
+            return Response(
+                {"detail": "'from' must be earlier than or equal to 'to'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        minimum_sample_size = int(request.query_params.get("minimum_sample_size", "30"))
+        minimum_sample_size = max(1, minimum_sample_size)
+
+        reminders_qs = Reminder.objects.filter(
+            clinic_id=request.user.clinic_id,
+            reminder_type=Reminder.ReminderType.APPOINTMENT,
+            appointment_id__isnull=False,
+            created_at__date__gte=from_date,
+            created_at__date__lte=to_date,
+        ).select_related("appointment")
+        channel = request.query_params.get("channel")
+        provider = request.query_params.get("provider")
+        if channel:
+            reminders_qs = reminders_qs.filter(channel=channel)
+        if provider:
+            reminders_qs = reminders_qs.filter(provider=provider)
+
+        reminders = list(
+            reminders_qs.values(
+                "appointment_id",
+                "experiment_key",
+                "experiment_variant",
+                "status",
+                "delivered_at",
+            )
+        )
+        appointment_ids = {row["appointment_id"] for row in reminders if row["appointment_id"]}
+        appointment_status_map = dict(
+            Appointment.objects.filter(id__in=appointment_ids).values_list("id", "status")
+        )
+        variants: dict[str, dict] = {}
+        for row in reminders:
+            label = row.get("experiment_variant") or "control"
+            item = variants.setdefault(
+                label,
+                {
+                    "variant": label,
+                    "experiment_key": row.get("experiment_key") or "",
+                    "reminders_total": 0,
+                    "delivered_total": 0,
+                    "appointments_total": 0,
+                    "appointments_completed": 0,
+                    "appointments_cancelled": 0,
+                    "appointments_no_show": 0,
+                },
+            )
+            item["reminders_total"] += 1
+            if row.get("delivered_at"):
+                item["delivered_total"] += 1
+            appointment_status = appointment_status_map.get(row.get("appointment_id"))
+            if appointment_status:
+                item["appointments_total"] += 1
+                if appointment_status == Appointment.Status.COMPLETED:
+                    item["appointments_completed"] += 1
+                elif appointment_status == Appointment.Status.CANCELLED:
+                    item["appointments_cancelled"] += 1
+                elif appointment_status == Appointment.Status.NO_SHOW:
+                    item["appointments_no_show"] += 1
+
+        variant_rows = []
+        for _label, item in sorted(variants.items(), key=lambda p: p[0]):
+            reminders_total = item["reminders_total"]
+            appointments_total = item["appointments_total"]
+            delivery_rate = (item["delivered_total"] / reminders_total) if reminders_total else 0.0
+            no_show_rate = (
+                item["appointments_no_show"] / appointments_total if appointments_total else 0.0
+            )
+            item["delivery_rate"] = round(delivery_rate, 4)
+            item["no_show_rate"] = round(no_show_rate, 4)
+            item["sample_warning"] = appointments_total < minimum_sample_size
+            variant_rows.append(item)
+
+        total_reminders = sum(row["reminders_total"] for row in variant_rows)
+        total_delivered = sum(row["delivered_total"] for row in variant_rows)
+        total_appointments = sum(row["appointments_total"] for row in variant_rows)
+        total_no_show = sum(row["appointments_no_show"] for row in variant_rows)
+        payload = {
+            "kind": "reminder_experiment_attribution",
+            "clinic_id": request.user.clinic_id,
+            "from": from_date.isoformat(),
+            "to": to_date.isoformat(),
+            "minimum_sample_size": minimum_sample_size,
+            "filters": {"channel": channel or "", "provider": provider or ""},
+            "overall": {
+                "reminders_total": total_reminders,
+                "delivered_total": total_delivered,
+                "appointments_total": total_appointments,
+                "appointments_no_show": total_no_show,
+                "delivery_rate": round(
+                    (total_delivered / total_reminders) if total_reminders else 0.0, 4
+                ),
+                "no_show_rate": round(
+                    (total_no_show / total_appointments) if total_appointments else 0.0, 4
+                ),
+            },
+            "variants": variant_rows,
         }
         return Response(payload, status=200)
 

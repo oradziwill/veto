@@ -30,6 +30,7 @@ Key fields:
 - `scheduled_for`, `sent_at`
 - `attempts`, `max_attempts`, `last_error`
 - `provider`, `provider_message_id`, `provider_status`, `delivered_at`
+- `experiment_key`, `experiment_variant` (for A/B attribution)
 
 `ReminderPreference` stores per-client, per-clinic compliance settings:
 
@@ -98,6 +99,26 @@ Payload includes:
 - `by_period[]` trend rows with `label`, status counts, and `delivery_rate`
 
 This endpoint is clinic-scoped and restricted to clinic admin users.
+
+### Reminder experiment attribution (admin only)
+
+`GET /api/reminders/experiment-attribution/`
+
+Query params:
+
+- `from=YYYY-MM-DD`
+- `to=YYYY-MM-DD`
+- optional filters: `channel`, `provider`
+- `minimum_sample_size` (default: `30`)
+
+Returns variant-level attribution rows for appointment reminders:
+
+- reminder volume and delivery rate
+- appointment outcomes (`completed`, `cancelled`, `no_show`)
+- `no_show_rate` per variant
+- `sample_warning` when appointments are below minimum sample threshold
+
+Current deterministic experiment assignment is `appointment_copy_v1` with variants `A` and `B`.
 
 ### Resend reminder (admin only)
 
