@@ -814,9 +814,7 @@ class ReminderPortalActionView(APIView):
         if not token_id:
             return {"error": "Malformed token payload.", "status_code": 400}
 
-        token_qs = ReminderPortalActionToken.objects.select_related(
-            "reminder", "reminder__appointment"
-        )
+        token_qs = ReminderPortalActionToken.objects
         if lock:
             token_qs = token_qs.select_for_update()
         token_row = token_qs.filter(token_id=token_id).first()
@@ -833,12 +831,13 @@ class ReminderPortalActionView(APIView):
         if token_row.used_at is not None:
             return {"error": "Token already used.", "status_code": 410}
 
-        return {
-            "error": "",
-            "status_code": 200,
-            "token_row": token_row,
-            "reminder": token_row.reminder,
-        }
+        reminder = (
+            Reminder.objects.select_related("appointment").filter(id=token_row.reminder_id).first()
+        )
+        if not reminder:
+            return {"error": "Reminder not found.", "status_code": 404}
+
+        return {"error": "", "status_code": 200, "token_row": token_row, "reminder": reminder}
 
     @staticmethod
     def _apply_portal_action(reminder: Reminder, action: str) -> tuple[str, str]:
