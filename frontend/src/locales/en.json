@@ -498,6 +498,24 @@
     "paid": "Paid",
     "newPatients": "New patients",
     "newClients": "New clients",
+    "reminderOps": {
+      "title": "Reminder operational health",
+      "loadError": "Failed to load reminder metrics.",
+      "queued": "Queued",
+      "failed": "Failed",
+      "failedLast24h": "Failed (24h)",
+      "oldestQueuedAge": "Oldest queued age",
+      "state": {
+        "healthy": "Healthy",
+        "degraded": "Needs attention",
+        "unknown": "Unknown"
+      },
+      "providers": {
+        "internal": "Internal",
+        "sendgrid": "SendGrid",
+        "twilio": "Twilio"
+      }
+    },
     "apptStatus": {
       "scheduled": "Scheduled",
       "confirmed": "Confirmed",

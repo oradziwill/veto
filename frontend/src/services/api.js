@@ -129,6 +129,10 @@ export const queueAPI = {
   done: (id) => api.post(`/queue/${id}/done/`),
 };
 
+export const remindersAPI = {
+  metrics: () => api.get("/reminders/metrics/"),
+};
+
 export const patientHistoryAPI = {
   list: (patientId) => api.get(`/patients/${patientId}/history/`),
   create: (patientId, data) =>
