@@ -123,6 +123,96 @@ def test_reminders_resend_admin_only(
 
 
 @pytest.mark.django_db
+def test_reminder_metrics_clinic_scoped(
+    api_client, receptionist, clinic, patient, client_with_membership
+):
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.INTERNAL,
+        status=Reminder.Status.QUEUED,
+        recipient="owner@example.com",
+        scheduled_for=timezone.now() - timedelta(minutes=10),
+    )
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        status=Reminder.Status.FAILED,
+        recipient="owner@example.com",
+        scheduled_for=timezone.now(),
+    )
+
+    other_clinic = Clinic.objects.create(
+        name="Clinic Metrics B",
+        address="Street 12",
+        phone="+48999999999",
+        email="metrics-b@example.com",
+    )
+    other_owner = Client.objects.create(
+        first_name="Other", last_name="Owner", email="other.metrics@example.com"
+    )
+    ClientClinic.objects.create(client=other_owner, clinic=other_clinic, is_active=True)
+    other_doctor = User.objects.create_user(
+        username="doctor_other_metrics",
+        password="pass",
+        clinic=other_clinic,
+        role=User.Role.DOCTOR,
+        is_vet=True,
+    )
+    other_patient = Patient.objects.create(
+        clinic=other_clinic,
+        owner=other_owner,
+        name="OtherPet",
+        species="Dog",
+        primary_vet=other_doctor,
+    )
+    other_invoice = Invoice.objects.create(
+        clinic=other_clinic,
+        client=other_owner,
+        patient=other_patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    Reminder.objects.create(
+        clinic=other_clinic,
+        patient=other_patient,
+        invoice=other_invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.TWILIO,
+        status=Reminder.Status.FAILED,
+        recipient="other@example.com",
+        scheduled_for=timezone.now(),
+    )
+
+    api_client.force_authenticate(user=receptionist)
+    response = api_client.get("/api/reminders/metrics/")
+    assert response.status_code == 200
+    assert response.data["kind"] == "reminder_metrics_snapshot"
+    assert response.data["status_counts"]["queued"] == 1
+    assert response.data["status_counts"]["failed"] == 1
+    assert response.data["provider_counts"].get(Reminder.Provider.INTERNAL) == 1
+    assert response.data["provider_counts"].get(Reminder.Provider.SENDGRID) == 1
+    assert response.data["provider_counts"].get(Reminder.Provider.TWILIO, 0) == 0
+    assert response.data["failed_last_24h"] == 1
+    assert response.data["oldest_queued_age_seconds"] >= 0
+
+
+@pytest.mark.django_db
 def test_reminder_preferences_crud_clinic_scoped(
     api_client, receptionist, clinic_admin, clinic, client_with_membership
 ):
