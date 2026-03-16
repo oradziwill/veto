@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.db.models import Count, Min
@@ -28,6 +29,15 @@ class Command(BaseCommand):
         oldest_age_seconds = (
             int((now - oldest_queued).total_seconds()) if oldest_queued is not None else 0
         )
+        failed_last_24h = Reminder.objects.filter(
+            status=Reminder.Status.FAILED,
+            updated_at__gte=now - timedelta(hours=24),
+        ).count()
+        provider_counts = dict(
+            Reminder.objects.values("provider")
+            .annotate(total=Count("id"))
+            .values_list("provider", "total")
+        )
 
         payload = {
             "kind": "reminder_queue_health",
@@ -36,6 +46,8 @@ class Command(BaseCommand):
             "failed": status_counts.get(Reminder.Status.FAILED, 0),
             "sent": status_counts.get(Reminder.Status.SENT, 0),
             "cancelled": status_counts.get(Reminder.Status.CANCELLED, 0),
+            "failed_last_24h": failed_last_24h,
+            "provider_counts": provider_counts,
             "oldest_queued_age_seconds": oldest_age_seconds,
         }
         text = json.dumps(payload, sort_keys=True)

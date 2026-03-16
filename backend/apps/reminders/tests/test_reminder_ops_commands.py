@@ -68,4 +68,6 @@ def test_reminder_queue_health_prints_json_snapshot(clinic, patient, client_with
 
     assert payload["kind"] == "reminder_queue_health"
     assert payload["queued"] >= 1
+    assert payload["failed_last_24h"] >= 0
+    assert isinstance(payload["provider_counts"], dict)
     assert payload["oldest_queued_age_seconds"] >= 0

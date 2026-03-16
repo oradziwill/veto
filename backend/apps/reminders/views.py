@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import Count, Min
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -74,6 +76,51 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
             ]
         )
         return Response(ReminderReadSerializer(reminder).data, status=status.HTTP_200_OK)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="metrics",
+        permission_classes=[IsAuthenticated, HasClinic, IsStaffOrVet],
+    )
+    def metrics(self, request):
+        now = timezone.now()
+        clinic_qs = Reminder.objects.filter(clinic_id=request.user.clinic_id)
+
+        status_counts = dict(
+            clinic_qs.values("status").annotate(total=Count("id")).values_list("status", "total")
+        )
+        provider_counts = dict(
+            clinic_qs.values("provider")
+            .annotate(total=Count("id"))
+            .values_list("provider", "total")
+        )
+        oldest_queued = clinic_qs.filter(status=Reminder.Status.QUEUED).aggregate(
+            oldest=Min("scheduled_for")
+        )["oldest"]
+        failed_last_24h = clinic_qs.filter(
+            status=Reminder.Status.FAILED,
+            updated_at__gte=now - timedelta(hours=24),
+        ).count()
+
+        payload = {
+            "kind": "reminder_metrics_snapshot",
+            "clinic_id": request.user.clinic_id,
+            "status_counts": {
+                "queued": status_counts.get(Reminder.Status.QUEUED, 0),
+                "deferred": status_counts.get(Reminder.Status.DEFERRED, 0),
+                "sent": status_counts.get(Reminder.Status.SENT, 0),
+                "failed": status_counts.get(Reminder.Status.FAILED, 0),
+                "cancelled": status_counts.get(Reminder.Status.CANCELLED, 0),
+            },
+            "provider_counts": provider_counts,
+            "failed_last_24h": failed_last_24h,
+            "oldest_queued_age_seconds": (
+                int((now - oldest_queued).total_seconds()) if oldest_queued is not None else 0
+            ),
+            "generated_at": now.isoformat(),
+        }
+        return Response(payload, status=200)
 
 
 class ReminderPreferenceViewSet(viewsets.ModelViewSet):

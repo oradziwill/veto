@@ -69,6 +69,17 @@ Optional filters:
 
 `GET /api/reminders/<id>/`
 
+### Reminder metrics snapshot
+
+`GET /api/reminders/metrics/`
+
+Clinic-scoped mini observability payload:
+
+- status counts (`queued`, `deferred`, `sent`, `failed`, `cancelled`)
+- provider counts
+- `failed_last_24h`
+- `oldest_queued_age_seconds`
+
 ### Resend reminder (admin only)
 
 `POST /api/reminders/<id>/resend/`
@@ -170,6 +181,7 @@ python manage.py reminder_queue_health
 ```
 
 Outputs a single JSON line with queue counters and oldest queued age for dashboards/alerts.
+Includes `failed_last_24h` and `provider_counts` for fast diagnostics.
 
 ### Replay dead-letter reminders
 
