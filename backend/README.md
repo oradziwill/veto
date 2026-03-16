@@ -180,10 +180,83 @@ API errors use a standardized envelope:
 |--------|----------|-------------|
 | CRUD | `/api/appointments/` | Appointments. Filters: `?date=`, `?vet=`, `?patient=`, `?status=` |
 | GET | `/api/availability/` | Free slots: `?date=YYYY-MM-DD&vet=<id>&slot=<minutes>` |
+| GET | `/api/schedule/capacity-insights/` | Capacity vs load analytics for vets. Params: `from`, `to`, `granularity=day|hour`, optional `vet`, optional `overload_threshold_pct` |
+| GET | `/api/schedule/optimization-suggestions/` | Deterministic load-balancing suggestions (move/reassign). Params: `from`, `to`, optional `vet`, `limit`, optional `overload_threshold_pct` |
 | GET/POST/PATCH | `/api/appointments/<id>/exam/` | Clinical exam (vet only) |
 | POST | `/api/appointments/<id>/close-visit/` | Mark visit completed (vet only) |
 | CRUD | `/api/hospital-stays/` | Hospital stays (Doctor/Admin only) |
 | POST | `/api/hospital-stays/<id>/discharge/` | Discharge patient |
+
+#### Scheduling Assistant (Backend MVP)
+
+This backend-only feature helps clinic staff identify doctor overload and receive explainable, conflict-safe optimization suggestions.
+
+- **Capacity insights endpoint** computes:
+  - available minutes
+  - booked minutes
+  - utilization percent
+  - overload windows based on configurable threshold
+- **Optimization suggestions endpoint** returns ranked suggestions with:
+  - `kind` (`reassign_vet` or `move_slot`)
+  - current and proposed schedule context
+  - human-readable `reason`
+  - `impact_estimate` and `confidence`
+
+Default behavior and guardrails:
+
+- if `from` and `to` are omitted, window defaults to next 14 days
+- max analysis range is 60 days
+- suggestions are generated only from active appointment statuses (`scheduled`, `confirmed`, `checked_in`)
+- all data is clinic-scoped; no cross-clinic leakage
+- access: authenticated clinic staff (`doctor`, `receptionist`, `admin`)
+
+Validation notes:
+
+- `granularity` must be `day` or `hour`
+- `overload_threshold_pct` must be numeric and is clamped to `[1, 100]`
+- `limit` on suggestions is clamped to `[1, 20]`
+- invalid date ranges return `400` with a clear `detail` message
+
+Example:
+
+```bash
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:8000/api/schedule/capacity-insights/?from=2026-03-12&to=2026-03-26&granularity=day"
+```
+
+```bash
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:8000/api/schedule/optimization-suggestions/?from=2026-03-12&to=2026-03-26&limit=5&overload_threshold_pct=80"
+```
+
+Sample response snippets:
+
+```json
+{
+  "kind": "scheduling_capacity_insights",
+  "window": {"from": "2026-03-12", "to": "2026-03-26"},
+  "summary": {
+    "available_minutes": 9600,
+    "booked_minutes": 6420,
+    "utilization_pct": 66.88,
+    "overload_windows_count": 3
+  }
+}
+```
+
+```json
+{
+  "kind": "scheduling_optimization_suggestions",
+  "count": 2,
+  "suggestions": [
+    {
+      "kind": "reassign_vet",
+      "reason": "Reassign to a lower-load qualified vet in the same time window.",
+      "impact_estimate": {"minutes_shifted": 30, "overload_reduction_pct": 6.25}
+    }
+  ]
+}
+```
 
 ### Medical
 
@@ -330,5 +403,6 @@ Config in `pyproject.toml`.
 - `documentation/AVAILABILITY_API.md` – Availability endpoint
 - `documentation/CLINICAL_EXAM_DOCUMENTATION.md` – Clinical exam API
 - `documentation/VISIT_CLOSE_WORKFLOW.md` – Visit close flow
+- `documentation/SCHEDULING_ASSISTANT.md` – Scheduling assistant backend (capacity + suggestions)
 - `documentation/HOW_TO_ADD_DATA.md` – Sample data and admin usage
 - `documentation/REMINDERS_ENGINE.md` – Reminder engine commands and API

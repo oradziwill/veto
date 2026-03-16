@@ -9,6 +9,10 @@ from .views import (
     RoomViewSet,
     WaitingQueueViewSet,
 )
+from .views_assistant import (
+    SchedulingCapacityInsightsView,
+    SchedulingOptimizationSuggestionsView,
+)
 from .views_schedule import (
     ClinicHolidayViewSet,
     ClinicWorkingHoursViewSet,
@@ -38,4 +42,14 @@ urlpatterns = [
         name="availability-rooms",
     ),
     path("schedule/generate/", GenerateScheduleView.as_view(), name="schedule-generate"),
+    path(
+        "schedule/capacity-insights/",
+        SchedulingCapacityInsightsView.as_view(),
+        name="schedule-capacity-insights",
+    ),
+    path(
+        "schedule/optimization-suggestions/",
+        SchedulingOptimizationSuggestionsView.as_view(),
+        name="schedule-optimization-suggestions",
+    ),
 ]
