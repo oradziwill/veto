@@ -183,6 +183,7 @@ API errors use a standardized envelope:
 | GET | `/api/schedule/capacity-insights/` | Capacity vs load analytics for vets. Params: `from`, `to`, `granularity=day|hour`, optional `vet`, optional `overload_threshold_pct` |
 | GET | `/api/schedule/optimization-suggestions/` | Deterministic load-balancing suggestions (move/reassign). Params: `from`, `to`, optional `vet`, `limit`, optional `overload_threshold_pct` |
 | GET/POST/PATCH | `/api/appointments/<id>/exam/` | Clinical exam (vet only) |
+| POST | `/api/visits/<appointment_id>/transcribe/` | Upload audio (`multipart/form-data`, `audio` field, max 25MB) and generate transcript + structured visit notes (doctor/admin only) |
 | POST | `/api/appointments/<id>/close-visit/` | Mark visit completed (vet only) |
 | CRUD | `/api/hospital-stays/` | Hospital stays (Doctor/Admin only) |
 | POST | `/api/hospital-stays/<id>/discharge/` | Discharge patient |

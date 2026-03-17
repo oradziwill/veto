@@ -5,7 +5,7 @@ from datetime import date as date_type
 from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.utils.dateparse import parse_date
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -29,6 +29,11 @@ from apps.scheduling.serializers import (
     WaitingQueueEntryWriteSerializer,
 )
 from apps.scheduling.services.availability import compute_availability
+from apps.scheduling.services.visit_transcription import (
+    VisitTranscriptionError,
+    structure_transcript_with_claude,
+    transcribe_audio_with_whisper,
+)
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
@@ -181,6 +186,81 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         appt.save(update_fields=["status"])
 
         return Response(status=204)
+
+
+class VisitTranscriptionView(APIView):
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+    allowed_audio_types = {
+        "audio/webm",
+        "audio/ogg",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/mpeg",
+    }
+    max_bytes = 25 * 1024 * 1024
+
+    def post(self, request, appointment_id: int):
+        appointment = (
+            Appointment.objects.filter(id=appointment_id, clinic_id=request.user.clinic_id)
+            .select_related("patient")
+            .first()
+        )
+        if not appointment:
+            return Response({"detail": "Appointment not found."}, status=404)
+
+        upload = request.FILES.get("audio")
+        if upload is None:
+            return Response(
+                {"detail": "Missing audio file in multipart field 'audio'."}, status=400
+            )
+        if upload.size > self.max_bytes:
+            return Response({"detail": "Audio file exceeds 25MB limit."}, status=400)
+        if (upload.content_type or "").lower() not in self.allowed_audio_types:
+            return Response(
+                {"detail": "Unsupported audio content type. Allowed: webm, ogg, wav, mp3."},
+                status=400,
+            )
+
+        audio_bytes = upload.read()
+        if not audio_bytes:
+            return Response({"detail": "Uploaded audio file is empty."}, status=400)
+
+        try:
+            transcript = transcribe_audio_with_whisper(
+                audio_bytes=audio_bytes,
+                filename=upload.name or f"visit-{appointment_id}.webm",
+                content_type=upload.content_type or "application/octet-stream",
+            )
+            structured = structure_transcript_with_claude(transcript=transcript)
+        except VisitTranscriptionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        exam, _created = ClinicalExam.objects.get_or_create(
+            clinic_id=request.user.clinic_id,
+            appointment=appointment,
+            defaults={"created_by": request.user},
+        )
+        exam.transcript = transcript
+        exam.ai_notes_raw = structured
+        exam.initial_notes = structured.get("anamnesis", "")
+        exam.clinical_examination = structured.get("clinical_findings", "")
+        exam.initial_diagnosis = structured.get("diagnosis", "")
+        exam.additional_notes = structured.get("treatment_plan", "")
+        exam.owner_instructions = structured.get("owner_instructions", "")
+        exam.save(
+            update_fields=[
+                "transcript",
+                "ai_notes_raw",
+                "initial_notes",
+                "clinical_examination",
+                "initial_diagnosis",
+                "additional_notes",
+                "owner_instructions",
+                "updated_at",
+            ]
+        )
+
+        return Response({"transcript": transcript, "structured": structured}, status=200)
 
 
 class HospitalStayViewSet(viewsets.ModelViewSet):

@@ -7,6 +7,7 @@ from .views import (
     AvailabilityView,
     HospitalStayViewSet,
     RoomViewSet,
+    VisitTranscriptionView,
     WaitingQueueViewSet,
 )
 from .views_assistant import (
@@ -35,6 +36,11 @@ router.register(r"schedule/assignments", DutyAssignmentViewSet, basename="duty-a
 
 urlpatterns = [
     path("", include(router.urls)),
+    path(
+        "visits/<int:appointment_id>/transcribe/",
+        VisitTranscriptionView.as_view(),
+        name="visit-transcribe",
+    ),
     path("availability/", AvailabilityView.as_view(), name="availability"),
     path(
         "availability/rooms/",

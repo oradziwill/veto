@@ -111,6 +111,8 @@ class ClinicalExam(models.Model):
     additional_notes = models.TextField(blank=True)
     owner_instructions = models.TextField(blank=True)
     initial_diagnosis = models.TextField(blank=True)
+    transcript = models.TextField(blank=True)
+    ai_notes_raw = models.JSONField(default=dict, blank=True)
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
