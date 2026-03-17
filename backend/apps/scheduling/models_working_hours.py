@@ -30,11 +30,11 @@ class VetWorkingHours(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = ("vet", "weekday", "start_time", "end_time")
+        unique_together = ("vet", "weekday")
         ordering = ["vet_id", "weekday", "start_time"]
 
     def clean(self):
-        if self.end_time <= self.start_time:
+        if self.end_time and self.start_time and self.end_time <= self.start_time:
             raise ValidationError({"end_time": "end_time must be after start_time"})
 
     def __str__(self) -> str:

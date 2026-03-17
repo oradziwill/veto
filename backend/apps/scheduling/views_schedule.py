@@ -44,8 +44,27 @@ class VetWorkingHoursViewSet(viewsets.ModelViewSet):
             qs = qs.filter(vet_id=vet_id)
         return qs
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vet = serializer.validated_data["vet"]
+        if vet.clinic_id != request.user.clinic_id:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Vet does not belong to your clinic.")
+        weekday = serializer.validated_data["weekday"]
+        obj, _ = VetWorkingHours.objects.update_or_create(
+            vet=vet,
+            weekday=weekday,
+            defaults={
+                "start_time": serializer.validated_data["start_time"],
+                "end_time": serializer.validated_data["end_time"],
+                "is_active": serializer.validated_data.get("is_active", True),
+            },
+        )
+        return Response(self.get_serializer(obj).data, status=status.HTTP_200_OK)
+
     def perform_create(self, serializer):
-        # Ensure the vet belongs to the same clinic
         vet = serializer.validated_data["vet"]
         if vet.clinic_id != self.request.user.clinic_id:
             from rest_framework.exceptions import PermissionDenied
