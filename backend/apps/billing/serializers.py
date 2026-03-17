@@ -2,9 +2,14 @@
 Billing serializers.
 """
 
+from decimal import Decimal
+
+from django.db import transaction
 from rest_framework import serializers
 
 from apps.clients.serializers import ClientSerializer
+from apps.inventory.models import InventoryMovement
+from apps.inventory.services.stock import apply_movement
 from apps.patients.serializers import PatientReadSerializer
 
 from .models import Invoice, InvoiceLine, Payment, Service
@@ -74,6 +79,17 @@ class InvoiceLineWriteSerializer(serializers.ModelSerializer):
             "service",
             "inventory_item",
         ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        inventory_item = attrs.get("inventory_item")
+        quantity = attrs.get("quantity")
+        if inventory_item is not None and quantity is not None:
+            if Decimal(quantity) != Decimal(quantity).to_integral_value():
+                raise serializers.ValidationError(
+                    {"quantity": "quantity must be a whole number when inventory_item is set."}
+                )
+        return attrs
 
 
 class PaymentSerializer(serializers.ModelSerializer):
@@ -185,19 +201,68 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
                 {"lines": "Inventory item must belong to your clinic."}
             )
 
+    @staticmethod
+    def _movement_note(*, appointment_id: int, invoice_id: int, line_id: int) -> str:
+        return f"Dispensed in visit #{appointment_id} (invoice #{invoice_id}, line #{line_id})"
+
+    def _create_dispense_movement_if_needed(
+        self, *, invoice: Invoice, line: InvoiceLine, request_user
+    ) -> None:
+        if not invoice.appointment_id or not line.inventory_item_id:
+            return
+        quantity = int(Decimal(line.quantity))
+        if quantity <= 0:
+            return
+        note = self._movement_note(
+            appointment_id=invoice.appointment_id,
+            invoice_id=invoice.id,
+            line_id=line.id,
+        )
+        # Idempotency guard in case serializer.save() is retried.
+        existing = InventoryMovement.objects.filter(
+            clinic_id=invoice.clinic_id,
+            item_id=line.inventory_item_id,
+            kind=InventoryMovement.Kind.OUT,
+            quantity=quantity,
+            appointment_id=invoice.appointment_id,
+            note=note,
+        ).exists()
+        if existing:
+            return
+        movement = InventoryMovement.objects.create(
+            clinic_id=invoice.clinic_id,
+            item_id=line.inventory_item_id,
+            kind=InventoryMovement.Kind.OUT,
+            quantity=quantity,
+            note=note,
+            patient_id=invoice.patient_id,
+            appointment_id=invoice.appointment_id,
+            created_by=request_user,
+        )
+        try:
+            apply_movement(movement)
+        except ValueError as err:
+            raise serializers.ValidationError({"lines": [str(err)]}) from err
+
     def create(self, validated_data):
         lines_data = validated_data.pop("lines", [])
         request = self.context["request"]
         clinic_id = request.user.clinic_id
         for line_data in lines_data:
             self._validate_line(line_data, clinic_id)
-        invoice = Invoice.objects.create(
-            clinic_id=clinic_id,
-            created_by=request.user,
-            **validated_data,
-        )
-        for line_data in lines_data:
-            InvoiceLine.objects.create(invoice=invoice, **line_data)
+        with transaction.atomic():
+            invoice = Invoice.objects.create(
+                clinic_id=clinic_id,
+                created_by=request.user,
+                **validated_data,
+            )
+            for line_data in lines_data:
+                line = InvoiceLine.objects.create(invoice=invoice, **line_data)
+                self._create_dispense_movement_if_needed(
+                    invoice=invoice,
+                    line=line,
+                    request_user=request.user,
+                )
         return invoice
 
     def update(self, instance, validated_data):
@@ -208,11 +273,17 @@ class InvoiceWriteSerializer(serializers.ModelSerializer):
         if lines_data is not None:
             for line_data in lines_data:
                 self._validate_line(line_data, clinic_id)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        if lines_data is not None:
-            instance.lines.all().delete()
-            for line_data in lines_data:
-                InvoiceLine.objects.create(invoice=instance, **line_data)
+        with transaction.atomic():
+            for attr, value in validated_data.items():
+                setattr(instance, attr, value)
+            instance.save()
+            if lines_data is not None:
+                instance.lines.all().delete()
+                for line_data in lines_data:
+                    line = InvoiceLine.objects.create(invoice=instance, **line_data)
+                    self._create_dispense_movement_if_needed(
+                        invoice=instance,
+                        line=line,
+                        request_user=self.context["request"].user,
+                    )
         return instance
