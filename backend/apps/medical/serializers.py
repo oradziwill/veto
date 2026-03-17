@@ -32,6 +32,8 @@ class ClinicalExamReadSerializer(serializers.ModelSerializer):
             "additional_notes",
             "owner_instructions",
             "initial_diagnosis",
+            "transcript",
+            "ai_notes_raw",
             "created_by",
             "created_at",
             "updated_at",
