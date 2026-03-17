@@ -12,7 +12,7 @@ import OwnerDashboardTab from "../components/tabs/OwnerDashboardTab";
 import SchedulerTab from "../components/tabs/SchedulerTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
-import { authAPI, queueAPI } from "../services/api";
+import { authAPI, queueAPI, vetsAPI } from "../services/api";
 import "../components/tabs/Tabs.css";
 import "./DoctorsView.css";
 
@@ -31,6 +31,8 @@ const DoctorsView = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userRole, setUserRole] = useState(null);
+  const [vets, setVets] = useState([]);
+  const [selectedVetId, setSelectedVetId] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(
     !localStorage.getItem("access_token")
   );
@@ -69,6 +71,7 @@ const DoctorsView = () => {
   useEffect(() => {
     if (localStorage.getItem("access_token")) {
       fetchCurrentUser();
+      vetsAPI.list().then((res) => setVets(res.data.results || res.data || [])).catch(() => {});
     }
   }, []);
 
@@ -143,6 +146,9 @@ const DoctorsView = () => {
       case "calendar":
         return (
           <CalendarTab
+            vets={vets}
+            vetId={selectedVetId}
+            onVetChange={setSelectedVetId}
             currentUserId={currentUserId}
             onStartVisit={(appointment) => {
               setHeaderVisitInitialPatient(appointment?.patient || null);

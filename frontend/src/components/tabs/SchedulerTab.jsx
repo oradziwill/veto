@@ -230,7 +230,8 @@ const DoctorHoursTab = ({ vets, workingHours, onRefresh }) => {
       setTimeout(() => setSuccess(false), 2500)
     } catch (err) {
       const data = err.response?.data
-      setError(data ? Object.values(data).flat().join(' ') : t('scheduler.saveError'))
+      const src = data?.details || data
+      setError(src ? Object.values(src).flat().join(' ') : t('scheduler.saveError'))
     } finally {
       setSaving(false)
     }
@@ -329,7 +330,8 @@ const LeavesTab = ({ vets, exceptions, onRefresh }) => {
       onRefresh()
     } catch (err) {
       const data = err.response?.data
-      setError(data ? Object.values(data).flat().join(' ') : t('scheduler.saveError'))
+      const src = data?.details || data
+      setError(src ? Object.values(src).flat().join(' ') : t('scheduler.saveError'))
     } finally {
       setSaving(false)
     }
@@ -472,7 +474,8 @@ const HolidaysTab = ({ holidays, onRefresh }) => {
       onRefresh()
     } catch (err) {
       const data = err.response?.data
-      setError(data ? Object.values(data).flat().join(' ') : t('scheduler.saveError'))
+      const src = data?.details || data
+      setError(src ? Object.values(src).flat().join(' ') : t('scheduler.saveError'))
     } finally {
       setSaving(false)
     }
