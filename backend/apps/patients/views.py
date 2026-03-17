@@ -38,6 +38,39 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
+        methods=["get"],
+        url_path="last-vitals",
+        permission_classes=[IsStaffOrVet],
+    )
+    def last_vitals(self, request, pk=None):
+        patient = self.get_object()
+        exam = (
+            Appointment.objects.filter(clinic_id=request.user.clinic_id, patient_id=patient.id)
+            .select_related("clinical_exam")
+            .exclude(clinical_exam__isnull=True)
+            .order_by("-starts_at", "-id")
+            .first()
+        )
+        if not exam or not getattr(exam, "clinical_exam", None):
+            return Response(status=204)
+        clinical_exam = exam.clinical_exam
+        payload = {
+            "temperature_c": (
+                str(clinical_exam.temperature_c)
+                if clinical_exam.temperature_c is not None
+                else None
+            ),
+            "heart_rate_bpm": clinical_exam.heart_rate_bpm,
+            "respiratory_rate_rpm": clinical_exam.respiratory_rate_rpm,
+            "weight_kg": (
+                str(clinical_exam.weight_kg) if clinical_exam.weight_kg is not None else None
+            ),
+            "recorded_at": clinical_exam.created_at.isoformat(),
+        }
+        return Response(payload, status=200)
+
+    @action(
+        detail=True,
         methods=["get", "post"],
         url_path="prescriptions",
         permission_classes=[IsStaffOrVet],

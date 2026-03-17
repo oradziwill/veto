@@ -107,6 +107,7 @@ class ClinicalExam(models.Model):
     temperature_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     heart_rate_bpm = models.PositiveIntegerField(null=True, blank=True)
     respiratory_rate_rpm = models.PositiveIntegerField(null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
 
     additional_notes = models.TextField(blank=True)
     owner_instructions = models.TextField(blank=True)
