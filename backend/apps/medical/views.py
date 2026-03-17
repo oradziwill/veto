@@ -44,7 +44,11 @@ class PatientHistoryEntryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
 
     def get_queryset(self):
-        return PatientHistoryEntry.objects.filter(clinic_id=self.request.user.clinic_id)
+        return (
+            PatientHistoryEntry.objects.filter(clinic_id=self.request.user.clinic_id)
+            .select_related("record", "appointment", "invoice")
+            .prefetch_related("invoice__lines")
+        )
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):

@@ -50,6 +50,20 @@ class PatientHistoryEntry(models.Model):
         on_delete=models.CASCADE,
         related_name="history_entries",
     )
+    appointment = models.ForeignKey(
+        "scheduling.Appointment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patient_history_entries",
+    )
+    invoice = models.ForeignKey(
+        "billing.Invoice",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patient_history_entries",
+    )
     note = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -62,7 +76,11 @@ class PatientHistoryEntry(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["clinic", "record", "-created_at"])]
+        indexes = [
+            models.Index(fields=["clinic", "record", "-created_at"]),
+            models.Index(fields=["clinic", "appointment", "-created_at"]),
+            models.Index(fields=["clinic", "invoice", "-created_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"HistoryEntry({self.record_id})"

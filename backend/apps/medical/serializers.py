@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.billing.models import Invoice
 from apps.medical.models import (
     ClinicalExam,
     MedicalRecord,
@@ -9,6 +10,7 @@ from apps.medical.models import (
     Prescription,
     Vaccination,
 )
+from apps.scheduling.models import Appointment
 
 # -------------------------
 # Clinical Exam
@@ -102,13 +104,34 @@ class MedicalRecordWriteSerializer(serializers.ModelSerializer):
 
 
 class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
+    services_performed = serializers.SerializerMethodField()
+
+    def get_services_performed(self, obj):
+        invoice = getattr(obj, "invoice", None)
+        if not invoice:
+            return []
+        lines = getattr(invoice, "lines", None)
+        if lines is None:
+            return []
+        return [
+            {
+                "description": line.description,
+                "quantity": str(line.quantity),
+                "unit_price": str(line.unit_price),
+            }
+            for line in lines.all()
+        ]
+
     class Meta:
         model = PatientHistoryEntry
         fields = [
             "id",
             "clinic",
             "record",
+            "appointment",
+            "invoice",
             "note",
+            "services_performed",
             "created_by",
             "created_at",
         ]
@@ -116,16 +139,53 @@ class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
 
 
 class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
+    invoice = serializers.PrimaryKeyRelatedField(
+        queryset=Invoice.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    appointment = serializers.PrimaryKeyRelatedField(
+        queryset=Appointment.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     def validate_record(self, value):
         request = self.context.get("request")
         if request and value.clinic_id != getattr(request.user, "clinic_id", None):
             raise serializers.ValidationError("Medical record must belong to your clinic.")
         return value
 
+    def validate_invoice(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+        if clinic_id and value.clinic_id != clinic_id:
+            raise serializers.ValidationError("Invoice must belong to your clinic.")
+        patient = self.context.get("patient")
+        if patient and value.patient_id and value.patient_id != patient.id:
+            raise serializers.ValidationError("Invoice must belong to this patient.")
+        return value
+
+    def validate_appointment(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+        if clinic_id and value.clinic_id != clinic_id:
+            raise serializers.ValidationError("Appointment must belong to your clinic.")
+        patient = self.context.get("patient")
+        if patient and value.patient_id and value.patient_id != patient.id:
+            raise serializers.ValidationError("Appointment must belong to this patient.")
+        return value
+
     class Meta:
         model = PatientHistoryEntry
         fields = [
             "record",
+            "appointment",
+            "invoice",
             "note",
         ]
 
