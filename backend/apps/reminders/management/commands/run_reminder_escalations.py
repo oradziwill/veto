@@ -7,6 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.billing.models import Invoice
+from apps.notifications.models import Notification
+from apps.notifications.services import notify_clinic_staff
 from apps.reminders.models import (
     Reminder,
     ReminderEscalationExecution,
@@ -150,6 +152,14 @@ class Command(BaseCommand):
                 ),
                 reason=reason,
             )
+            if applied:
+                notify_clinic_staff(
+                    clinic_id=rule.clinic_id,
+                    kind=Notification.Kind.ESCALATION_TRIGGERED,
+                    title="Reminder escalation triggered",
+                    body=f"Rule '{rule.name}' applied to reminder #{reminder.id}.",
+                    link_tab="reminders",
+                )
             return "applied" if applied else "skipped"
 
     def _run_action(self, rule: ReminderEscalationRule, reminder: Reminder) -> tuple[bool, str]:
