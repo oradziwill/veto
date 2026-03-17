@@ -13,6 +13,7 @@ class PatientHistoryForPatientSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     appointment = serializers.SerializerMethodField()
     receipt_summary = serializers.SerializerMethodField()
+    services_performed = serializers.SerializerMethodField()
 
     class Meta:
         model = PatientHistoryEntry
@@ -23,6 +24,8 @@ class PatientHistoryForPatientSerializer(serializers.ModelSerializer):
             "note",
             "receipt_summary",
             "appointment",
+            "invoice",
+            "services_performed",
             "created_by_name",
         ]
 
@@ -35,10 +38,38 @@ class PatientHistoryForPatientSerializer(serializers.ModelSerializer):
         return None
 
     def get_appointment(self, obj):
-        return None
+        appointment = getattr(obj, "appointment", None)
+        if not appointment:
+            return None
+        return {
+            "id": appointment.id,
+            "starts_at": appointment.starts_at.isoformat(),
+            "ends_at": appointment.ends_at.isoformat(),
+            "status": appointment.status,
+        }
 
     def get_receipt_summary(self, obj):
-        return ""
+        services = self.get_services_performed(obj)
+        if not services:
+            return ""
+        parts = [f"{line['description']} x{line['quantity']}" for line in services]
+        return ", ".join(parts)
+
+    def get_services_performed(self, obj):
+        invoice = getattr(obj, "invoice", None)
+        if not invoice:
+            return []
+        lines = getattr(invoice, "lines", None)
+        if lines is None:
+            return []
+        return [
+            {
+                "description": line.description,
+                "quantity": str(line.quantity),
+                "unit_price": str(line.unit_price),
+            }
+            for line in lines.all()
+        ]
 
 
 class ClientMiniSerializer(serializers.ModelSerializer):

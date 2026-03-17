@@ -16,6 +16,7 @@ from apps.clients.models import ClientClinic
 from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
 from apps.medical.serializers import (
     MedicalRecordReadSerializer,
+    PatientHistoryEntryWriteSerializer,
     PrescriptionReadSerializer,
     PrescriptionWriteSerializer,
     VaccinationReadSerializer,
@@ -291,7 +292,8 @@ class PatientViewSet(viewsets.ModelViewSet):
                     clinic_id=user.clinic_id,
                     record__patient_id=patient.id,
                 )
-                .select_related("record", "created_by")
+                .select_related("record", "created_by", "appointment", "invoice")
+                .prefetch_related("invoice__lines")
                 .order_by("-created_at")
             )
             return Response(PatientHistoryForPatientSerializer(qs, many=True).data)
@@ -300,10 +302,6 @@ class PatientViewSet(viewsets.ModelViewSet):
         if not IsDoctorOrAdmin().has_permission(request, self):
             raise PermissionDenied("Only doctors and clinic admins can add history notes.")
 
-        note = request.data.get("note", "")
-        if not note:
-            raise ValidationError({"note": "Note is required."})
-
         # PatientHistoryEntry uses record (MedicalRecord), not patient_id. Get or create MedicalRecord.
         record, _ = MedicalRecord.objects.get_or_create(
             clinic_id=user.clinic_id,
@@ -311,10 +309,21 @@ class PatientViewSet(viewsets.ModelViewSet):
             defaults={"created_by": user},
         )
 
-        entry = PatientHistoryEntry.objects.create(
+        serializer = PatientHistoryEntryWriteSerializer(
+            data={
+                "record": record.id,
+                "note": request.data.get("note", ""),
+                "invoice": request.data.get("invoice"),
+                "appointment": request.data.get("appointment"),
+            },
+            context={"request": request, "patient": patient},
+        )
+        serializer.is_valid(raise_exception=True)
+        if not (serializer.validated_data.get("note") or "").strip():
+            raise ValidationError({"note": "Note is required."})
+
+        entry = serializer.save(
             clinic_id=user.clinic_id,
-            record=record,
-            note=note,
             created_by=user,
         )
 
@@ -323,6 +332,12 @@ class PatientViewSet(viewsets.ModelViewSet):
         patient.ai_summary_updated_at = None
         patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
 
+        entry = (
+            PatientHistoryEntry.objects.filter(pk=entry.pk)
+            .select_related("record", "created_by", "appointment", "invoice")
+            .prefetch_related("invoice__lines")
+            .get()
+        )
         return Response(PatientHistoryForPatientSerializer(entry).data, status=201)
 
     @action(detail=True, methods=["get"], url_path="ai-summary")
