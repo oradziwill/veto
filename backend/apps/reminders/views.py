@@ -17,6 +17,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsClinicAdmin, IsStaffOrVet
+from apps.notifications.models import Notification
+from apps.notifications.services import notify_clinic_staff
 from apps.scheduling.models import Appointment
 
 from .models import (
@@ -867,6 +869,11 @@ class ReminderPortalActionView(APIView):
                     "action_note": action_note,
                 },
             )
+            self._create_notification_for_portal_action(
+                reminder=reminder,
+                action=token_row.action,
+                action_status=action_status,
+            )
         return Response(
             {
                 "ok": True,
@@ -875,6 +882,35 @@ class ReminderPortalActionView(APIView):
                 "action_note": action_note,
             },
             status=200,
+        )
+
+    @staticmethod
+    def _create_notification_for_portal_action(
+        *, reminder: Reminder, action: str, action_status: str
+    ) -> None:
+        if action_status not in {"applied", "needs_review"}:
+            return
+        if action == ReminderPortalActionToken.Action.RESCHEDULE_REQUEST:
+            notify_clinic_staff(
+                clinic_id=reminder.clinic_id,
+                kind=Notification.Kind.RESCHEDULE_REQUEST,
+                title="Owner requested reschedule",
+                body=f"Reminder #{reminder.id}: reschedule request requires follow-up.",
+                link_tab="calendar",
+            )
+            return
+        if action == ReminderPortalActionToken.Action.CONFIRM:
+            title = "Owner confirmed appointment"
+            body = f"Reminder #{reminder.id}: appointment confirmed via portal."
+        else:
+            title = "Owner cancelled appointment"
+            body = f"Reminder #{reminder.id}: appointment cancelled via portal."
+        notify_clinic_staff(
+            clinic_id=reminder.clinic_id,
+            kind=Notification.Kind.APPOINTMENT_CONFIRMED,
+            title=title,
+            body=body,
+            link_tab="calendar",
         )
 
     def _resolve_token(self, token: str, *, lock: bool):

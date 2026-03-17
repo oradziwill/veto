@@ -321,6 +321,15 @@ Sample response snippets:
 | POST | `/api/reminder-templates/preview/` | Preview rendered template output with context payload |
 | POST | `/api/reminders/webhooks/<provider>/` | Provider callback for delivery status updates |
 
+### Notifications
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/notifications/` | Paginated in-app notifications for authenticated user (all unread + recently read), newest first |
+| POST | `/api/notifications/<id>/read/` | Mark one notification as read |
+| POST | `/api/notifications/read-all/` | Mark all unread notifications for user as read |
+| GET | `/api/notifications/unread-count/` | Lightweight unread count payload: `{ "count": N }` |
+
 ## Apps and Responsibilities
 
 | App | Purpose |
@@ -333,6 +342,7 @@ Sample response snippets:
 | **inventory** | Items, stock movements, low-stock alerts |
 | **billing** | Services, invoices, invoice lines, payments |
 | **labs** | Labs, lab tests, lab orders, results (in-clinic + external) |
+| **notifications** | In-app staff notification center and unread counters |
 | **tenancy** | Clinics, holidays (no API routes) |
 
 ## User Roles (Personas)

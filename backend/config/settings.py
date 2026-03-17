@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "apps.billing.apps.BillingConfig",
     "apps.labs.apps.LabsConfig",
     "apps.reminders.apps.RemindersConfig",
+    "apps.notifications.apps.NotificationsConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
