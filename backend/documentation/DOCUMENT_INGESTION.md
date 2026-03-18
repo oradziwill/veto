@@ -31,12 +31,28 @@ Output is minimal HTML (e.g. `<html><body><p>...</p></body></html>`). Optional `
 
 **Dependencies:** `pymupdf`, `openai` (and `boto3` for S3). OCR requires `OPENAI_API_KEY` to be set when processing low-text PDFs or images.
 
+## Frontend integration (async flow + polling)
+
+Conversion runs **asynchronously** in the backend (scheduled job). The frontend should not wait for conversion on upload.
+
+1. **Upload** – `POST /api/documents/upload/` with `file` + `patient`. Response is **immediate** (201) with `id`, `job_id`, `status: "uploaded"`. No conversion happens in this request.
+2. **Poll for completion** – Use `GET /api/documents/{id}/` (or `GET /api/documents/?patient=…`) and check `status`:
+   - `uploaded` → waiting for processing
+   - `processing` → conversion in progress
+   - `ready` → HTML is available; use download-url to get it
+   - `failed` → conversion failed; show error, no HTML
+3. **Get HTML for display** – When `status === "ready"`, call `POST /api/documents/{id}/download-url/`. Use the returned `url` (presigned, valid for `expires_in` seconds) to fetch the HTML in the browser (e.g. in an iframe or by fetching and rendering).
+
+Polling interval suggestion: every 5–10 seconds until `ready` or `failed`, with a timeout (e.g. 5 minutes).
+
 ## API summary
 
-- `POST /api/documents/upload/` – Multipart: `file` (required), `patient` (required), optional `appointment`, `lab_order`, `document_type`. Returns 201 with `id`, `job_id`, `status`, `input_s3_key`.
-- `GET /api/documents/` – List (clinic-scoped). Query params: `patient`, `status`.
-- `GET /api/documents/{id}/` – Retrieve one (clinic-scoped).
-- `POST /api/documents/{id}/download-url/` – Returns presigned URL for the HTML file (or input file if HTML not ready). Body: `{"url": "...", "expires_in": 3600}`.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/documents/upload/` | Multipart: `file` (required), `patient` (required). Optional: `appointment`, `lab_order`, `document_type`. Returns 201: `{ id, job_id, status, input_s3_key, created_at }`. |
+| GET | `/api/documents/` | List (clinic-scoped). Query: `patient`, `status`. Returns list of documents with full metadata. |
+| GET | `/api/documents/{id}/` | Retrieve one. Returns full document (including `status`, `output_html_s3_key` when ready). |
+| POST | `/api/documents/{id}/download-url/` | Returns `{ url, expires_in }` – use `url` to load the HTML (or original file if not ready). |
 
 Permissions: authenticated users with a clinic and staff/vet role (`IsStaffOrVet`, `HasClinic`).
 
