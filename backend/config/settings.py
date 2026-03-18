@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "apps.labs.apps.LabsConfig",
     "apps.reminders.apps.RemindersConfig",
     "apps.notifications.apps.NotificationsConfig",
+    "apps.documents.apps.DocumentsConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -229,3 +230,8 @@ REMINDER_PORTAL_TOKEN_TTL_HOURS = int(os.getenv("REMINDER_PORTAL_TOKEN_TTL_HOURS
 DEFAULT_CLINIC_OPEN_TIME = "09:00"
 DEFAULT_CLINIC_CLOSE_TIME = "17:00"
 DEFAULT_SLOT_MINUTES = 30
+
+# Document ingestion pipeline (single bucket for I/O)
+DOCUMENTS_DATA_S3_BUCKET = os.getenv("DOCUMENTS_DATA_S3_BUCKET", "")
+DOCUMENTS_S3_REGION = os.getenv("DOCUMENTS_S3_REGION", "us-east-1")
+DOCUMENTS_MAX_UPLOAD_MB = int(os.getenv("DOCUMENTS_MAX_UPLOAD_MB", "50"))

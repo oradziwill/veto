@@ -30,6 +30,7 @@ backend/
 │   ├── billing/            # Services, invoices, payments
 │   ├── labs/               # Labs, lab tests, lab orders, results
 │   ├── reminders/          # Reminder queue, delivery processing, reminder API
+│   ├── documents/          # Document ingestion (upload → S3 → async HTML conversion)
 │   └── tenancy/            # Clinics, holidays (models only)
 ├── documentation/          # API docs and handoffs
 ├── conftest.py             # Shared pytest fixtures

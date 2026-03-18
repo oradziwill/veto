@@ -239,3 +239,28 @@ variable "reminder_process_schedule_expression" {
   type        = string
   default     = "rate(5 minutes)"
 }
+
+# --- Document ingestion pipeline ---
+variable "documents_data_s3_bucket_name" {
+  description = "S3 bucket name for document ingestion (input and output under documents_data/). Empty to disable."
+  type        = string
+  default     = ""
+}
+
+variable "documents_s3_region" {
+  description = "AWS region for document ingestion S3 bucket"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "documents_max_upload_mb" {
+  description = "Maximum upload size in MB for document ingestion"
+  type        = number
+  default     = 50
+}
+
+variable "document_ingestion_schedule_expression" {
+  description = "EventBridge schedule for process_document_ingestion command"
+  type        = string
+  default     = "rate(10 minutes)"
+}
