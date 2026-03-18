@@ -155,6 +155,44 @@ resource "aws_cloudwatch_event_target" "process_reminders" {
   })
 }
 
+# Document ingestion: run process_document_ingestion on schedule (only when bucket is configured)
+resource "aws_cloudwatch_event_rule" "process_document_ingestion" {
+  count               = length(trimspace(var.documents_data_s3_bucket_name)) > 0 ? 1 : 0
+  name                = "${local.name}-process-document-ingestion"
+  description         = "Runs process_document_ingestion command on schedule"
+  schedule_expression = var.document_ingestion_schedule_expression
+}
+
+resource "aws_cloudwatch_event_target" "process_document_ingestion" {
+  count       = length(trimspace(var.documents_data_s3_bucket_name)) > 0 ? 1 : 0
+  rule        = aws_cloudwatch_event_rule.process_document_ingestion[0].name
+  target_id   = "process-document-ingestion"
+  arn         = aws_ecs_cluster.main.arn
+  role_arn    = aws_iam_role.eventbridge_ecs_runner.arn
+
+  ecs_target {
+    launch_type         = "FARGATE"
+    task_count          = 1
+    task_definition_arn = aws_ecs_task_definition.backend.arn
+    platform_version    = "LATEST"
+
+    network_configuration {
+      subnets          = aws_subnet.private[*].id
+      security_groups  = [aws_security_group.ecs.id]
+      assign_public_ip = false
+    }
+  }
+
+  input = jsonencode({
+    containerOverrides = [
+      {
+        name    = "backend"
+        command = ["python", "manage.py", "process_document_ingestion"]
+      }
+    ]
+  })
+}
+
 resource "aws_cloudwatch_metric_alarm" "alb_backend_5xx" {
   alarm_name          = "${local.name}-alb-backend-5xx"
   alarm_description   = "Backend target 5xx errors are above threshold"

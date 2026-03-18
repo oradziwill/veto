@@ -181,3 +181,37 @@ resource "aws_iam_role_policy" "ecs_task_exec_command" {
     }]
   })
 }
+
+# Document ingestion: ECS task needs S3 GetObject/PutObject (and ListBucket) on documents bucket
+resource "aws_iam_role_policy" "ecs_task_documents_s3" {
+  count = length(trimspace(var.documents_data_s3_bucket_name)) > 0 ? 1 : 0
+
+  name = "${local.name}-ecs-task-documents-s3"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+        ]
+        Resource = "arn:aws:s3:::${var.documents_data_s3_bucket_name}/documents_data/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = "arn:aws:s3:::${var.documents_data_s3_bucket_name}"
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["documents_data/*"]
+          }
+        }
+      }
+    ]
+  })
+}
