@@ -342,6 +342,30 @@
   },
   "patientDetails": {
     "title": "Szczegóły pacjenta",
+    "tabs": {
+      "overview": "Przegląd",
+      "history": "Historia",
+      "prescriptions": "Recepty"
+    },
+    "prescriptions": {
+      "title": "Recepty",
+      "add": "Dodaj receptę",
+      "newPrescription": "Nowa recepta",
+      "drugName": "Lek",
+      "drugNamePlaceholder": "np. Amoksycylina",
+      "dosage": "Dawkowanie",
+      "dosagePlaceholder": "np. 250mg dwa razy dziennie",
+      "durationDays": "Czas leczenia (dni)",
+      "prescribedBy": "Wystawiona przez",
+      "date": "Data",
+      "notes": "Uwagi",
+      "notesPlaceholder": "Dodatkowe instrukcje...",
+      "days": "dni",
+      "empty": "Brak recept dla tego pacjenta.",
+      "loading": "Ładowanie recept...",
+      "loadError": "Nie udało się załadować recept.",
+      "saveError": "Nie udało się zapisać recepty."
+    },
     "patientInfo": "Dane pacjenta",
     "name": "Imię",
     "species": "Gatunek",

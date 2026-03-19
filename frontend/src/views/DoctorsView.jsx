@@ -140,7 +140,7 @@ const DoctorsView = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case "patients":
-        return <PatientsTab />;
+        return <PatientsTab userRole={userRole} />;
       case "visits":
         return <VisitsTab />;
       case "calendar":

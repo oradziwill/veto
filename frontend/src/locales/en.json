@@ -342,6 +342,30 @@
   },
   "patientDetails": {
     "title": "Patient Details",
+    "tabs": {
+      "overview": "Overview",
+      "history": "History",
+      "prescriptions": "Prescriptions"
+    },
+    "prescriptions": {
+      "title": "Prescriptions",
+      "add": "Add Prescription",
+      "newPrescription": "New Prescription",
+      "drugName": "Drug Name",
+      "drugNamePlaceholder": "e.g. Amoxicillin",
+      "dosage": "Dosage",
+      "dosagePlaceholder": "e.g. 250mg twice daily",
+      "durationDays": "Duration (days)",
+      "prescribedBy": "Prescribed by",
+      "date": "Date",
+      "notes": "Notes",
+      "notesPlaceholder": "Additional instructions...",
+      "days": "days",
+      "empty": "No prescriptions for this patient.",
+      "loading": "Loading prescriptions...",
+      "loadError": "Failed to load prescriptions.",
+      "saveError": "Failed to save prescription."
+    },
     "patientInfo": "Patient Information",
     "name": "Name",
     "species": "Species",
