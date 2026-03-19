@@ -129,7 +129,7 @@ const ReceptionistView = () => {
       case "waiting-room":
         return <WaitingRoomTab userRole="receptionist" />;
       case "patients":
-        return <PatientsTab />;
+        return <PatientsTab userRole="receptionist" />;
       case "visits":
         return <VisitsTab />;
       case "billing":

@@ -145,6 +145,12 @@ export const patientAISummaryAPI = {
   get: (patientId) => api.get(`/patients/${patientId}/ai-summary/`),
 };
 
+export const prescriptionsAPI = {
+  list: (patientId) => api.get(`/patients/${patientId}/prescriptions/`),
+  create: (patientId, data) => api.post(`/patients/${patientId}/prescriptions/`, data),
+  get: (id) => api.get(`/prescriptions/${id}/`),
+};
+
 export const servicesAPI = {
   list: (params, options = {}) => api.get("/billing/services/", { params, ...options }),
   get: (id) => api.get(`/billing/services/${id}/`),

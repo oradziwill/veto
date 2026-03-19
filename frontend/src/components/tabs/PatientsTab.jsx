@@ -6,7 +6,7 @@ import AddPatientModal from "../modals/AddPatientModal";
 import PatientDetailsModal from "../modals/PatientDetailsModal";
 import "./Tabs.css";
 
-const PatientsTab = () => {
+const PatientsTab = ({ userRole = null }) => {
   const { t } = useTranslation();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -201,6 +201,7 @@ const PatientsTab = () => {
           setSelectedPatient(null);
         }}
         patient={selectedPatient}
+        userRole={userRole}
       />
     </div>
   );
