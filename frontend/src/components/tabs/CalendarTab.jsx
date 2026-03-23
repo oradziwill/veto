@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { appointmentsAPI, availabilityAPI, roomsAPI, schedulerAPI } from '../../services/api'
+import { appointmentsAPI, availabilityAPI, roomsAPI, schedulerAPI } from '../../services/api' // availabilityAPI still used by room view
 import VisitDetailsModal from '../modals/VisitDetailsModal'
 import AddAppointmentModal from '../modals/AddAppointmentModal'
 import './Tabs.css'
 
-const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVisit = null, currentUserId = null }) => {
+const DUTY_COLORS = [
+  '#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5',
+  '#dd6b20', '#319795', '#d53f8c', '#2b6cb0', '#276749',
+]
+
+const getDutyColor = (vetId) => DUTY_COLORS[(vetId || 0) % DUTY_COLORS.length]
+
+const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVisit = null, currentUserId = null, userRole = null }) => {
   const { t, i18n } = useTranslation()
   const [appointments, setAppointments] = useState([])
   const [rooms, setRooms] = useState([])
@@ -16,9 +23,9 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
   const [clickedSlotTime, setClickedSlotTime] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [availabilityByDay, setAvailabilityByDay] = useState({}) // { 'YYYY-MM-DD': { free: [], busy: [] } }
+  const [clinicHours, setClinicHours] = useState([]) // { weekday, start_time, end_time, is_active }
   const [availabilityByRoomByDay, setAvailabilityByRoomByDay] = useState({}) // { 'YYYY-MM-DD': { rooms: [...] } }
-  const [dutyAssignments, setDutyAssignments] = useState([]) // DutyAssignment records for current user
+  const [dutyAssignments, setDutyAssignments] = useState([])
 
   const days = [t('calendar.sun'), t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), t('calendar.thu'), t('calendar.fri'), t('calendar.sat')]
   const hours = Array.from({ length: 12 }, (_, i) => i + 8) // 8 AM to 7 PM
@@ -61,13 +68,18 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
       const weekStart = getWeekStart(currentDate)
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekEnd.getDate() + 7)
-      
+
       // Set time boundaries for the week
       weekStart.setHours(0, 0, 0, 0)
       weekEnd.setHours(23, 59, 59, 999)
 
-      // Fetch all appointments (backend doesn't support date range, so we fetch all and filter client-side)
-      const params = vetId ? { vet: vetId } : {}
+      // Doctor sees only their own visits; reception/admin see all (or filtered by vet dropdown)
+      let params = {}
+      if (userRole === 'doctor') {
+        if (currentUserId) params.vet = currentUserId
+      } else {
+        if (vetId) params.vet = vetId
+      }
       const response = await appointmentsAPI.list(params)
       let allAppointments = response.data.results || response.data || []
       
@@ -87,25 +99,14 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
   }
 
   useEffect(() => {
-    const fetchAvailabilityForWeek = async () => {
-      const weekDates = getWeekDates(currentDate)
-      const availabilityMap = {}
-      
-      const promises = weekDates.map(async (date) => {
-        const dateStr = date.toISOString().split('T')[0]
-        try {
-          const availParams = { date: dateStr, slot_minutes: 30 }
-          if (vetId) availParams.vet = vetId
-          const response = await availabilityAPI.get(availParams)
-          availabilityMap[dateStr] = response.data
-        } catch (err) {
-          console.error(`Error fetching availability for ${dateStr}:`, err)
-          availabilityMap[dateStr] = null
-        }
-      })
-      
-      await Promise.all(promises)
-      setAvailabilityByDay(availabilityMap)
+    const fetchClinicHours = async () => {
+      try {
+        const res = await schedulerAPI.listClinicHours()
+        setClinicHours(res.data.results || res.data || [])
+      } catch (err) {
+        console.error('Error fetching clinic hours:', err)
+        setClinicHours([])
+      }
     }
 
     const fetchRoomsAndRoomAvailability = async () => {
@@ -132,15 +133,14 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
     }
 
     const fetchDutyAssignments = async () => {
-      const dutyVetId = vetId || currentUserId
-      if (!dutyVetId) return
       const weekStart = getWeekStart(currentDate)
       const weekEnd = new Date(weekStart)
       weekEnd.setDate(weekEnd.getDate() + 6)
       const from = weekStart.toISOString().split('T')[0]
       const to = weekEnd.toISOString().split('T')[0]
       try {
-        const res = await schedulerAPI.listAssignments({ from, to, vet: dutyVetId })
+        // Fetch all doctors' duties — duty calendar is visible to everyone
+        const res = await schedulerAPI.listAssignments({ from, to })
         setDutyAssignments(res.data.results || res.data || [])
       } catch (err) {
         console.error('Error fetching duty assignments:', err)
@@ -149,7 +149,7 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
     }
 
     fetchAppointments()
-    fetchAvailabilityForWeek()
+    fetchClinicHours()
     fetchRoomsAndRoomAvailability()
     fetchDutyAssignments()
   }, [currentDate, vetId, currentUserId])
@@ -196,18 +196,9 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
     })
   }
 
-  const getDutyForCell = (date, hour) => {
+  const getDutiesForDay = (date) => {
     const dateStr = date.toISOString().split('T')[0]
-    return dutyAssignments.filter(duty => {
-      if (duty.date !== dateStr) return false
-      const [startH, startM] = duty.start_time.split(':').map(Number)
-      const [endH, endM] = duty.end_time.split(':').map(Number)
-      const dutyStartMins = startH * 60 + startM
-      const dutyEndMins = endH * 60 + endM
-      const cellStartMins = hour * 60
-      const cellEndMins = (hour + 1) * 60
-      return dutyStartMins < cellEndMins && dutyEndMins > cellStartMins
-    })
+    return dutyAssignments.filter(duty => duty.date === dateStr)
   }
 
   const navigateWeek = (direction) => {
@@ -222,58 +213,20 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
   }
 
   const getCellStatus = (date, hour) => {
-    const dateStr = date.toISOString().split('T')[0]
-    const availability = availabilityByDay[dateStr]
-    
-    if (!availability || !availability.workday) {
-      return 'unavailable' // Day is closed or no availability data
-    }
+    // Convert JS day (0=Sun) to API weekday (0=Mon, 6=Sun)
+    const jsDay = date.getDay()
+    const weekday = jsDay === 0 ? 6 : jsDay - 1
 
-    const hourStart = new Date(date)
-    hourStart.setHours(hour, 0, 0, 0)
-    const hourEnd = new Date(hourStart)
-    hourEnd.setHours(hour + 1, 0, 0, 0)
+    const clinicDay = clinicHours.find(h => h.weekday === weekday && h.is_active)
+    if (!clinicDay) return 'unavailable'
 
-    // Check if this hour is within work hours
-    const workStart = new Date(availability.workday.start)
-    const workEnd = new Date(availability.workday.end)
-    
-    if (hourEnd <= workStart || hourStart >= workEnd) {
-      return 'unavailable' // Outside work hours
-    }
+    const [startH] = clinicDay.start_time.split(':').map(Number)
+    const [endH] = clinicDay.end_time.split(':').map(Number)
+    if (hour < startH || hour >= endH) return 'unavailable'
 
-    // Check if there's an appointment in this hour
-    const cellAppointments = getAppointmentsForCell(date, hour)
-    if (cellAppointments.length > 0) {
-      return 'busy' // Has appointments
-    }
+    if (getAppointmentsForCell(date, hour).length > 0) return 'busy'
 
-    // Check if this hour overlaps with any free slot
-    if (availability.free && availability.free.length > 0) {
-      const isFree = availability.free.some((slot) => {
-        const slotStart = new Date(slot.start)
-        const slotEnd = new Date(slot.end)
-        return hourStart < slotEnd && hourEnd > slotStart
-      })
-      if (isFree) {
-        return 'free' // Available time slot
-      }
-    }
-
-    // If we have work hours but no free slots, it might be busy or unavailable
-    if (availability.busy && availability.busy.length > 0) {
-      const isBusy = availability.busy.some((busySlot) => {
-        const busyStart = new Date(busySlot.start)
-        const busyEnd = new Date(busySlot.end)
-        return hourStart < busyEnd && hourEnd > busyStart
-      })
-      if (isBusy) {
-        return 'busy'
-      }
-    }
-
-    // Default to unavailable if we can't determine
-    return 'unavailable'
+    return 'free'
   }
 
   return (
@@ -286,7 +239,7 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
       </div>
 
       <div className="calendar-controls" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.75rem', flexWrap: 'wrap', padding: '0 0 1rem 0' }}>
-        {vets && (
+        {vets && userRole !== 'doctor' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: 'auto' }}>
             <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#4a5568' }}>{t('calendar.doctor')}</label>
             <select
@@ -398,90 +351,95 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
         ) : (
           <div className="calendar-view">
             <div className="calendar-grid">
-              <div className="calendar-header">
-                <div className="time-column"></div>
-                {weekDates.map((date, idx) => (
+              {/* Header row — day names + duty badges */}
+              <div className="time-column"></div>
+              {weekDates.map((date, idx) => {
+                const dayDuties = getDutiesForDay(date)
+                return (
                   <div key={idx} className="day-header">
                     <div className="day-name">{days[date.getDay()]}</div>
                     <div className="day-number">{date.getDate()}</div>
+                    {dayDuties.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '6px' }}>
+                        {dayDuties.map(duty => (
+                          <div
+                            key={duty.id}
+                            style={{
+                              background: getDutyColor(duty.vet),
+                              color: '#fff',
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {duty.vet_name} {duty.start_time.slice(0, 5)}–{duty.end_time.slice(0, 5)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                )
+              })}
 
-              <div className="calendar-body">
-                {hours.map((hour) => (
-                  <div key={hour} className="calendar-row">
-                    <div className="time-slot">{hour}:00</div>
-                    {weekDates.map((date, dayIdx) => {
-                      const cellAppointments = getAppointmentsForCell(date, hour)
-                      const cellStatus = getCellStatus(date, hour)
-                      const cellDuties = getDutyForCell(date, hour)
+              {/* Hour rows */}
+              {hours.map((hour) => (
+                <React.Fragment key={hour}>
+                  <div className="time-slot">{hour}:00</div>
+                  {weekDates.map((date, dayIdx) => {
+                    const cellAppointments = getAppointmentsForCell(date, hour)
+                    const cellStatus = getCellStatus(date, hour)
 
-                      return (
-                        <div
-                          key={`${dayIdx}-${hour}`}
-                          className={`calendar-cell calendar-cell-${cellStatus}`}
-                          title={cellStatus === 'unavailable' ? t('calendar.notAvailable') : cellStatus === 'busy' ? t('calendar.busy') : t('calendar.available')}
-                          onClick={() => handleCellClick(date, hour)}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          {cellDuties.map((duty) => (
+                    return (
+                      <div
+                        key={`${dayIdx}-${hour}`}
+                        className={`calendar-cell calendar-cell-${cellStatus}`}
+                        title={cellStatus === 'unavailable' ? t('calendar.notAvailable') : cellStatus === 'busy' ? t('calendar.busy') : t('calendar.available')}
+                        onClick={() => handleCellClick(date, hour)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {cellAppointments.map((apt) => {
+                          let displayReason = apt.reason || t('visits.visit')
+                          if (displayReason.startsWith('Unknown - ')) {
+                            displayReason = displayReason.replace('Unknown - ', '')
+                          }
+
+                          return (
                             <div
-                              key={`duty-${duty.id}`}
-                              style={{
-                                background: '#3182ce',
-                                color: '#fff',
-                                borderRadius: '4px',
-                                padding: '2px 4px',
-                                fontSize: '0.72rem',
-                                fontWeight: 600,
-                                marginBottom: '2px',
-                                pointerEvents: 'none',
+                              key={apt.id}
+                              className="calendar-event"
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedAppointment(apt)
+                                setIsDetailsModalOpen(true)
                               }}
-                            >
-                              {t('scheduler.onDuty')} {duty.start_time.slice(0, 5)}–{duty.end_time.slice(0, 5)}
-                            </div>
-                          ))}
-                          {cellAppointments.map((apt) => {
-                            let displayReason = apt.reason || t('visits.visit')
-                            if (displayReason.startsWith('Unknown - ')) {
-                              displayReason = displayReason.replace('Unknown - ', '')
-                            }
-                            
-                            return (
-                              <div
-                                key={apt.id}
-                                className="calendar-event"
-                                role="button"
-                                tabIndex={0}
-                                onClick={(e) => {
-                                  e.stopPropagation()
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
                                   setSelectedAppointment(apt)
                                   setIsDetailsModalOpen(true)
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault()
-                                    setSelectedAppointment(apt)
-                                    setIsDetailsModalOpen(true)
-                                  }
-                                }}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <span className="event-time">{formatTime(apt.starts_at)}</span>
-                                <span className="event-title">{displayReason}</span>
-                                {apt.room && (
-                                  <span className="event-room" style={{ fontSize: '0.7rem', opacity: 0.9 }}>{t('rooms.' + apt.room.name, { defaultValue: apt.room.name })}</span>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
+                                }
+                              }}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <span className="event-time">{formatTime(apt.starts_at)}</span>
+                              <span className="event-title">{displayReason}</span>
+                              {apt.room && (
+                                <span className="event-room" style={{ fontSize: '0.7rem', opacity: 0.9 }}>{t('rooms.' + apt.room.name, { defaultValue: apt.room.name })}</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </React.Fragment>
+              ))}
             </div>
           </div>
         )}

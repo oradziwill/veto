@@ -124,6 +124,7 @@ const ReceptionistView = () => {
             vets={vets}
             vetId={selectedVetId}
             onVetChange={setSelectedVetId}
+            userRole="receptionist"
           />
         );
       case "waiting-room":
@@ -140,6 +141,7 @@ const ReceptionistView = () => {
             vets={vets}
             vetId={selectedVetId}
             onVetChange={setSelectedVetId}
+            userRole="receptionist"
           />
         );
     }
