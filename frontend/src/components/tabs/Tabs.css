@@ -356,14 +356,10 @@
 }
 
 .calendar-grid {
-  min-width: 1000px;
-}
-
-.calendar-header {
   display: grid;
   grid-template-columns: 80px repeat(7, 1fr);
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  min-width: 1000px;
 }
 
 .time-column {
@@ -387,19 +383,6 @@
   font-size: 1.1rem;
   font-weight: 600;
   color: #2d3748;
-}
-
-.calendar-body {
-  display: flex;
-  flex-direction: column;
-}
-
-.calendar-row {
-  display: grid;
-  grid-template-columns: 80px repeat(7, 1fr);
-  gap: 0.5rem;
-  min-height: 60px;
-  margin-bottom: 0.5rem;
 }
 
 .time-slot {

@@ -150,6 +150,7 @@ const DoctorsView = () => {
             vetId={selectedVetId}
             onVetChange={setSelectedVetId}
             currentUserId={currentUserId}
+            userRole={userRole}
             onStartVisit={(appointment) => {
               setHeaderVisitInitialPatient(appointment?.patient || null);
               setHeaderVisitActive(true);
