@@ -34,14 +34,7 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
       Resource = [
         aws_secretsmanager_secret.django_secret_key.arn,
         aws_secretsmanager_secret.db_password.arn,
-        aws_secretsmanager_secret.cors_allowed_origins.arn,
-        aws_secretsmanager_secret.openai_api_key.arn,
-        aws_secretsmanager_secret.reminder_sendgrid_api_key.arn,
-        aws_secretsmanager_secret.reminder_sendgrid_webhook_secret.arn,
-        aws_secretsmanager_secret.reminder_twilio_account_sid.arn,
-        aws_secretsmanager_secret.reminder_twilio_auth_token.arn,
-        aws_secretsmanager_secret.reminder_twilio_webhook_secret.arn,
-        aws_secretsmanager_secret.reminder_webhook_token.arn,
+        aws_secretsmanager_secret.app_secrets.arn,
       ]
     }]
   })
