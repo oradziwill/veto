@@ -7,6 +7,7 @@ import {
   patientHistoryAPI,
   servicesAPI,
   invoicesAPI,
+  inventoryAPI,
 } from '../../services/api'
 import AddClientModal from './AddClientModal'
 import './Modal.css'
@@ -27,29 +28,39 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
   const [formData, setFormData] = useState({
     patient: '',
     visitNotes: '',
-    medication: '',
     medicalReceipts: '',
     additionalNotes: '',
   })
-  
+
   const [services, setServices] = useState([])
   const [selectedServices, setSelectedServices] = useState([]) // { id, name, price } - can add same service multiple times
   const [serviceToAdd, setServiceToAdd] = useState('') // id of service selected in dropdown
   const [loadingServices, setLoadingServices] = useState(false)
   const [servicesError, setServicesError] = useState(false)
   const [servicesFetchKey, setServicesFetchKey] = useState(0)
+
+  const [medicationItems, setMedicationItems] = useState([])
+  const [loadingMedications, setLoadingMedications] = useState(false)
+  const [selectedMedications, setSelectedMedications] = useState([]) // { id, name, unit, quantity }
+  const [medicationToAdd, setMedicationToAdd] = useState('')
+  const [medicationQty, setMedicationQty] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [suggestedAppointment, setSuggestedAppointment] = useState(null)
 
-  // Fetch services when modal opens
+  // Fetch services and medications when modal opens
   useEffect(() => {
     if (!isOpen) return
     let cancelled = false
+
     setLoadingServices(true)
     setServicesError(false)
     setSelectedServices([])
     setServiceToAdd('')
+    setSelectedMedications([])
+    setMedicationToAdd('')
+    setMedicationQty(1)
+
     servicesAPI.list()
       .then(response => {
         if (cancelled) return
@@ -65,6 +76,16 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       .finally(() => {
         if (!cancelled) setLoadingServices(false)
       })
+
+    setLoadingMedications(true)
+    inventoryAPI.list({ category: 'medication', page_size: 200 })
+      .then(res => {
+        if (cancelled) return
+        setMedicationItems(res.data.results ?? res.data ?? [])
+      })
+      .catch(() => { if (!cancelled) setMedicationItems([]) })
+      .finally(() => { if (!cancelled) setLoadingMedications(false) })
+
     return () => { cancelled = true }
   }, [isOpen, servicesFetchKey])
 
@@ -88,7 +109,6 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       setFormData({
         patient: initialPatient.id.toString(),
         visitNotes: initialChiefComplaint || '',
-        medication: '',
         medicalReceipts: '',
         additionalNotes: '',
       })
@@ -99,7 +119,6 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     setFormData({
       patient: '',
       visitNotes: '',
-      medication: '',
       medicalReceipts: '',
       additionalNotes: '',
     })
@@ -241,6 +260,20 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     setSelectedServices(prev => prev.filter((_, i) => i !== index))
   }
 
+  const addMedication = () => {
+    if (!medicationToAdd) return
+    const item = medicationItems.find(m => m.id.toString() === medicationToAdd)
+    if (!item) return
+    const qty = Math.max(1, Math.min(medicationQty, item.stock_on_hand))
+    setSelectedMedications(prev => [...prev, { id: item.id, name: item.name, unit: item.unit, quantity: qty }])
+    setMedicationToAdd('')
+    setMedicationQty(1)
+  }
+
+  const removeMedication = (index) => {
+    setSelectedMedications(prev => prev.filter((_, i) => i !== index))
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -269,8 +302,9 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       if (formData.visitNotes.trim()) {
         noteParts.push(`VISIT NOTES:\n${formData.visitNotes.trim()}`)
       }
-      if (formData.medication.trim()) {
-        noteParts.push(`MEDICATION:\n${formData.medication.trim()}`)
+      if (selectedMedications.length > 0) {
+        const medLines = selectedMedications.map(m => `- ${m.name} x${m.quantity} ${m.unit}`)
+        noteParts.push(`MEDICATION:\n${medLines.join('\n')}`)
       }
       if (formData.additionalNotes.trim()) {
         noteParts.push(`ADDITIONAL NOTES:\n${formData.additionalNotes.trim()}`)
@@ -297,6 +331,24 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       }
 
       await patientHistoryAPI.create(patientId, historyData)
+
+      // Record inventory movements for used medications
+      const movementErrors = []
+      for (const med of selectedMedications) {
+        try {
+          await inventoryAPI.recordMovement({
+            item: med.id,
+            kind: 'out',
+            quantity: med.quantity,
+            note: 'Used in visit',
+            patient_id: patientId,
+          })
+        } catch (movErr) {
+          console.error('Error recording inventory movement for', med.name, movErr)
+          const detail = movErr.response?.data?.detail || movErr.response?.data?.quantity?.[0] || movErr.message
+          movementErrors.push(`${med.name}: ${detail || 'unknown error'}`)
+        }
+      }
 
       // If services are added, create a draft invoice
       if (selectedServices.length > 0 && selectedOwner?.id) {
@@ -332,6 +384,14 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         }
       }
 
+      if (movementErrors.length > 0) {
+        // Visit was saved but some inventory movements failed — show warning then close
+        setError(`${t('startVisit.saveSuccess')} ${t('startVisit.inventoryWarning')}: ${movementErrors.join('; ')}`)
+        setLoading(false)
+        setTimeout(() => { onSuccess(); onClose() }, 4000)
+        return
+      }
+
       onSuccess()
       onClose()
       
@@ -339,11 +399,13 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       setFormData({
         patient: '',
         visitNotes: '',
-        medication: '',
         medicalReceipts: '',
         additionalNotes: '',
       })
       setSelectedServices([])
+      setSelectedMedications([])
+      setMedicationToAdd('')
+      setMedicationQty(1)
       setOwnerSearch('')
       setSelectedOwner(null)
       setSuggestedAppointment(null)
@@ -571,15 +633,68 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
           </div>
 
           <div className="form-group">
-            <label htmlFor="medication">{t('startVisit.medication')}</label>
-            <textarea
-              id="medication"
-              name="medication"
-              value={formData.medication}
-              onChange={handleChange}
-              rows="3"
-              placeholder={t('startVisit.medicationPlaceholder')}
-            />
+            <label>{t('startVisit.medication')}</label>
+            {loadingMedications ? (
+              <div className="loading-text">{t('startVisit.loadingMedications', { defaultValue: 'Loading medications...' })}</div>
+            ) : medicationItems.length === 0 ? (
+              <div style={{ fontSize: '0.9rem', color: '#718096' }}>
+                {t('startVisit.noMedicationsInInventory', { defaultValue: 'No medications found in inventory.' })}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <select
+                    value={medicationToAdd}
+                    onChange={e => setMedicationToAdd(e.target.value)}
+                    style={{ flex: 1, padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                  >
+                    <option value="">{t('startVisit.chooseMedication', { defaultValue: 'Choose medication...' })}</option>
+                    {medicationItems.map(m => (
+                      <option key={m.id} value={m.id} disabled={m.stock_on_hand === 0}>
+                        {m.name} — {t('inventory.stock', { defaultValue: 'stock' })}: {m.stock_on_hand} {m.unit}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    max={medicationItems.find(m => m.id.toString() === medicationToAdd)?.stock_on_hand || 99}
+                    value={medicationQty}
+                    onChange={e => setMedicationQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    style={{ width: '70px', padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={addMedication}
+                    disabled={!medicationToAdd}
+                    style={{ padding: '0.5rem 1rem' }}
+                  >
+                    {t('common.add')}
+                  </button>
+                </div>
+                {selectedMedications.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                    {selectedMedications.map((m, index) => (
+                      <div
+                        key={`${m.id}-${index}`}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '0.5rem 0.75rem', backgroundColor: '#fef3c7', borderRadius: '4px', fontSize: '0.95rem',
+                        }}
+                      >
+                        <span>{m.name} × {m.quantity} {m.unit}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeMedication(index)}
+                          style={{ background: 'none', border: 'none', color: '#c53030', cursor: 'pointer', padding: '0.25rem', fontSize: '1.1rem', lineHeight: 1 }}
+                        >×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div className="form-group">
