@@ -248,6 +248,9 @@ resource "aws_cloudwatch_metric_alarm" "ecs_backend_memory_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "ecs_backend_running_tasks_low" {
+  # In dev, tasks are intentionally stopped outside working hours — skip this alarm.
+  count = var.env == "prod" ? 1 : 0
+
   alarm_name          = "${local.name}-ecs-backend-running-low"
   alarm_description   = "Backend ECS running task count dropped below 1"
   namespace           = "AWS/ECS"
