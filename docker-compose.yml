@@ -9,6 +9,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend
@@ -27,7 +29,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "5174:3000"
+      - "5174:80"
     environment:
       - VITE_API_PROXY_TARGET=http://backend:8000
       - BACKEND_URL=http://backend:8000
