@@ -24,6 +24,7 @@ class IngestionDocumentSerializer(serializers.ModelSerializer):
             "size_bytes",
             "sha256",
             "status",
+            "last_error",
             "input_s3_key",
             "output_html_s3_key",
             "uploaded_by",
