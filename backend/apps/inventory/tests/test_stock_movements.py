@@ -133,3 +133,49 @@ def test_low_stock_filter_and_is_low_stock_field():
     assert len(r.data) == 1
     assert r.data[0]["sku"] == "LOW"
     assert r.data[0]["is_low_stock"] is True
+
+
+@pytest.mark.django_db
+def test_inventory_items_category_medication_filter_and_search_fields():
+    clinic = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
+    doctor = User.objects.create_user(
+        username="doctor_items_filter",
+        password="pass",
+        clinic=clinic,
+        role=User.Role.DOCTOR,
+        is_vet=True,
+        is_staff=True,
+    )
+    InventoryItem.objects.create(
+        clinic=clinic,
+        name="Amoxicillin 50mg",
+        sku="AMOX_50",
+        category=InventoryItem.Category.MEDICATION,
+        unit="tablet",
+        stock_on_hand=18,
+        low_stock_threshold=5,
+        created_by=doctor,
+    )
+    InventoryItem.objects.create(
+        clinic=clinic,
+        name="Bandage Roll",
+        sku="BANDAGE_1",
+        category=InventoryItem.Category.SUPPLY,
+        unit="roll",
+        stock_on_hand=40,
+        low_stock_threshold=10,
+        created_by=doctor,
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=doctor)
+    response = client.get("/api/inventory/items/?category=medication&q=amox")
+    assert response.status_code == 200
+    assert len(response.data) == 1
+    row = response.data[0]
+    # FE picker contract.
+    assert row["name"] == "Amoxicillin 50mg"
+    assert row["sku"] == "AMOX_50"
+    assert row["unit"] == "tablet"
+    assert row["stock_on_hand"] == 18
+    assert row["id"] > 0

@@ -1,0 +1,267 @@
+name: Deploy
+
+on:
+  # Dev: auto-deploy after CI passes on main
+  workflow_run:
+    workflows: ["CI"]
+    branches: ["main"]
+    types: [completed]
+  # Prod: manual trigger with environment selection
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "dev"
+        type: choice
+        options: [dev, prod]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_BACKEND_REPO: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/veto-backend
+  ECR_FRONTEND_REPO: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/veto-frontend
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    name: Build & Deploy (${{ github.event.inputs.environment || 'dev' }})
+    runs-on: ubuntu-latest
+
+    # Only run auto-deploy if CI succeeded; manual runs always proceed
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    environment:
+      name: ${{ github.event.inputs.environment || 'dev' }}
+
+    permissions:
+      id-token: write   # OIDC
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/veto-github-actions
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: tag
+        run: echo "IMAGE_TAG=sha-${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Build & push backend image
+        env:
+          ENV: ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          docker build \
+            --cache-from $ECR_BACKEND_REPO:$ENV-latest \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -t $ECR_BACKEND_REPO:${{ steps.tag.outputs.IMAGE_TAG }} \
+            -t $ECR_BACKEND_REPO:$ENV-latest \
+            ./backend
+          docker push $ECR_BACKEND_REPO:${{ steps.tag.outputs.IMAGE_TAG }}
+          docker push $ECR_BACKEND_REPO:$ENV-latest
+
+      - name: Build & push frontend image
+        env:
+          ENV: ${{ github.event.inputs.environment || 'dev' }}
+        run: |
+          docker build \
+            --cache-from $ECR_FRONTEND_REPO:$ENV-latest \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            -t $ECR_FRONTEND_REPO:${{ steps.tag.outputs.IMAGE_TAG }} \
+            -t $ECR_FRONTEND_REPO:$ENV-latest \
+            ./frontend
+          docker push $ECR_FRONTEND_REPO:${{ steps.tag.outputs.IMAGE_TAG }}
+          docker push $ECR_FRONTEND_REPO:$ENV-latest
+
+      - name: Set environment name
+        id: env
+        run: echo "ENV=${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_OUTPUT
+
+      # Backend: fetch current task definition → inject new image → deploy
+      - name: Download backend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition veto-${{ steps.env.outputs.ENV }}-backend \
+            --query taskDefinition \
+            --output json > backend-task-definition.json
+
+      - name: Render backend task definition with new image
+        id: render-backend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: backend-task-definition.json
+          container-name: backend
+          image: ${{ env.ECR_BACKEND_REPO }}:${{ steps.tag.outputs.IMAGE_TAG }}
+
+      - name: Check for migration changes
+        id: migrations
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q 'migrations/'; then
+            echo "needed=true" >> $GITHUB_OUTPUT
+          else
+            echo "needed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run database migrations
+        if: steps.migrations.outputs.needed == 'true'
+        run: |
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://${{ steps.render-backend.outputs.task-definition }} \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)
+
+          NETWORK=$(aws ecs describe-services \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --services veto-${{ steps.env.outputs.ENV }}-backend \
+            --query "services[0].networkConfiguration" \
+            --output json)
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --task-definition "$TASK_DEF_ARN" \
+            --launch-type FARGATE \
+            --network-configuration "$NETWORK" \
+            --overrides '{"containerOverrides":[{"name":"backend","command":["python","manage.py","migrate","--no-input"]}]}' \
+            --query "tasks[0].taskArn" \
+            --output text)
+
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --tasks "$TASK_ARN"
+
+          EXIT=$(aws ecs describe-tasks \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --tasks "$TASK_ARN" \
+            --query "tasks[0].containers[0].exitCode" \
+            --output text)
+          echo "Migration exit code: $EXIT"
+          test "$EXIT" = "0"
+
+      - name: Deploy backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-backend.outputs.task-definition }}
+          service: veto-${{ steps.env.outputs.ENV }}-backend
+          cluster: veto-${{ steps.env.outputs.ENV }}-cluster
+          wait-for-service-stability: true
+
+      # Frontend: fetch current task definition → inject new image → deploy
+      - name: Download frontend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition veto-${{ steps.env.outputs.ENV }}-frontend \
+            --query taskDefinition \
+            --output json > frontend-task-definition.json
+
+      - name: Render frontend task definition with new image
+        id: render-frontend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: frontend-task-definition.json
+          container-name: frontend
+          image: ${{ env.ECR_FRONTEND_REPO }}:${{ steps.tag.outputs.IMAGE_TAG }}
+
+      - name: Deploy frontend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-frontend.outputs.task-definition }}
+          service: veto-${{ steps.env.outputs.ENV }}-frontend
+          cluster: veto-${{ steps.env.outputs.ENV }}-cluster
+          wait-for-service-stability: true
+
+      - name: Post-deploy smoke checks
+        run: |
+          TASK_DEF_ARN=$(aws ecs describe-services \
+            --cluster veto-${{ steps.env.outputs.ENV }}-cluster \
+            --services veto-${{ steps.env.outputs.ENV }}-backend \
+            --query "services[0].taskDefinition" \
+            --output text)
+
+          BACKEND_SECRET_NAMES=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF_ARN" \
+            --query "taskDefinition.containerDefinitions[?name=='backend'].secrets[*].name" \
+            --output text)
+          echo "Backend secret names (raw): $BACKEND_SECRET_NAMES"
+
+          BACKEND_ENV_PAIRS=$(aws ecs describe-task-definition \
+            --task-definition "$TASK_DEF_ARN" \
+            --query "taskDefinition.containerDefinitions[?name=='backend'].environment[].[name,value]" \
+            --output text)
+          echo "Backend env pairs (raw): $BACKEND_ENV_PAIRS"
+
+          declare -A BACKEND_SECRETS_MAP=()
+          for name in $BACKEND_SECRET_NAMES; do
+            BACKEND_SECRETS_MAP["$name"]=1
+          done
+
+          declare -A BACKEND_ENV_MAP=()
+          while read -r env_name env_value; do
+            [[ -z "$env_name" ]] && continue
+            BACKEND_ENV_MAP["$env_name"]="$env_value"
+          done <<< "$BACKEND_ENV_PAIRS"
+
+          REQUIRED_SECRET_NAMES=(
+            SECRET_KEY
+            RDS_PASSWORD
+            CORS_ALLOWED_ORIGINS
+            OPENAI_API_KEY
+          )
+
+          EMAIL_PROVIDER="${BACKEND_ENV_MAP[REMINDER_EMAIL_PROVIDER]:-internal}"
+          SMS_PROVIDER="${BACKEND_ENV_MAP[REMINDER_SMS_PROVIDER]:-internal}"
+
+          if [[ "$EMAIL_PROVIDER" == "sendgrid" ]]; then
+            SENDGRID_FROM_EMAIL="${BACKEND_ENV_MAP[REMINDER_SENDGRID_FROM_EMAIL]:-}"
+            if [[ -z "$SENDGRID_FROM_EMAIL" ]]; then
+              echo "Missing required backend env injection for sendgrid: REMINDER_SENDGRID_FROM_EMAIL"
+              exit 1
+            fi
+            REQUIRED_SECRET_NAMES+=(
+              REMINDER_SENDGRID_API_KEY
+              REMINDER_SENDGRID_WEBHOOK_SECRET
+            )
+          fi
+
+          if [[ "$SMS_PROVIDER" == "twilio" ]]; then
+            TWILIO_FROM_NUMBER="${BACKEND_ENV_MAP[REMINDER_TWILIO_FROM_NUMBER]:-}"
+            if [[ -z "$TWILIO_FROM_NUMBER" ]]; then
+              echo "Missing required backend env injection for twilio: REMINDER_TWILIO_FROM_NUMBER"
+              exit 1
+            fi
+            REQUIRED_SECRET_NAMES+=(
+              REMINDER_TWILIO_ACCOUNT_SID
+              REMINDER_TWILIO_AUTH_TOKEN
+              REMINDER_TWILIO_WEBHOOK_SECRET
+            )
+          fi
+
+          for secret_name in "${REQUIRED_SECRET_NAMES[@]}"; do
+            if [[ -z "${BACKEND_SECRETS_MAP[$secret_name]}" ]]; then
+              echo "Missing required backend secret injection: $secret_name"
+              exit 1
+            fi
+          done
+
+          ALB_DNS=$(aws elbv2 describe-load-balancers \
+            --names veto-${{ steps.env.outputs.ENV }}-alb \
+            --query "LoadBalancers[0].DNSName" \
+            --output text)
+
+          echo "Smoke check target: http://$ALB_DNS"
+          curl --fail --silent --show-error "http://$ALB_DNS/health/" >/dev/null
+
+          STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$ALB_DNS/api/clients/")
+          test "$STATUS" = "401" -o "$STATUS" = "403"
+
+          METRICS_STATUS=$(curl --silent --output /dev/null --write-out "%{http_code}" "http://$ALB_DNS/api/reminders/metrics/")
+          test "$METRICS_STATUS" = "401" -o "$METRICS_STATUS" = "403"

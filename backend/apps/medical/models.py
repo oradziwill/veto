@@ -50,6 +50,20 @@ class PatientHistoryEntry(models.Model):
         on_delete=models.CASCADE,
         related_name="history_entries",
     )
+    appointment = models.ForeignKey(
+        "scheduling.Appointment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patient_history_entries",
+    )
+    invoice = models.ForeignKey(
+        "billing.Invoice",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="patient_history_entries",
+    )
     note = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -62,7 +76,11 @@ class PatientHistoryEntry(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["clinic", "record", "-created_at"])]
+        indexes = [
+            models.Index(fields=["clinic", "record", "-created_at"]),
+            models.Index(fields=["clinic", "appointment", "-created_at"]),
+            models.Index(fields=["clinic", "invoice", "-created_at"]),
+        ]
 
     def __str__(self) -> str:
         return f"HistoryEntry({self.record_id})"
@@ -89,10 +107,13 @@ class ClinicalExam(models.Model):
     temperature_c = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     heart_rate_bpm = models.PositiveIntegerField(null=True, blank=True)
     respiratory_rate_rpm = models.PositiveIntegerField(null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
 
     additional_notes = models.TextField(blank=True)
     owner_instructions = models.TextField(blank=True)
     initial_diagnosis = models.TextField(blank=True)
+    transcript = models.TextField(blank=True)
+    ai_notes_raw = models.JSONField(default=dict, blank=True)
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -113,7 +134,7 @@ class ClinicalExam(models.Model):
 
 
 class Prescription(models.Model):
-    """Prescription linked to a patient (and optionally an appointment)."""
+    """Prescription linked to a patient and optionally to a visit (MedicalRecord)."""
 
     clinic = models.ForeignKey(
         Clinic,
@@ -132,6 +153,24 @@ class Prescription(models.Model):
         blank=True,
         related_name="prescriptions",
     )
+    medical_record = models.ForeignKey(
+        MedicalRecord,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prescriptions_for_record",
+    )
+    prescribed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prescribed_prescriptions",
+    )
+    drug_name = models.CharField(max_length=200, blank=True)
+    dosage = models.CharField(max_length=200, blank=True)
+    duration_days = models.PositiveIntegerField(null=True, blank=True)
+    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -142,3 +181,39 @@ class Prescription(models.Model):
 
     def __str__(self) -> str:
         return f"Prescription(patient={self.patient_id})"
+
+
+class Vaccination(models.Model):
+    """Vaccination record: vaccine given to a patient, when, and when next dose is due."""
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="vaccinations",
+    )
+    patient = models.ForeignKey(
+        "patients.Patient",
+        on_delete=models.CASCADE,
+        related_name="vaccinations",
+    )
+    vaccine_name = models.CharField(max_length=200)
+    batch_number = models.CharField(max_length=100, blank=True)
+    administered_at = models.DateField()
+    next_due_at = models.DateField(null=True, blank=True)
+    administered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="administered_vaccinations",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-administered_at"]
+        indexes = [
+            models.Index(fields=["clinic", "patient"], name="medical_vac_clinic__a1b2c3_idx")
+        ]
+
+    def __str__(self) -> str:
+        return f"Vaccination(patient={self.patient_id}, {self.vaccine_name})"

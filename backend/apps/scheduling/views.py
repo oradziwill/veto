@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import date as date_type
 
 from django.core.exceptions import PermissionDenied
+from django.db import models
 from django.utils.dateparse import parse_date
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,16 +13,27 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.medical.models import ClinicalExam
-from apps.medical.serializers import ClinicalExamReadSerializer, ClinicalExamWriteSerializer
+from apps.medical.serializers import (
+    ClinicalExamReadSerializer,
+    ClinicalExamWriteSerializer,
+)
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment, HospitalStay
+from apps.scheduling.models import Appointment, HospitalStay, Room, WaitingQueueEntry
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
     AppointmentWriteSerializer,
     HospitalStayReadSerializer,
     HospitalStayWriteSerializer,
+    RoomSerializer,
+    WaitingQueueEntryReadSerializer,
+    WaitingQueueEntryWriteSerializer,
 )
 from apps.scheduling.services.availability import compute_availability
+from apps.scheduling.services.visit_transcription import (
+    VisitTranscriptionError,
+    structure_transcript_with_claude,
+    transcribe_audio_with_whisper,
+)
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
@@ -37,7 +49,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         qs = (
             Appointment.objects.filter(clinic_id=user.clinic_id)
-            .select_related("clinic", "patient", "vet")
+            .select_related("clinic", "patient", "vet", "room")
             .order_by("starts_at")
         )
 
@@ -50,6 +62,24 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 parsed = None
             if parsed:
                 qs = qs.filter(starts_at__date=parsed)
+
+        date_from = self.request.query_params.get("date_from")
+        if date_from:
+            try:
+                parsed_from = parse_date(date_from)
+            except ValueError:
+                parsed_from = None
+            if parsed_from:
+                qs = qs.filter(starts_at__date__gte=parsed_from)
+
+        date_to = self.request.query_params.get("date_to")
+        if date_to:
+            try:
+                parsed_to = parse_date(date_to)
+            except ValueError:
+                parsed_to = None
+            if parsed_to:
+                qs = qs.filter(starts_at__date__lte=parsed_to)
 
         vet_id = self.request.query_params.get("vet")
         if vet_id:
@@ -158,6 +188,81 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return Response(status=204)
 
 
+class VisitTranscriptionView(APIView):
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+    allowed_audio_types = {
+        "audio/webm",
+        "audio/ogg",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/mpeg",
+    }
+    max_bytes = 25 * 1024 * 1024
+
+    def post(self, request, appointment_id: int):
+        appointment = (
+            Appointment.objects.filter(id=appointment_id, clinic_id=request.user.clinic_id)
+            .select_related("patient")
+            .first()
+        )
+        if not appointment:
+            return Response({"detail": "Appointment not found."}, status=404)
+
+        upload = request.FILES.get("audio")
+        if upload is None:
+            return Response(
+                {"detail": "Missing audio file in multipart field 'audio'."}, status=400
+            )
+        if upload.size > self.max_bytes:
+            return Response({"detail": "Audio file exceeds 25MB limit."}, status=400)
+        if (upload.content_type or "").lower() not in self.allowed_audio_types:
+            return Response(
+                {"detail": "Unsupported audio content type. Allowed: webm, ogg, wav, mp3."},
+                status=400,
+            )
+
+        audio_bytes = upload.read()
+        if not audio_bytes:
+            return Response({"detail": "Uploaded audio file is empty."}, status=400)
+
+        try:
+            transcript = transcribe_audio_with_whisper(
+                audio_bytes=audio_bytes,
+                filename=upload.name or f"visit-{appointment_id}.webm",
+                content_type=upload.content_type or "application/octet-stream",
+            )
+            structured = structure_transcript_with_claude(transcript=transcript)
+        except VisitTranscriptionError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        exam, _created = ClinicalExam.objects.get_or_create(
+            clinic_id=request.user.clinic_id,
+            appointment=appointment,
+            defaults={"created_by": request.user},
+        )
+        exam.transcript = transcript
+        exam.ai_notes_raw = structured
+        exam.initial_notes = structured.get("anamnesis", "")
+        exam.clinical_examination = structured.get("clinical_findings", "")
+        exam.initial_diagnosis = structured.get("diagnosis", "")
+        exam.additional_notes = structured.get("treatment_plan", "")
+        exam.owner_instructions = structured.get("owner_instructions", "")
+        exam.save(
+            update_fields=[
+                "transcript",
+                "ai_notes_raw",
+                "initial_notes",
+                "clinical_examination",
+                "initial_diagnosis",
+                "additional_notes",
+                "owner_instructions",
+                "updated_at",
+            ]
+        )
+
+        return Response({"transcript": transcript, "structured": structured}, status=200)
+
+
 class HospitalStayViewSet(viewsets.ModelViewSet):
     """
     CRUD for hospital stays (in-patient hospitalization).
@@ -209,6 +314,18 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         return Response(HospitalStayReadSerializer(stay).data)
 
 
+class RoomViewSet(viewsets.ReadOnlyModelViewSet):
+    """List rooms for the user's clinic (for dropdowns and calendar). Manage rooms in Django admin."""
+
+    permission_classes = [IsAuthenticated, HasClinic]
+    serializer_class = RoomSerializer
+
+    def get_queryset(self):
+        return Room.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
+            "display_order", "name"
+        )
+
+
 class AvailabilityView(APIView):
     """
     Read-only endpoint returning available time slots for a given date.
@@ -243,6 +360,9 @@ class AvailabilityView(APIView):
         vet = request.query_params.get("vet")
         vet_id = int(vet) if vet else None
 
+        room = request.query_params.get("room")
+        room_id = int(room) if room else None
+
         slot = request.query_params.get("slot")
         slot_minutes = int(slot) if slot else None
 
@@ -251,6 +371,7 @@ class AvailabilityView(APIView):
             clinic_id=user.clinic_id,
             date_str=date_str,
             vet_id=vet_id,
+            room_id=room_id,
             slot_minutes=slot_minutes,
         )
 
@@ -268,6 +389,7 @@ class AvailabilityView(APIView):
                 "timezone": data["timezone"],
                 "clinic_id": user.clinic_id,
                 "vet_id": vet_id,
+                "room_id": room_id,
                 "slot_minutes": data["slot_minutes"],
                 "closed_reason": data.get("closed_reason"),
                 "workday": dump_interval(work_bounds) if work_bounds else None,
@@ -276,3 +398,192 @@ class AvailabilityView(APIView):
                 "free": [dump_interval(i) for i in data["free_slots"]],
             }
         )
+
+
+class AvailabilityRoomsView(APIView):
+    """
+    GET /availability/rooms/?date=YYYY-MM-DD
+    Returns availability per room for the given date (for calendar room view).
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic]
+
+    def get(self, request):
+        user = request.user
+        date_str = request.query_params.get("date")
+        if not date_str:
+            return Response(
+                {"detail": "Missing required query param: date=YYYY-MM-DD"},
+                status=400,
+            )
+        try:
+            parse_date(date_str)
+        except ValueError:
+            return Response(
+                {"detail": "Invalid date. Use YYYY-MM-DD."},
+                status=400,
+            )
+
+        rooms = Room.objects.filter(clinic_id=user.clinic_id).order_by("display_order", "name")
+        slot_minutes = 30
+        result = []
+
+        def dump_interval(interval):
+            return {
+                "start": interval.start.isoformat(),
+                "end": interval.end.isoformat(),
+            }
+
+        for room in rooms:
+            data = compute_availability(
+                clinic_id=user.clinic_id,
+                date_str=date_str,
+                vet_id=None,
+                room_id=room.id,
+                slot_minutes=slot_minutes,
+            )
+            result.append(
+                {
+                    "id": room.id,
+                    "name": room.name,
+                    "busy": [dump_interval(i) for i in data["busy_merged"]],
+                    "free": [dump_interval(i) for i in data["free_slots"]],
+                    "workday": (
+                        dump_interval(data["work_bounds"]) if data.get("work_bounds") else None
+                    ),
+                    "closed_reason": data.get("closed_reason"),
+                }
+            )
+
+        return Response({"date": date_str, "rooms": result})
+
+
+class WaitingQueueViewSet(viewsets.ModelViewSet):
+    """
+    Walk-in patient queue. Receptionist/doctor adds patients; doctor calls them.
+    List returns only active entries (waiting or in_progress).
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+
+    def get_queryset(self):
+        return (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=self.request.user.clinic_id,
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
+            )
+            .select_related("patient", "patient__owner", "called_by")
+            .order_by("position", "arrived_at")
+        )
+
+    def get_serializer_class(self):
+        if self.action in ("list", "retrieve"):
+            return WaitingQueueEntryReadSerializer
+        return WaitingQueueEntryWriteSerializer
+
+    def perform_create(self, serializer):
+        clinic_id = self.request.user.clinic_id
+        max_pos = (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=clinic_id,
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
+            ).aggregate(m=models.Max("position"))["m"]
+            or 0
+        )
+        serializer.save(clinic_id=clinic_id, position=max_pos + 1)
+
+    @action(detail=True, methods=["post"], url_path="move-up")
+    def move_up(self, request, pk=None):
+        entry = self.get_object()
+        above = (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=entry.clinic_id,
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
+                position__lt=entry.position,
+            )
+            .order_by("-position")
+            .first()
+        )
+        if above:
+            entry.position, above.position = above.position, entry.position
+            entry.save(update_fields=["position"])
+            above.save(update_fields=["position"])
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="move-down")
+    def move_down(self, request, pk=None):
+        entry = self.get_object()
+        below = (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=entry.clinic_id,
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
+                position__gt=entry.position,
+            )
+            .order_by("position")
+            .first()
+        )
+        if below:
+            entry.position, below.position = below.position, entry.position
+            entry.save(update_fields=["position"])
+            below.save(update_fields=["position"])
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="call")
+    def call(self, request, pk=None):
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can call a patient.")
+        entry = self.get_object()
+        if entry.status != WaitingQueueEntry.Status.WAITING:
+            return Response({"detail": "Entry is not in waiting status."}, status=400)
+
+        already_active = WaitingQueueEntry.objects.filter(
+            clinic_id=entry.clinic_id,
+            called_by=request.user,
+            status=WaitingQueueEntry.Status.IN_PROGRESS,
+        ).exists()
+        if already_active:
+            return Response(
+                {
+                    "detail": "You already have a patient in progress. Close the current visit first."
+                },
+                status=409,
+            )
+
+        entry.status = WaitingQueueEntry.Status.IN_PROGRESS
+        entry.called_by = request.user
+        entry.save(update_fields=["status", "called_by"])
+
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="requeue")
+    def requeue(self, request, pk=None):
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can requeue a patient.")
+        entry = self.get_object()
+        if entry.status != WaitingQueueEntry.Status.IN_PROGRESS:
+            return Response({"detail": "Entry is not in progress."}, status=400)
+        entry.status = WaitingQueueEntry.Status.WAITING
+        entry.called_by = None
+        entry.save(update_fields=["status", "called_by"])
+        return Response(WaitingQueueEntryReadSerializer(entry).data)
+
+    @action(detail=True, methods=["post"], url_path="done")
+    def done(self, request, pk=None):
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can mark a visit as done.")
+        entry = self.get_object()
+        entry.status = WaitingQueueEntry.Status.DONE
+        entry.save(update_fields=["status"])
+        return Response(status=204)

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from apps.inventory.models import InventoryItem, InventoryMovement
+from apps.notifications.models import Notification
+from apps.notifications.services import notify_clinic_staff
 from django.db import transaction
 
 
@@ -26,6 +28,7 @@ def apply_movement(movement: InventoryMovement) -> StockChange:
     # Ensure we apply under transaction and lock the row to avoid race conditions.
     with transaction.atomic():
         item = InventoryItem.objects.select_for_update().get(pk=movement.item_id)
+        previous_stock = item.stock_on_hand
 
         kind = movement.kind
         qty = int(movement.quantity)
@@ -43,5 +46,16 @@ def apply_movement(movement: InventoryMovement) -> StockChange:
 
         item.stock_on_hand = new_val
         item.save(update_fields=["stock_on_hand", "updated_at"])
+        crossed_low_stock = (
+            previous_stock > item.low_stock_threshold and new_val <= item.low_stock_threshold
+        )
 
+    if crossed_low_stock:
+        notify_clinic_staff(
+            clinic_id=item.clinic_id,
+            kind=Notification.Kind.LOW_STOCK,
+            title="Inventory low stock alert",
+            body=f"{item.name} ({item.sku}) stock is now {new_val} {item.unit}.",
+            link_tab="inventory",
+        )
     return StockChange(new_stock_on_hand=new_val)

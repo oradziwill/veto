@@ -10,6 +10,11 @@ React frontend application for the Veto veterinary clinic management system.
   - **Calendar Tab**: Visual calendar view of appointments
   - **Inventory Tab**: Manage clinic inventory and supplies
   - **AI Assistant Tab**: Interactive AI assistant for veterinary support
+  - **Owner Dashboard**:
+    - Reminder operational health widget (consumes `GET /api/reminders/metrics/`)
+    - Health state derived from queue age, queue size, and failed reminders in last 24h
+    - Reminder analytics tab with filterable delivery trend charts (`GET /api/reminders/analytics/`)
+    - A/B attribution section for appointment reminder variants (`GET /api/reminders/experiment-attribution/`)
 
 ## Getting Started
 
@@ -89,6 +94,45 @@ frontend/
 ## API Integration
 
 The frontend is configured to proxy API requests to the Django backend running on `http://localhost:8000`. The proxy is configured in `vite.config.js`.
+
+### Reminder Ops Widget
+
+The owner dashboard overview includes a reminder operations widget that auto-refreshes every 60 seconds and displays:
+
+- queued reminders
+- failed reminders (total + last 24h)
+- oldest queued age
+- provider breakdown (`internal`, `sendgrid`, `twilio`)
+
+Health state is currently marked as "needs attention" when one of these is true:
+
+- failed reminders in last 24h >= 1
+- oldest queued reminder age >= 30 minutes
+- queued reminders >= 20
+
+You can adjust thresholds in `src/utils/reminderMetrics.js`.
+
+### Reminder Analytics Tab
+
+Owner dashboard includes a `Reminders` subtab with delivery analytics:
+
+- filters: `period`, `from`, `to`, `channel`, `provider`, `type`
+- totals: total, delivered, failed, delivery rate
+- trend charts: volume and delivery-rate trend
+
+The tab consumes:
+
+- `GET /api/reminders/analytics/?period=monthly|daily&from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `GET /api/reminders/experiment-attribution/?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+## Frontend Checks
+
+Run these after changes:
+
+```bash
+npm run build
+node --test src/utils/reminderMetrics.test.js
+```
 
 ## Notes
 

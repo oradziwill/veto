@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env_path = BASE_DIR.parent / ".env"
 if not env_path.exists():
     env_path = BASE_DIR / ".env"
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, override=True)
 
 
 # Quick-start development settings - unsuitable for production
@@ -36,7 +36,8 @@ SECRET_KEY = "django-insecure-!xlvc@w2#_0bajgy^wd)56y6xj_l8@(kmknbc_t0qy03-6*z1&
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+_allowed = os.getenv("ALLOWED_HOSTS")
+ALLOWED_HOSTS = [x.strip() for x in _allowed.split(",") if x.strip()] if _allowed else []
 
 
 # Application definition
@@ -60,6 +61,9 @@ INSTALLED_APPS = [
     "apps.medical.apps.MedicalConfig",
     "apps.billing.apps.BillingConfig",
     "apps.labs.apps.LabsConfig",
+    "apps.reminders.apps.RemindersConfig",
+    "apps.notifications.apps.NotificationsConfig",
+    "apps.documents.apps.DocumentsConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -72,6 +76,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "config.middleware.RequestContextMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -100,12 +105,24 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+if os.getenv("POSTGRES_DB"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB"),
+            "USER": os.getenv("POSTGRES_USER"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
+            "HOST": os.getenv("POSTGRES_HOST", "127.0.0.1"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
@@ -147,6 +164,9 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:5173",
+    "http://localhost:5174",
 ]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -155,6 +175,30 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "EXCEPTION_HANDLER": "config.exception_handler.custom_exception_handler",
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_context": {
+            "()": "config.logging_filters.RequestContextFilter",
+        }
+    },
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s user_id=%(user_id)s clinic_id=%(clinic_id)s %(message)s"
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "filters": ["request_context"],
+            "formatter": "default",
+        }
+    },
+    "root": {"handlers": ["console"], "level": os.getenv("LOG_LEVEL", "INFO")},
 }
 
 # OpenAI API Key (optional - can be set via environment variable)
@@ -165,9 +209,29 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
 }
 
+REMINDER_EMAIL_PROVIDER = os.getenv("REMINDER_EMAIL_PROVIDER", "internal")
+REMINDER_SMS_PROVIDER = os.getenv("REMINDER_SMS_PROVIDER", "internal")
+REMINDER_WEBHOOK_TOKEN = os.getenv("REMINDER_WEBHOOK_TOKEN", "")
+REMINDER_SENDGRID_API_KEY = os.getenv("REMINDER_SENDGRID_API_KEY", "")
+REMINDER_SENDGRID_FROM_EMAIL = os.getenv("REMINDER_SENDGRID_FROM_EMAIL", "")
+REMINDER_SENDGRID_FROM_NAME = os.getenv("REMINDER_SENDGRID_FROM_NAME", "Veto Clinic")
+REMINDER_SENDGRID_WEBHOOK_SECRET = os.getenv("REMINDER_SENDGRID_WEBHOOK_SECRET", "")
+REMINDER_TWILIO_ACCOUNT_SID = os.getenv("REMINDER_TWILIO_ACCOUNT_SID", "")
+REMINDER_TWILIO_AUTH_TOKEN = os.getenv("REMINDER_TWILIO_AUTH_TOKEN", "")
+REMINDER_TWILIO_FROM_NUMBER = os.getenv("REMINDER_TWILIO_FROM_NUMBER", "")
+REMINDER_TWILIO_STATUS_CALLBACK_URL = os.getenv("REMINDER_TWILIO_STATUS_CALLBACK_URL", "")
+REMINDER_TWILIO_WEBHOOK_SECRET = os.getenv("REMINDER_TWILIO_WEBHOOK_SECRET", "")
+REMINDER_PORTAL_BASE_URL = os.getenv("REMINDER_PORTAL_BASE_URL", "")
+REMINDER_PORTAL_TOKEN_TTL_HOURS = int(os.getenv("REMINDER_PORTAL_TOKEN_TTL_HOURS", "72"))
+
 # Availability defaults (MVP)
 # REMEMBER
 # TODO
 DEFAULT_CLINIC_OPEN_TIME = "09:00"
 DEFAULT_CLINIC_CLOSE_TIME = "17:00"
 DEFAULT_SLOT_MINUTES = 30
+
+# Document ingestion pipeline (single bucket for I/O)
+DOCUMENTS_DATA_S3_BUCKET = os.getenv("DOCUMENTS_DATA_S3_BUCKET", "")
+DOCUMENTS_S3_REGION = os.getenv("DOCUMENTS_S3_REGION", "us-east-1")
+DOCUMENTS_MAX_UPLOAD_MB = int(os.getenv("DOCUMENTS_MAX_UPLOAD_MB", "50"))

@@ -87,3 +87,26 @@ def test_receptionist_can_list_lab_orders(
     r = api_client.get("/api/lab-orders/")
     assert r.status_code == 200
     assert len(r.data) >= 1
+
+
+@pytest.mark.django_db
+def test_receptionist_cannot_create_lab_order(
+    receptionist,
+    patient,
+    lab,
+    lab_test,
+    api_client,
+):
+    """Receptionist can list but cannot create lab orders."""
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.post(
+        "/api/lab-orders/",
+        {
+            "patient": patient.id,
+            "lab": lab.id,
+            "clinical_notes": "Check CBC",
+            "lines": [{"test": lab_test.id, "notes": ""}],
+        },
+        format="json",
+    )
+    assert r.status_code == 403

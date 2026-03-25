@@ -1,12 +1,13 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import InvoiceViewSet, ServiceViewSet
+from .views import InvoiceViewSet, RevenueSummaryView, ServiceViewSet
 
 router = DefaultRouter()
-router.register(r"billing/services", ServiceViewSet, basename="billing-services")
-router.register(r"billing/invoices", InvoiceViewSet, basename="billing-invoices")
+router.register(r"services", ServiceViewSet, basename="billing-services")
+router.register(r"invoices", InvoiceViewSet, basename="billing-invoices")
 
 urlpatterns = [
+    path("revenue-summary/", RevenueSummaryView.as_view(), name="revenue-summary"),
     path("", include(router.urls)),
 ]

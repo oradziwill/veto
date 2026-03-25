@@ -1,25 +1,36 @@
 import os
 
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
+from apps.billing.models import Invoice
+from apps.billing.serializers import InvoiceReadSerializer
 from apps.clients.models import ClientClinic
-from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription
+from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
 from apps.medical.serializers import (
-    PatientHistoryEntryReadSerializer,
+    MedicalRecordReadSerializer,
     PatientHistoryEntryWriteSerializer,
     PrescriptionReadSerializer,
+    PrescriptionWriteSerializer,
+    VaccinationReadSerializer,
+    VaccinationWriteSerializer,
 )
 from apps.patients.models import Patient
-from apps.patients.serializers import PatientReadSerializer, PatientWriteSerializer
+from apps.patients.serializers import (
+    ClientMiniSerializer,
+    PatientHistoryForPatientSerializer,
+    PatientReadSerializer,
+    PatientWriteSerializer,
+)
 from apps.scheduling.models import Appointment
+from apps.scheduling.serializers import AppointmentReadSerializer
 
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -28,25 +39,199 @@ class PatientViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=["get"],
+        url_path="last-vitals",
+        permission_classes=[IsStaffOrVet],
+    )
+    def last_vitals(self, request, pk=None):
+        patient = self.get_object()
+        exam = (
+            Appointment.objects.filter(clinic_id=request.user.clinic_id, patient_id=patient.id)
+            .select_related("clinical_exam")
+            .exclude(clinical_exam__isnull=True)
+            .order_by("-starts_at", "-id")
+            .first()
+        )
+        if not exam or not getattr(exam, "clinical_exam", None):
+            return Response(status=204)
+        clinical_exam = exam.clinical_exam
+        payload = {
+            "temperature_c": (
+                str(clinical_exam.temperature_c)
+                if clinical_exam.temperature_c is not None
+                else None
+            ),
+            "heart_rate_bpm": clinical_exam.heart_rate_bpm,
+            "respiratory_rate_rpm": clinical_exam.respiratory_rate_rpm,
+            "weight_kg": (
+                str(clinical_exam.weight_kg) if clinical_exam.weight_kg is not None else None
+            ),
+            "recorded_at": clinical_exam.created_at.isoformat(),
+        }
+        return Response(payload, status=200)
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
         url_path="prescriptions",
         permission_classes=[IsStaffOrVet],
     )
     def prescriptions(self, request, pk=None):
         """
-        GET /api/patients/<id>/prescriptions/
-
-        Returns patient's prescription history (newest-first).
-        Scoped to the authenticated user's clinic.
+        GET  /api/patients/<id>/prescriptions/  -> list prescriptions (clinic scoped)
+        POST /api/patients/<id>/prescriptions/  -> create (doctors and admins only)
         """
         user = request.user
-        patient = self.get_object()  # should already be clinic-scoped by queryset
+        patient = self.get_object()
 
-        qs = Prescription.objects.filter(
+        if request.method == "GET":
+            qs = Prescription.objects.filter(
+                clinic_id=user.clinic_id,
+                patient_id=patient.id,
+            ).order_by("-created_at")
+            return Response(PrescriptionReadSerializer(qs, many=True).data, status=200)
+
+        # POST: only doctors and admins
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can create prescriptions.")
+        if not getattr(user, "clinic_id", None):
+            raise ValidationError("User must belong to a clinic to create prescriptions.")
+        serializer = PrescriptionWriteSerializer(
+            data=request.data,
+            context={"request": request, "patient": patient},
+        )
+        serializer.is_valid(raise_exception=True)
+        prescription = Prescription.objects.create(
             clinic_id=user.clinic_id,
-            patient_id=patient.id,
-        ).order_by("-created_at")
+            patient=patient,
+            prescribed_by=user,
+            **serializer.validated_data,
+        )
+        return Response(
+            PrescriptionReadSerializer(prescription).data,
+            status=201,
+        )
 
-        return Response(PrescriptionReadSerializer(qs, many=True).data, status=200)
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path="vaccinations",
+        permission_classes=[IsStaffOrVet],
+    )
+    def vaccinations(self, request, pk=None):
+        """
+        GET  /api/patients/<id>/vaccinations/  -> list vaccinations for this patient (clinic scoped)
+        POST /api/patients/<id>/vaccinations/  -> record new vaccination
+        """
+        user = request.user
+        patient = self.get_object()
+
+        if request.method == "GET":
+            qs = Vaccination.objects.filter(
+                clinic_id=user.clinic_id,
+                patient_id=patient.id,
+            ).order_by("-administered_at")
+            if request.query_params.get("upcoming") == "1":
+                qs = qs.filter(
+                    next_due_at__isnull=False,
+                    next_due_at__gte=timezone.now().date(),
+                )
+            return Response(VaccinationReadSerializer(qs, many=True).data, status=200)
+
+        # POST: create new vaccination
+        if not getattr(user, "clinic_id", None):
+            raise ValidationError("User must belong to a clinic to record vaccinations.")
+        serializer = VaccinationWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        vaccination = Vaccination.objects.create(
+            clinic_id=user.clinic_id,
+            patient=patient,
+            administered_by=user,
+            **serializer.validated_data,
+        )
+        return Response(
+            VaccinationReadSerializer(vaccination).data,
+            status=201,
+        )
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="profile",
+        permission_classes=[IsStaffOrVet],
+    )
+    def profile(self, request, pk=None):
+        """
+        GET /api/patients/<id>/profile/
+        Single-call payload: patient, owner, last 5 medical records, all vaccinations,
+        next 3 upcoming appointments, open invoices. Clinic-scoped.
+        """
+        patient = self.get_object()
+        user = request.user
+        now = timezone.now()
+        open_statuses = [
+            Invoice.Status.DRAFT,
+            Invoice.Status.SENT,
+            Invoice.Status.OVERDUE,
+        ]
+        upcoming_statuses = [
+            Appointment.Status.SCHEDULED,
+            Appointment.Status.CONFIRMED,
+            Appointment.Status.CHECKED_IN,
+        ]
+
+        patient = (
+            Patient.objects.filter(pk=patient.pk, clinic_id=user.clinic_id)
+            .select_related("owner", "primary_vet", "clinic")
+            .prefetch_related(
+                Prefetch(
+                    "medical_records",
+                    queryset=MedicalRecord.objects.select_related("created_by").order_by(
+                        "-created_at"
+                    ),
+                ),
+                Prefetch(
+                    "vaccinations",
+                    queryset=Vaccination.objects.select_related("administered_by").order_by(
+                        "-administered_at"
+                    ),
+                ),
+                Prefetch(
+                    "appointments",
+                    queryset=Appointment.objects.filter(
+                        starts_at__gte=now, status__in=upcoming_statuses
+                    )
+                    .select_related("vet", "room")
+                    .order_by("starts_at"),
+                ),
+                Prefetch(
+                    "invoices",
+                    queryset=Invoice.objects.filter(status__in=open_statuses)
+                    .select_related("client", "patient")
+                    .prefetch_related("lines", "payments")
+                    .order_by("-created_at"),
+                ),
+            )
+            .first()
+        )
+        if not patient:
+            raise NotFound()
+
+        medical_records = list(patient.medical_records.all())[:5]
+        vaccinations = list(patient.vaccinations.all())
+        upcoming_appointments = list(patient.appointments.all())[:3]
+        open_invoices = list(patient.invoices.all())
+
+        data = {
+            "patient": PatientReadSerializer(patient).data,
+            "owner": ClientMiniSerializer(patient.owner).data,
+            "medical_records": MedicalRecordReadSerializer(medical_records, many=True).data,
+            "vaccinations": VaccinationReadSerializer(vaccinations, many=True).data,
+            "upcoming_appointments": AppointmentReadSerializer(
+                upcoming_appointments, many=True
+            ).data,
+            "open_invoices": InvoiceReadSerializer(open_invoices, many=True).data,
+        }
+        return Response(data, status=200)
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
@@ -64,11 +249,14 @@ class PatientViewSet(viewsets.ModelViewSet):
             "clinic",
         )
 
-        # Search across patient name, owner name, surname, and phone
+        # Search across patient name, microchip, owner name, surname, and phone
         search = self.request.query_params.get("search")
+        if search:
+            search = search.strip()
         if search:
             qs = qs.filter(
                 Q(name__icontains=search)
+                | Q(microchip_no__icontains=search)
                 | Q(owner__first_name__icontains=search)
                 | Q(owner__last_name__icontains=search)
                 | Q(owner__phone__icontains=search)
@@ -135,36 +323,40 @@ class PatientViewSet(viewsets.ModelViewSet):
             qs = (
                 PatientHistoryEntry.objects.filter(
                     clinic_id=user.clinic_id,
-                    patient_id=patient.id,
+                    record__patient_id=patient.id,
                 )
-                .select_related("appointment", "created_by")
+                .select_related("record", "created_by", "appointment", "invoice")
+                .prefetch_related("invoice__lines")
                 .order_by("-created_at")
             )
-            return Response(PatientHistoryEntryReadSerializer(qs, many=True).data)
+            return Response(PatientHistoryForPatientSerializer(qs, many=True).data)
 
         # POST requires doctor or clinic admin
         if not IsDoctorOrAdmin().has_permission(request, self):
             raise PermissionDenied("Only doctors and clinic admins can add history notes.")
 
-        serializer = PatientHistoryEntryWriteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        appointment = serializer.validated_data.get("appointment")
-
-        if appointment is not None:
-            # Enforce tenant + patient match
-            # (This prevents your earlier: "appointment from another clinic")
-            if appointment.clinic_id != user.clinic_id:
-                raise PermissionDenied("You cannot attach an appointment from another clinic.")
-            if appointment.patient_id != patient.id:
-                raise PermissionDenied("You cannot attach an appointment for a different patient.")
-
-        entry = PatientHistoryEntry.objects.create(
+        # PatientHistoryEntry uses record (MedicalRecord), not patient_id. Get or create MedicalRecord.
+        record, _ = MedicalRecord.objects.get_or_create(
             clinic_id=user.clinic_id,
             patient_id=patient.id,
-            appointment=appointment,
-            note=serializer.validated_data["note"],
-            receipt_summary=serializer.validated_data.get("receipt_summary", ""),
+            defaults={"created_by": user},
+        )
+
+        serializer = PatientHistoryEntryWriteSerializer(
+            data={
+                "record": record.id,
+                "note": request.data.get("note", ""),
+                "invoice": request.data.get("invoice"),
+                "appointment": request.data.get("appointment"),
+            },
+            context={"request": request, "patient": patient},
+        )
+        serializer.is_valid(raise_exception=True)
+        if not (serializer.validated_data.get("note") or "").strip():
+            raise ValidationError({"note": "Note is required."})
+
+        entry = serializer.save(
+            clinic_id=user.clinic_id,
             created_by=user,
         )
 
@@ -173,7 +365,13 @@ class PatientViewSet(viewsets.ModelViewSet):
         patient.ai_summary_updated_at = None
         patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
 
-        return Response(PatientHistoryEntryReadSerializer(entry).data, status=201)
+        entry = (
+            PatientHistoryEntry.objects.filter(pk=entry.pk)
+            .select_related("record", "created_by", "appointment", "invoice")
+            .prefetch_related("invoice__lines")
+            .get()
+        )
+        return Response(PatientHistoryForPatientSerializer(entry).data, status=201)
 
     @action(detail=True, methods=["get"], url_path="ai-summary")
     def ai_summary(self, request, pk=None):
@@ -206,7 +404,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             # Check if there are any history entries created after the summary was updated
             has_new_history = PatientHistoryEntry.objects.filter(
                 clinic_id=user.clinic_id,
-                patient_id=patient.id,
+                record__patient_id=patient.id,
                 created_at__gt=patient.ai_summary_updated_at,
             ).exists()
 
@@ -225,9 +423,9 @@ class PatientViewSet(viewsets.ModelViewSet):
         history_entries = (
             PatientHistoryEntry.objects.filter(
                 clinic_id=user.clinic_id,
-                patient_id=patient.id,
+                record__patient_id=patient.id,
             )
-            .select_related("appointment", "created_by")
+            .select_related("record", "created_by")
             .order_by("-created_at")
         )
 
@@ -236,10 +434,8 @@ class PatientViewSet(viewsets.ModelViewSet):
             history_item = {
                 "date": str(entry.created_at.date()),
                 "note": entry.note,
-                "receipt_summary": entry.receipt_summary or "",
+                "receipt_summary": "",
             }
-            if entry.appointment:
-                history_item["appointment_reason"] = entry.appointment.reason or ""
             history_data.append(history_item)
 
         # Collect appointments
@@ -259,12 +455,13 @@ class PatientViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        # Collect medical records (SOAP notes)
+        # Collect medical records (SOAP notes) - MedicalRecord has patient, not appointment
         medical_records = (
             MedicalRecord.objects.filter(
-                appointment__patient_id=patient.id, appointment__clinic_id=user.clinic_id
+                clinic_id=user.clinic_id,
+                patient_id=patient.id,
             )
-            .select_related("appointment", "created_by")
+            .select_related("created_by")
             .order_by("-created_at")
         )
 
@@ -273,12 +470,12 @@ class PatientViewSet(viewsets.ModelViewSet):
             medical_records_data.append(
                 {
                     "date": str(record.created_at.date()),
-                    "subjective": record.subjective or "",
-                    "objective": record.objective or "",
-                    "assessment": record.assessment or "",
-                    "plan": record.plan or "",
-                    "weight_kg": float(record.weight_kg) if record.weight_kg else None,
-                    "temperature_c": float(record.temperature_c) if record.temperature_c else None,
+                    "subjective": "",
+                    "objective": "",
+                    "assessment": record.ai_summary or "",
+                    "plan": "",
+                    "weight_kg": None,
+                    "temperature_c": None,
                 }
             )
 
@@ -363,8 +560,11 @@ class PatientViewSet(viewsets.ModelViewSet):
                 }
             )
 
-        except Exception as e:
+        except Exception:
             return Response(
-                {"error": f"Failed to generate AI summary: {str(e)}"},
+                {
+                    "code": "ai_summary_generation_failed",
+                    "message": "Failed to generate AI summary.",
+                },
                 status=500,
             )

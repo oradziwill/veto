@@ -82,5 +82,5 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
             with transaction.atomic():
                 movement = serializer.save(clinic_id=user.clinic_id, created_by=user)
                 apply_movement(movement)
-        except ValueError as err:
+        except Exception as err:
             raise serializers.ValidationError({"detail": str(err)}) from err

@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.medical.models import ClinicalExam, MedicalRecord, PatientHistoryEntry, Prescription
+from apps.billing.models import Invoice
+from apps.medical.models import (
+    ClinicalExam,
+    MedicalRecord,
+    PatientHistoryEntry,
+    Prescription,
+    Vaccination,
+)
+from apps.scheduling.models import Appointment
 
 # -------------------------
 # Clinical Exam
@@ -21,9 +29,12 @@ class ClinicalExamReadSerializer(serializers.ModelSerializer):
             "temperature_c",
             "heart_rate_bpm",
             "respiratory_rate_rpm",
+            "weight_kg",
             "additional_notes",
             "owner_instructions",
             "initial_diagnosis",
+            "transcript",
+            "ai_notes_raw",
             "created_by",
             "created_at",
             "updated_at",
@@ -41,6 +52,7 @@ class ClinicalExamWriteSerializer(serializers.ModelSerializer):
             "temperature_c",
             "heart_rate_bpm",
             "respiratory_rate_rpm",
+            "weight_kg",
             "additional_notes",
             "owner_instructions",
             "initial_diagnosis",
@@ -76,6 +88,12 @@ class MedicalRecordReadSerializer(serializers.ModelSerializer):
 
 
 class MedicalRecordWriteSerializer(serializers.ModelSerializer):
+    def validate_patient(self, value):
+        request = self.context.get("request")
+        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+            raise serializers.ValidationError("Patient must belong to your clinic.")
+        return value
+
     class Meta:
         model = MedicalRecord
         fields = [
@@ -90,13 +108,34 @@ class MedicalRecordWriteSerializer(serializers.ModelSerializer):
 
 
 class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
+    services_performed = serializers.SerializerMethodField()
+
+    def get_services_performed(self, obj):
+        invoice = getattr(obj, "invoice", None)
+        if not invoice:
+            return []
+        lines = getattr(invoice, "lines", None)
+        if lines is None:
+            return []
+        return [
+            {
+                "description": line.description,
+                "quantity": str(line.quantity),
+                "unit_price": str(line.unit_price),
+            }
+            for line in lines.all()
+        ]
+
     class Meta:
         model = PatientHistoryEntry
         fields = [
             "id",
             "clinic",
             "record",
+            "appointment",
+            "invoice",
             "note",
+            "services_performed",
             "created_by",
             "created_at",
         ]
@@ -104,10 +143,53 @@ class PatientHistoryEntryReadSerializer(serializers.ModelSerializer):
 
 
 class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
+    invoice = serializers.PrimaryKeyRelatedField(
+        queryset=Invoice.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    appointment = serializers.PrimaryKeyRelatedField(
+        queryset=Appointment.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    def validate_record(self, value):
+        request = self.context.get("request")
+        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+            raise serializers.ValidationError("Medical record must belong to your clinic.")
+        return value
+
+    def validate_invoice(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+        if clinic_id and value.clinic_id != clinic_id:
+            raise serializers.ValidationError("Invoice must belong to your clinic.")
+        patient = self.context.get("patient")
+        if patient and value.patient_id and value.patient_id != patient.id:
+            raise serializers.ValidationError("Invoice must belong to this patient.")
+        return value
+
+    def validate_appointment(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+        if clinic_id and value.clinic_id != clinic_id:
+            raise serializers.ValidationError("Appointment must belong to your clinic.")
+        patient = self.context.get("patient")
+        if patient and value.patient_id and value.patient_id != patient.id:
+            raise serializers.ValidationError("Appointment must belong to this patient.")
+        return value
+
     class Meta:
         model = PatientHistoryEntry
         fields = [
             "record",
+            "appointment",
+            "invoice",
             "note",
         ]
 
@@ -118,6 +200,13 @@ class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
 
 
 class PrescriptionReadSerializer(serializers.ModelSerializer):
+    prescribed_by_name = serializers.SerializerMethodField()
+
+    def get_prescribed_by_name(self, obj):
+        if not obj.prescribed_by:
+            return None
+        return obj.prescribed_by.get_full_name() or obj.prescribed_by.username
+
     class Meta:
         model = Prescription
         fields = [
@@ -125,6 +214,101 @@ class PrescriptionReadSerializer(serializers.ModelSerializer):
             "clinic",
             "patient",
             "appointment",
+            "medical_record",
+            "prescribed_by",
+            "prescribed_by_name",
+            "drug_name",
+            "dosage",
+            "duration_days",
+            "notes",
             "created_at",
         ]
         read_only_fields = fields
+
+
+class PrescriptionWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Prescription
+        fields = [
+            "medical_record",
+            "drug_name",
+            "dosage",
+            "duration_days",
+            "notes",
+        ]
+
+    def validate_drug_name(self, value):
+        if not (value or "").strip():
+            raise serializers.ValidationError("drug_name is required for new prescriptions.")
+        return value
+
+    def validate_dosage(self, value):
+        if not (value or "").strip():
+            raise serializers.ValidationError("dosage is required for new prescriptions.")
+        return value
+
+    def validate_medical_record(self, value):
+        if value is None:
+            return value
+        request = self.context.get("request")
+        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+            raise serializers.ValidationError("Medical record must belong to your clinic.")
+        patient = self.context.get("patient")
+        if patient and value.patient_id != patient.id:
+            raise serializers.ValidationError("Medical record must belong to this patient.")
+        return value
+
+
+# -------------------------
+# Vaccination
+# -------------------------
+
+
+class VaccinationReadSerializer(serializers.ModelSerializer):
+    administered_by_name = serializers.SerializerMethodField()
+    patient_name = serializers.CharField(source="patient.name", read_only=True)
+    owner_name = serializers.SerializerMethodField()
+    next_due_date = serializers.DateField(source="next_due_at", read_only=True)
+
+    def get_administered_by_name(self, obj):
+        if not obj.administered_by:
+            return None
+        return obj.administered_by.get_full_name() or obj.administered_by.username
+
+    def get_owner_name(self, obj):
+        owner = getattr(obj.patient, "owner", None)
+        if not owner:
+            return None
+        full_name = f"{owner.first_name or ''} {owner.last_name or ''}".strip()
+        return full_name or None
+
+    class Meta:
+        model = Vaccination
+        fields = [
+            "id",
+            "clinic",
+            "patient",
+            "vaccine_name",
+            "batch_number",
+            "administered_at",
+            "next_due_at",
+            "next_due_date",
+            "administered_by",
+            "administered_by_name",
+            "patient_name",
+            "owner_name",
+            "notes",
+        ]
+        read_only_fields = fields
+
+
+class VaccinationWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vaccination
+        fields = [
+            "vaccine_name",
+            "batch_number",
+            "administered_at",
+            "next_due_at",
+            "notes",
+        ]

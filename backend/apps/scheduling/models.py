@@ -6,7 +6,34 @@ from django.utils import timezone
 from apps.patients.models import Patient
 from apps.tenancy.models import Clinic
 
+from .models_clinic_hours import ClinicWorkingHours  # noqa: F401
+from .models_duty import DutyAssignment  # noqa: F401
 from .models_exceptions import VetAvailabilityException  # noqa: F401
+
+
+class Room(models.Model):
+    """Clinic room for visits (e.g. Room 1, RTG room). Admin configures rooms per clinic."""
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name="rooms",
+    )
+    name = models.CharField(max_length=64)
+    display_order = models.PositiveSmallIntegerField(
+        default=0, help_text="Order in lists (lower first)"
+    )
+
+    class Meta:
+        ordering = ["display_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clinic", "name"], name="scheduling_room_clinic_name_uniq"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.clinic}: {self.name}"
 
 
 class Appointment(models.Model):
@@ -29,6 +56,13 @@ class Appointment(models.Model):
         on_delete=models.PROTECT,
         related_name="appointments",
         limit_choices_to={"is_vet": True},
+    )
+    room = models.ForeignKey(
+        "Room",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="appointments",
     )
 
     starts_at = models.DateTimeField()
@@ -67,6 +101,22 @@ class Appointment(models.Model):
             and getattr(self.vet, "clinic_id", None) != self.clinic_id
         ):
             raise ValidationError({"vet": "Vet clinic must match appointment clinic."})
+
+        if self.room_id and self.clinic_id and self.room.clinic_id != self.clinic_id:
+            raise ValidationError({"room": "Room must belong to the appointment clinic."})
+
+        if self.room_id and self.clinic_id and self.starts_at and self.ends_at:
+            room_qs = Appointment.objects.filter(
+                clinic_id=self.clinic_id,
+                room_id=self.room_id,
+            ).exclude(status=Appointment.Status.CANCELLED)
+            if self.pk:
+                room_qs = room_qs.exclude(pk=self.pk)
+            room_qs = room_qs.filter(starts_at__lt=self.ends_at, ends_at__gt=self.starts_at)
+            if room_qs.exists():
+                raise ValidationError(
+                    "This room already has an overlapping appointment in this time range."
+                )
 
         if self.vet_id and self.clinic_id and self.starts_at and self.ends_at:
             qs = Appointment.objects.filter(
@@ -147,6 +197,57 @@ class HospitalStay(models.Model):
 
     def __str__(self) -> str:
         return f"HospitalStay {self.patient} @ {self.clinic} ({self.status})"
+
+
+class WaitingQueueEntry(models.Model):
+    """Walk-in patient queue. Receptionist/doctor adds patients; doctor calls them."""
+
+    class Status(models.TextChoices):
+        WAITING = "waiting", "Waiting"
+        IN_PROGRESS = "in_progress", "In Progress"
+        DONE = "done", "Done"
+        LEFT = "left", "Left"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name="queue_entries",
+    )
+    patient = models.ForeignKey(
+        Patient,
+        on_delete=models.PROTECT,
+        related_name="queue_entries",
+    )
+    chief_complaint = models.CharField(max_length=255, blank=True)
+    is_urgent = models.BooleanField(default=False)
+    position = models.PositiveIntegerField()
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.WAITING,
+    )
+    arrived_at = models.DateTimeField(auto_now_add=True)
+    called_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="called_patients",
+    )
+    appointment = models.OneToOneField(
+        "Appointment",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="queue_entry",
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["position", "arrived_at"]
+
+    def __str__(self) -> str:
+        return f"Queue#{self.position} {self.patient} @ {self.clinic} ({self.status})"
 
 
 # Register additional scheduling models kept in separate modules

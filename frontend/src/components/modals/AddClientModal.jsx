@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { clientsAPI, authAPI } from "../../services/api";
 import "./Modal.css";
 
 const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -13,10 +15,20 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     apartment: "",
     city: "",
     postal_code: "",
-    country: "PL",
+    country: "Polska",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [duplicates, setDuplicates] = useState([]);
+  const [skipDuplicateCheck, setSkipDuplicateCheck] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setDuplicates([]);
+      setSkipDuplicateCheck(false);
+      setError(null);
+    }
+  }, [isOpen]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -53,17 +65,46 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
+  const findDuplicates = async () => {
+    const first = formData.first_name.trim();
+    const last = formData.last_name.trim();
+    if (!first || !last) return [];
+    try {
+      const res = await clientsAPI.list({ q: `${first} ${last}`, in_my_clinic: true });
+      const results = res.data.results || res.data || [];
+      return results.filter((client) => {
+        const nameMatch =
+          client.first_name.toLowerCase() === first.toLowerCase() &&
+          client.last_name.toLowerCase() === last.toLowerCase();
+        if (!nameMatch) return false;
+        const userPhone = formData.phone.trim().replace(/\s/g, "");
+        const clientPhone = (client.phone || "").replace(/\s/g, "");
+        if (userPhone && clientPhone) return userPhone === clientPhone;
+        return true; // name matches and no phone to compare
+      });
+    } catch {
+      return [];
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
+    if (!skipDuplicateCheck) {
+      const dupes = await findDuplicates();
+      if (dupes.length > 0) {
+        setDuplicates(dupes);
+        setLoading(false);
+        return;
+      }
+    }
+
     // Ensure authentication before making the API call
     const isAuthenticated = await ensureAuthenticated();
     if (!isAuthenticated) {
-      setError(
-        "Unable to authenticate. Please check your connection and try again."
-      );
+        setError(t("addClient.authError"));
       setLoading(false);
       return;
     }
@@ -84,8 +125,9 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
         apartment: "",
         city: "",
         postal_code: "",
-        country: "PL",
+        country: "Polska",
       });
+      setSkipDuplicateCheck(false);
     } catch (err) {
       // Handle authentication errors - try to auto-login and retry once more
       if (err.response?.status === 401) {
@@ -108,17 +150,16 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
             apartment: "",
             city: "",
             postal_code: "",
-            country: "PL",
+            country: "Polska",
           });
           return;
         } catch (authErr) {
           console.error("Auto-login retry failed:", authErr);
-          setError("Authentication failed. Please refresh the page.");
+          setError(t("addClient.authError"));
         }
       } else {
         setError(
-          err.response?.data?.detail ||
-            "Failed to create client. Please try again."
+          err.response?.data?.detail || t("addClient.createError")
         );
       }
       console.error("Error creating client:", err);
@@ -133,7 +174,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Add New Client</h2>
+          <h2>{t("addClient.title")}</h2>
           <button className="modal-close" onClick={onClose}>
             ×
           </button>
@@ -142,9 +183,89 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="modal-form">
           {error && <div className="error-message">{error}</div>}
 
+          {duplicates.length > 0 && (
+            <div style={{
+              background: "#fffbeb",
+              border: "1px solid #f6e05e",
+              borderLeft: "4px solid #d69e2e",
+              borderRadius: "8px",
+              padding: "1rem",
+              marginBottom: "1rem",
+            }}>
+              <div style={{ fontWeight: "600", color: "#744210", marginBottom: "0.5rem" }}>
+                {t("addClient.duplicateWarning")}
+              </div>
+              {duplicates.map((d) => (
+                <div key={d.id} style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "0.5rem",
+                  padding: "0.4rem 0",
+                  borderBottom: "1px solid #fef08a",
+                }}>
+                  <span style={{ color: "#92400e", fontSize: "0.95rem" }}>
+                    {d.first_name} {d.last_name}
+                    {d.phone && <span style={{ color: "#a16207", marginLeft: "0.5rem" }}>· {d.phone}</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { onSuccess(d); onClose(); }}
+                    style={{
+                      padding: "0.3rem 0.75rem",
+                      background: "#2f855a",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "0.85rem",
+                      fontWeight: "600",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t("addClient.useExisting")}
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+                <button
+                  type="button"
+                  onClick={() => { setSkipDuplicateCheck(true); setDuplicates([]); }}
+                  style={{
+                    padding: "0.4rem 0.9rem",
+                    background: "white",
+                    border: "1px solid #d69e2e",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    color: "#744210",
+                    fontWeight: "500",
+                  }}
+                >
+                  {t("addClient.createAnyway")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDuplicates([])}
+                  style={{
+                    padding: "0.4rem 0.9rem",
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    color: "#4a5568",
+                  }}
+                >
+                  {t("common.cancel")}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="first_name">First Name *</label>
+              <label htmlFor="first_name">{t("addClient.firstName")}</label>
               <input
                 type="text"
                 id="first_name"
@@ -156,7 +277,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="last_name">Last Name *</label>
+              <label htmlFor="last_name">{t("addClient.lastName")}</label>
               <input
                 type="text"
                 id="last_name"
@@ -170,7 +291,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="phone">Phone</label>
+              <label htmlFor="phone">{t("addClient.phone")}</label>
               <input
                 type="tel"
                 id="phone"
@@ -181,7 +302,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="email">Email</label>
+              <label htmlFor="email">{t("addClient.email")}</label>
               <input
                 type="email"
                 id="email"
@@ -207,12 +328,12 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
                 color: "#2d3748",
               }}
             >
-              Address Information
+              {t("addClient.addressInfo")}
             </h3>
 
             <div className="form-row">
               <div className="form-group" style={{ flex: 2 }}>
-                <label htmlFor="street">Street</label>
+                <label htmlFor="street">{t("addClient.street")}</label>
                 <input
                   type="text"
                   id="street"
@@ -223,7 +344,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group" style={{ flex: 1 }}>
-                <label htmlFor="house_number">House Number</label>
+                <label htmlFor="house_number">{t("addClient.houseNumber")}</label>
                 <input
                   type="text"
                   id="house_number"
@@ -234,7 +355,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group" style={{ flex: 1 }}>
-                <label htmlFor="apartment">Apartment</label>
+                <label htmlFor="apartment">{t("addClient.apartment")}</label>
                 <input
                   type="text"
                   id="apartment"
@@ -247,7 +368,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
 
             <div className="form-row">
               <div className="form-group">
-                <label htmlFor="city">City</label>
+                <label htmlFor="city">{t("addClient.city")}</label>
                 <input
                   type="text"
                   id="city"
@@ -258,7 +379,7 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group">
-                <label htmlFor="postal_code">Postal Code</label>
+                <label htmlFor="postal_code">{t("addClient.postalCode")}</label>
                 <input
                   type="text"
                   id="postal_code"
@@ -269,26 +390,57 @@ const AddClientModal = ({ isOpen, onClose, onSuccess }) => {
               </div>
 
               <div className="form-group">
-                <label htmlFor="country">Country</label>
-                <input
-                  type="text"
+                <label htmlFor="country">{t("addClient.country")}</label>
+                <select
                   id="country"
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
-                  placeholder="PL"
-                  maxLength="2"
-                />
+                >
+                  <option value="Polska">Polska</option>
+                  <option value="Austria">Austria</option>
+                  <option value="Belgia">Belgia</option>
+                  <option value="Białoruś">Białoruś</option>
+                  <option value="Bułgaria">Bułgaria</option>
+                  <option value="Chorwacja">Chorwacja</option>
+                  <option value="Czechy">Czechy</option>
+                  <option value="Dania">Dania</option>
+                  <option value="Estonia">Estonia</option>
+                  <option value="Finlandia">Finlandia</option>
+                  <option value="Francja">Francja</option>
+                  <option value="Grecja">Grecja</option>
+                  <option value="Hiszpania">Hiszpania</option>
+                  <option value="Irlandia">Irlandia</option>
+                  <option value="Kanada">Kanada</option>
+                  <option value="Litwa">Litwa</option>
+                  <option value="Luksemburg">Luksemburg</option>
+                  <option value="Łotwa">Łotwa</option>
+                  <option value="Niemcy">Niemcy</option>
+                  <option value="Niderlandy">Niderlandy</option>
+                  <option value="Norwegia">Norwegia</option>
+                  <option value="Portugalia">Portugalia</option>
+                  <option value="Rumunia">Rumunia</option>
+                  <option value="Słowacja">Słowacja</option>
+                  <option value="Słowenia">Słowenia</option>
+                  <option value="Stany Zjednoczone">Stany Zjednoczone</option>
+                  <option value="Szwajcaria">Szwajcaria</option>
+                  <option value="Szwecja">Szwecja</option>
+                  <option value="Ukraina">Ukraina</option>
+                  <option value="Węgry">Węgry</option>
+                  <option value="Wielka Brytania">Wielka Brytania</option>
+                  <option value="Włochy">Włochy</option>
+                  <option value="Inne">Inne</option>
+                </select>
               </div>
             </div>
           </div>
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </button>
             <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? "Creating..." : "Create Client"}
+              {loading ? t("addClient.creating") : t("addClient.createClient")}
             </button>
           </div>
         </form>
