@@ -179,7 +179,10 @@ jobs:
           cluster: veto-${{ steps.env.outputs.ENV }}-cluster
           wait-for-service-stability: true
 
+      # Dev ECS is often scaled down to save cost; smoke checks then return 503. Skip by default
+      # for dev unless repo variable ENABLE_DEV_POST_DEPLOY_SMOKE is set to 'true' (Settings → Variables).
       - name: Post-deploy smoke checks
+        if: ${{ steps.env.outputs.ENV == 'prod' || vars.ENABLE_DEV_POST_DEPLOY_SMOKE == 'true' }}
         run: |
           TASK_DEF_ARN=$(aws ecs describe-services \
             --cluster veto-${{ steps.env.outputs.ENV }}-cluster \

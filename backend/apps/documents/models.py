@@ -75,6 +75,7 @@ class IngestionDocument(models.Model):
         default=Status.UPLOADED,
         db_index=True,
     )
+    last_error = models.TextField(blank=True)
     input_s3_key = models.CharField(max_length=1024, blank=True)
     output_html_s3_key = models.CharField(max_length=1024, blank=True)
 
