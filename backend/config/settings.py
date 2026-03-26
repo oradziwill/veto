@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "apps.reminders.apps.RemindersConfig",
     "apps.notifications.apps.NotificationsConfig",
     "apps.documents.apps.DocumentsConfig",
+    "apps.audit.apps.AuditConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

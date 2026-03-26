@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsClinicAdmin, IsStaffOrVet
+from apps.audit.services import log_audit_event
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_clinic_staff
 from apps.scheduling.models import Appointment
@@ -76,6 +77,11 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def resend(self, request, pk=None):
         reminder = self.get_object()
+        before = {
+            "status": reminder.status,
+            "attempts": reminder.attempts,
+            "scheduled_for": reminder.scheduled_for.isoformat() if reminder.scheduled_for else "",
+        }
         reminder.status = Reminder.Status.QUEUED
         reminder.scheduled_for = timezone.now()
         reminder.sent_at = None
@@ -90,6 +96,21 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
                 "last_error",
                 "updated_at",
             ]
+        )
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="reminder_resend_queued",
+            entity_type="reminder",
+            entity_id=reminder.id,
+            before=before,
+            after={
+                "status": reminder.status,
+                "attempts": reminder.attempts,
+                "scheduled_for": (
+                    reminder.scheduled_for.isoformat() if reminder.scheduled_for else ""
+                ),
+            },
         )
         return Response(ReminderReadSerializer(reminder).data, status=status.HTTP_200_OK)
 

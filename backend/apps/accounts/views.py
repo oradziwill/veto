@@ -3,6 +3,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.audit.services import log_audit_event
+
 from .models import User
 from .permissions import HasClinic, IsClinicAdmin
 from .serializers import (
@@ -59,14 +61,77 @@ class ClinicUserViewSet(viewsets.ModelViewSet):
         return ctx
 
     def perform_create(self, serializer):
-        serializer.save()
+        user = serializer.save()
+        log_audit_event(
+            clinic_id=self.request.user.clinic_id,
+            actor=self.request.user,
+            action="clinic_user_created",
+            entity_type="user",
+            entity_id=user.id,
+            after={
+                "username": user.username,
+                "role": user.role,
+                "is_active": user.is_active,
+            },
+        )
+        return user
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = self.perform_create(serializer)
+        return Response(ClinicUserReadSerializer(user).data, status=201)
 
     def perform_update(self, serializer):
         instance = self.get_object()
+        before = {
+            "role": instance.role,
+            "is_active": instance.is_active,
+            "is_vet": instance.is_vet,
+        }
         if instance.id == self.request.user.id and "role" in serializer.validated_data:
             new_role = serializer.validated_data["role"]
             if new_role != User.Role.ADMIN:
                 raise ValidationError(
                     {"role": "You cannot remove admin role from your own account."}
                 )
-        serializer.save()
+        user = serializer.save()
+        log_audit_event(
+            clinic_id=self.request.user.clinic_id,
+            actor=self.request.user,
+            action="clinic_user_updated",
+            entity_type="user",
+            entity_id=user.id,
+            before=before,
+            after={
+                "role": user.role,
+                "is_active": user.is_active,
+                "is_vet": user.is_vet,
+            },
+        )
+        return user
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        user = self.perform_update(serializer)
+        return Response(ClinicUserReadSerializer(user).data)
+
+    def perform_destroy(self, instance):
+        before = {
+            "username": instance.username,
+            "role": instance.role,
+            "is_active": instance.is_active,
+        }
+        entity_id = instance.id
+        super().perform_destroy(instance)
+        log_audit_event(
+            clinic_id=self.request.user.clinic_id,
+            actor=self.request.user,
+            action="clinic_user_deleted",
+            entity_type="user",
+            entity_id=entity_id,
+            before=before,
+        )
