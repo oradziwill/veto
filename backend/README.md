@@ -89,6 +89,11 @@ python manage.py createsuperuser
 
 Admin: http://localhost:8000/admin/
 
+## Feature Docs
+
+- [Document ingestion async flow](documentation/DOCUMENT_INGESTION.md)
+- [Visit recording + AI summary (frontend handoff)](documentation/VISIT_RECORDING_AI_SUMMARY.md)
+
 ## Environment Variables
 
 | Variable | Required | Description |

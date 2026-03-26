@@ -2,7 +2,13 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.patients.serializers import PatientReadSerializer, VetMiniSerializer
-from apps.scheduling.models import Appointment, HospitalStay, Room, WaitingQueueEntry
+from apps.scheduling.models import (
+    Appointment,
+    HospitalStay,
+    Room,
+    VisitRecording,
+    WaitingQueueEntry,
+)
 
 
 class RoomSerializer(serializers.ModelSerializer):
@@ -106,3 +112,33 @@ class WaitingQueueEntryWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = WaitingQueueEntry
         fields = ["patient", "chief_complaint", "is_urgent", "notes"]
+
+
+class VisitRecordingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VisitRecording
+        fields = [
+            "id",
+            "job_id",
+            "clinic",
+            "appointment",
+            "uploaded_by",
+            "original_filename",
+            "content_type",
+            "size_bytes",
+            "status",
+            "last_error",
+            "input_s3_key",
+            "transcript",
+            "summary_text",
+            "summary_structured",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class VisitRecordingUploadResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VisitRecording
+        fields = ["id", "job_id", "status", "input_s3_key", "created_at"]

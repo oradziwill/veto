@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Appointment, Room
+from .models import Appointment, Room, VisitRecording
 from .models_exceptions import VetAvailabilityException
 from .models_working_hours import VetWorkingHours
 
@@ -49,3 +49,27 @@ class AppointmentAdmin(admin.ModelAdmin):
     )
     list_filter = ("clinic", "status", "vet")
     search_fields = ("patient__name", "vet__username")
+
+
+@admin.register(VisitRecording)
+class VisitRecordingAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "clinic",
+        "appointment",
+        "status",
+        "original_filename",
+        "created_at",
+    )
+    list_filter = ("clinic", "status")
+    search_fields = ("original_filename", "job_id")
+    readonly_fields = (
+        "job_id",
+        "input_s3_key",
+        "transcript",
+        "summary_text",
+        "summary_structured",
+        "last_error",
+        "created_at",
+        "updated_at",
+    )
