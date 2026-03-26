@@ -3,7 +3,9 @@ from __future__ import annotations
 from apps.medical.models import ClinicalExam
 from apps.scheduling.models import VisitRecording
 from apps.scheduling.services.visit_transcription import (
+    SUMMARY_UNKNOWN,
     VisitTranscriptionError,
+    enforce_strict_summary,
     structure_transcript_with_claude,
     transcribe_audio_with_whisper,
 )
@@ -34,8 +36,18 @@ def process_visit_recording(*, recording: VisitRecording, audio_bytes: bytes) ->
         filename=recording.original_filename or f"visit-{recording.appointment_id}.webm",
         content_type=recording.content_type or "application/octet-stream",
     )
-    structured = structure_transcript_with_claude(transcript=transcript)
+    structured_raw = structure_transcript_with_claude(transcript=transcript)
+    structured, needs_review = enforce_strict_summary(
+        transcript=transcript,
+        structured=structured_raw,
+    )
     summary_text = format_summary(structured)
+    strict_metadata = {
+        "_strict_mode": True,
+        "_needs_review": needs_review,
+        "_unknown_fields": [k for k, v in structured.items() if v == SUMMARY_UNKNOWN],
+    }
+    structured_for_storage = {**structured, **strict_metadata}
 
     with transaction.atomic():
         exam, _created = ClinicalExam.objects.get_or_create(
@@ -44,7 +56,7 @@ def process_visit_recording(*, recording: VisitRecording, audio_bytes: bytes) ->
             defaults={"created_by_id": recording.uploaded_by_id},
         )
         exam.transcript = transcript
-        exam.ai_notes_raw = structured
+        exam.ai_notes_raw = structured_for_storage
         exam.initial_notes = structured.get("anamnesis", "")
         exam.clinical_examination = structured.get("clinical_findings", "")
         exam.initial_diagnosis = structured.get("diagnosis", "")
@@ -64,7 +76,7 @@ def process_visit_recording(*, recording: VisitRecording, audio_bytes: bytes) ->
         )
 
         recording.transcript = transcript
-        recording.summary_structured = structured
+        recording.summary_structured = structured_for_storage
         recording.summary_text = summary_text
         recording.status = VisitRecording.Status.READY
         recording.last_error = ""

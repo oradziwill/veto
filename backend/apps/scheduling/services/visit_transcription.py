@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from urllib import error, request
 
@@ -9,6 +10,16 @@ from django.conf import settings
 
 class VisitTranscriptionError(Exception):
     pass
+
+
+SUMMARY_SCHEMA_KEYS = [
+    "anamnesis",
+    "clinical_findings",
+    "diagnosis",
+    "treatment_plan",
+    "owner_instructions",
+]
+SUMMARY_UNKNOWN = "UNKNOWN"
 
 
 def _build_multipart_form_data(
@@ -100,21 +111,67 @@ def _extract_json_object(text: str) -> dict[str, str]:
     return {str(k): str(v) for k, v in payload.items() if isinstance(k, str)}
 
 
+def _normalize_for_match(text: str) -> str:
+    lowered = text.lower()
+    lowered = re.sub(r"\s+", " ", lowered)
+    lowered = re.sub(r"[^\w\s]", "", lowered)
+    return lowered.strip()
+
+
+def _split_sentences(text: str) -> list[str]:
+    chunks = re.split(r"(?<!\d)[.!?;]+(?!\d)|\n+", text)
+    return [c.strip() for c in chunks if c.strip()]
+
+
+def _is_grounded_quote(*, candidate: str, transcript: str) -> bool:
+    candidate_norm = _normalize_for_match(candidate)
+    transcript_norm = _normalize_for_match(transcript)
+    return bool(candidate_norm) and candidate_norm in transcript_norm
+
+
+def enforce_strict_summary(
+    *, transcript: str, structured: dict[str, str]
+) -> tuple[dict[str, str], bool]:
+    strict: dict[str, str] = {}
+    needs_review = False
+
+    for key in SUMMARY_SCHEMA_KEYS:
+        raw_value = str(structured.get(key, "")).strip()
+        if not raw_value:
+            strict[key] = SUMMARY_UNKNOWN
+            needs_review = True
+            continue
+        if raw_value.upper() == SUMMARY_UNKNOWN:
+            strict[key] = SUMMARY_UNKNOWN
+            needs_review = True
+            continue
+
+        kept_sentences: list[str] = []
+        for sentence in _split_sentences(raw_value):
+            if _is_grounded_quote(candidate=sentence, transcript=transcript):
+                kept_sentences.append(sentence)
+
+        if not kept_sentences:
+            strict[key] = SUMMARY_UNKNOWN
+            needs_review = True
+        else:
+            strict[key] = ". ".join(kept_sentences).strip()
+
+    return strict, needs_review
+
+
 def structure_transcript_with_claude(*, transcript: str) -> dict[str, str]:
     api_key = str(getattr(settings, "OPENAI_API_KEY", "")).strip()
     if not api_key:
         raise VisitTranscriptionError("OPENAI_API_KEY is not configured.")
 
-    schema_keys = [
-        "anamnesis",
-        "clinical_findings",
-        "diagnosis",
-        "treatment_plan",
-        "owner_instructions",
-    ]
     prompt = (
-        "You are a veterinary assistant. Convert the transcript into JSON with keys exactly: "
-        f"{', '.join(schema_keys)}. Keep concise factual text values. "
+        "You are a strict extraction assistant for veterinary visits. "
+        "Output JSON with keys exactly: "
+        f"{', '.join(SUMMARY_SCHEMA_KEYS)}. "
+        "For each key, copy exact quotes from the transcript only. "
+        f"If the information is missing, set value to {SUMMARY_UNKNOWN}. "
+        "Do not infer, generalize, or add medical assumptions. "
         "Return JSON only, no markdown, no extra keys.\n\n"
         f"Transcript:\n{transcript}"
     )
@@ -122,14 +179,15 @@ def structure_transcript_with_claude(*, transcript: str) -> dict[str, str]:
         {
             "model": "gpt-4o-mini",
             "max_tokens": 1200,
-            "temperature": 0.2,
+            "temperature": 0.0,
             "response_format": {"type": "json_object"},
             "messages": [
                 {
                     "role": "system",
                     "content": (
-                        "You output valid JSON only with keys: anamnesis, clinical_findings, "
-                        "diagnosis, treatment_plan, owner_instructions."
+                        "Return valid JSON only. Allowed keys: anamnesis, clinical_findings, "
+                        "diagnosis, treatment_plan, owner_instructions. "
+                        "Values must be direct quotes from transcript or UNKNOWN."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -160,6 +218,8 @@ def structure_transcript_with_claude(*, transcript: str) -> dict[str, str]:
         message = choices[0].get("message") or {}
         content = str(message.get("content", ""))
     structured = _extract_json_object(content)
-    for key in schema_keys:
+    for key in SUMMARY_SCHEMA_KEYS:
         structured.setdefault(key, "")
-    return {key: str(structured.get(key, "")) for key in schema_keys}
+    normalized = {key: str(structured.get(key, "")).strip() for key in SUMMARY_SCHEMA_KEYS}
+    strict, _needs_review = enforce_strict_summary(transcript=transcript, structured=normalized)
+    return strict

@@ -48,7 +48,9 @@ from apps.scheduling.services.visit_recording_pipeline import (
     safe_error_text,
 )
 from apps.scheduling.services.visit_transcription import (
+    SUMMARY_UNKNOWN,
     VisitTranscriptionError,
+    enforce_strict_summary,
     structure_transcript_with_claude,
     transcribe_audio_with_whisper,
 )
@@ -287,7 +289,11 @@ class VisitTranscriptionView(APIView):
                 filename=upload.name or f"visit-{appointment_id}.webm",
                 content_type=upload.content_type or "application/octet-stream",
             )
-            structured = structure_transcript_with_claude(transcript=transcript)
+            structured_raw = structure_transcript_with_claude(transcript=transcript)
+            structured, needs_review = enforce_strict_summary(
+                transcript=transcript,
+                structured=structured_raw,
+            )
         except VisitTranscriptionError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
@@ -297,7 +303,12 @@ class VisitTranscriptionView(APIView):
             defaults={"created_by": request.user},
         )
         exam.transcript = transcript
-        exam.ai_notes_raw = structured
+        exam.ai_notes_raw = {
+            **structured,
+            "_strict_mode": True,
+            "_needs_review": needs_review,
+            "_unknown_fields": [k for k, v in structured.items() if v == SUMMARY_UNKNOWN],
+        }
         exam.initial_notes = structured.get("anamnesis", "")
         exam.clinical_examination = structured.get("clinical_findings", "")
         exam.initial_diagnosis = structured.get("diagnosis", "")
@@ -316,7 +327,16 @@ class VisitTranscriptionView(APIView):
             ]
         )
 
-        return Response({"transcript": transcript, "structured": structured}, status=200)
+        return Response(
+            {
+                "transcript": transcript,
+                "structured": structured,
+                "strict_mode": True,
+                "needs_review": needs_review,
+                "unknown_fields": [k for k, v in structured.items() if v == SUMMARY_UNKNOWN],
+            },
+            status=200,
+        )
 
 
 class VisitRecordingUploadView(APIView):

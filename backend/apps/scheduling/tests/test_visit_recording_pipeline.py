@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from apps.medical.models import ClinicalExam
 from apps.scheduling.models import VisitRecording
+from apps.scheduling.services.visit_transcription import SUMMARY_UNKNOWN, enforce_strict_summary
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 
@@ -151,7 +152,13 @@ def test_process_visit_recordings_updates_clinical_exam(
     ):
         with patch(
             "apps.scheduling.services.visit_recording_pipeline.transcribe_audio_with_whisper",
-            return_value="Owner reports lethargy and poor appetite.",
+            return_value=(
+                "Owner reports lethargy and poor appetite for 2 days. "
+                "Mild fever. "
+                "Suspected infection. "
+                "Antibiotic 5 days. "
+                "Return if no improvement in 48h."
+            ),
         ):
             with patch(
                 "apps.scheduling.services.visit_recording_pipeline.structure_transcript_with_claude",
@@ -169,4 +176,22 @@ def test_process_visit_recordings_updates_clinical_exam(
     exam = ClinicalExam.objects.get(appointment=appointment)
     assert row.status == VisitRecording.Status.READY
     assert "Suspected infection" in row.summary_text
-    assert exam.initial_diagnosis == "Suspected infection."
+    assert exam.initial_diagnosis == "Suspected infection"
+
+
+def test_enforce_strict_summary_replaces_non_grounded_with_unknown():
+    transcript = "Owner reports cough. Mild fever."
+    structured = {
+        "anamnesis": "Owner reports cough.",
+        "clinical_findings": "Mild fever.",
+        "diagnosis": "Bacterial pneumonia.",
+        "treatment_plan": "Antibiotic 7 days.",
+        "owner_instructions": "Recheck in 2 days.",
+    }
+    strict, needs_review = enforce_strict_summary(transcript=transcript, structured=structured)
+    assert strict["anamnesis"] == "Owner reports cough"
+    assert strict["clinical_findings"] == "Mild fever"
+    assert strict["diagnosis"] == SUMMARY_UNKNOWN
+    assert strict["treatment_plan"] == SUMMARY_UNKNOWN
+    assert strict["owner_instructions"] == SUMMARY_UNKNOWN
+    assert needs_review is True

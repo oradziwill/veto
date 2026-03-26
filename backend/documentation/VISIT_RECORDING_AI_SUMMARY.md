@@ -53,6 +53,8 @@ Important response fields:
 - `transcript`: full transcript when ready
 - `summary_structured`: JSON sections for UI cards
 - `summary_text`: plain formatted summary text
+- `needs_review`: `true` when strict extraction had missing/non-grounded fields
+- `unknown_fields`: fields set to `UNKNOWN` by strict guardrails
 
 ## FE polling contract
 
@@ -71,3 +73,12 @@ Important response fields:
 - Use appointment id in upload/list URLs.
 - Use returned `recording_id` for detail polling.
 - Do not assume immediate `ready`; treat this as asynchronous processing.
+
+## Strict AI mode (anti-hallucination)
+
+Backend enforces strict extraction mode:
+
+- model is instructed to return only direct quotes from transcript,
+- missing information must be `UNKNOWN`,
+- backend validates grounding against transcript and replaces non-grounded values with `UNKNOWN`,
+- responses include `needs_review` + `unknown_fields` so FE can highlight sections requiring doctor verification.
