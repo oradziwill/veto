@@ -4,11 +4,14 @@ import json
 import re
 import uuid
 from datetime import date as date_type
+from datetime import timedelta
 
 import boto3
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db import models, transaction
+from django.db.models import Count, Q
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -194,6 +197,9 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         appointment = serializer.save(clinic=self.request.user.clinic)
+        if appointment.status == Appointment.Status.CANCELLED and appointment.cancelled_at is None:
+            appointment.cancelled_at = timezone.now()
+            appointment.save(update_fields=["cancelled_at", "updated_at"])
 
         # Invalidate AI summary cache for the patient when a new visit is added
         if appointment.patient_id:
@@ -203,7 +209,141 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
 
     def perform_update(self, serializer):
-        serializer.save(clinic=self.request.user.clinic)
+        appointment = serializer.save(clinic=self.request.user.clinic)
+        if appointment.status == Appointment.Status.CANCELLED and appointment.cancelled_at is None:
+            appointment.cancelled_at = timezone.now()
+            appointment.save(update_fields=["cancelled_at", "updated_at"])
+
+    @action(detail=False, methods=["get"], url_path="cancellation-analytics")
+    def cancellation_analytics(self, request):
+        """
+        GET /api/appointments/cancellation-analytics/?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
+        Aggregate cancelled/no-show insights for operations.
+        """
+        date_from = parse_date(request.query_params.get("date_from") or "")
+        date_to = parse_date(request.query_params.get("date_to") or "")
+        if not date_to:
+            date_to = timezone.localdate()
+        if not date_from:
+            date_from = date_to - timedelta(days=30)
+        if date_from > date_to:
+            return Response({"detail": "date_from cannot be after date_to."}, status=400)
+
+        qs = Appointment.objects.filter(
+            clinic_id=request.user.clinic_id,
+            starts_at__date__gte=date_from,
+            starts_at__date__lte=date_to,
+            status__in=[Appointment.Status.CANCELLED, Appointment.Status.NO_SHOW],
+        )
+
+        totals = qs.aggregate(
+            cancelled_count=Count("id", filter=Q(status=Appointment.Status.CANCELLED)),
+            no_show_count=Count("id", filter=Q(status=Appointment.Status.NO_SHOW)),
+            total_count=Count("id"),
+        )
+
+        by_vet = list(
+            qs.values("vet_id", "vet__username", "vet__first_name", "vet__last_name")
+            .annotate(
+                cancelled_count=Count("id", filter=Q(status=Appointment.Status.CANCELLED)),
+                no_show_count=Count("id", filter=Q(status=Appointment.Status.NO_SHOW)),
+                total_count=Count("id"),
+            )
+            .order_by("-total_count", "vet_id")
+        )
+        for row in by_vet:
+            full_name = f"{(row.get('vet__first_name') or '').strip()} {(row.get('vet__last_name') or '').strip()}".strip()
+            row["vet_name"] = full_name or row.get("vet__username") or ""
+            row.pop("vet__first_name", None)
+            row.pop("vet__last_name", None)
+            row.pop("vet__username", None)
+
+        by_visit_type = list(
+            qs.values("visit_type")
+            .annotate(
+                cancelled_count=Count("id", filter=Q(status=Appointment.Status.CANCELLED)),
+                no_show_count=Count("id", filter=Q(status=Appointment.Status.NO_SHOW)),
+                total_count=Count("id"),
+            )
+            .order_by("-total_count", "visit_type")
+        )
+
+        weekday_names = [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ]
+        by_weekday_map = {
+            name: {"weekday": name, "cancelled_count": 0, "no_show_count": 0, "total_count": 0}
+            for name in weekday_names
+        }
+        for item in qs.values("starts_at", "status"):
+            weekday = weekday_names[item["starts_at"].weekday()]
+            by_weekday_map[weekday]["total_count"] += 1
+            if item["status"] == Appointment.Status.CANCELLED:
+                by_weekday_map[weekday]["cancelled_count"] += 1
+            if item["status"] == Appointment.Status.NO_SHOW:
+                by_weekday_map[weekday]["no_show_count"] += 1
+        by_weekday = [by_weekday_map[name] for name in weekday_names]
+
+        cancelled_source = {
+            "client": 0,
+            "clinic": 0,
+            "unspecified": 0,
+        }
+        for item in qs.filter(status=Appointment.Status.CANCELLED).values("cancelled_by"):
+            source = item["cancelled_by"] or ""
+            if source == Appointment.CancelledBy.CLIENT:
+                cancelled_source["client"] += 1
+            elif source == Appointment.CancelledBy.CLINIC:
+                cancelled_source["clinic"] += 1
+            else:
+                cancelled_source["unspecified"] += 1
+
+        lead_time = {
+            "under_24h": 0,
+            "between_24h_48h": 0,
+            "between_48h_7d": 0,
+            "over_7d": 0,
+            "unknown": 0,
+        }
+        cancelled_for_lead = qs.filter(status=Appointment.Status.CANCELLED).values(
+            "starts_at", "cancelled_at"
+        )
+        for item in cancelled_for_lead:
+            starts_at = item["starts_at"]
+            cancelled_at = item["cancelled_at"]
+            if not cancelled_at or cancelled_at > starts_at:
+                lead_time["unknown"] += 1
+                continue
+
+            hours = (starts_at - cancelled_at).total_seconds() / 3600.0
+            if hours < 24:
+                lead_time["under_24h"] += 1
+            elif hours < 48:
+                lead_time["between_24h_48h"] += 1
+            elif hours < 168:
+                lead_time["between_48h_7d"] += 1
+            else:
+                lead_time["over_7d"] += 1
+
+        return Response(
+            {
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "totals": totals,
+                "by_vet": by_vet,
+                "by_visit_type": by_visit_type,
+                "by_weekday": by_weekday,
+                "cancelled_source": cancelled_source,
+                "cancelled_lead_time": lead_time,
+            },
+            status=200,
+        )
 
     @action(detail=True, methods=["get", "post", "patch"], url_path="exam")
     def exam(self, request, pk=None):
