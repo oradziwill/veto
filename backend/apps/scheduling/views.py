@@ -162,6 +162,36 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             return AppointmentReadSerializer
         return AppointmentWriteSerializer
 
+    @staticmethod
+    def _build_visit_readiness_payload(appt: Appointment, exam: ClinicalExam | None) -> dict:
+        ai_notes = exam.ai_notes_raw if exam and isinstance(exam.ai_notes_raw, dict) else {}
+        unknown_fields = ai_notes.get("_unknown_fields", [])
+        if not isinstance(unknown_fields, list):
+            unknown_fields = []
+
+        needs_review = bool(ai_notes.get("_needs_review", False))
+        has_exam = exam is not None
+        can_close = has_exam
+
+        reasons: list[str] = []
+        if not has_exam:
+            reasons.append("clinical_exam_missing")
+        if needs_review:
+            reasons.append("ai_summary_needs_review")
+        if unknown_fields:
+            reasons.append("ai_summary_has_unknown_fields")
+
+        return {
+            "appointment_id": appt.id,
+            "appointment_status": appt.status,
+            "can_close_visit": can_close,
+            "has_clinical_exam": has_exam,
+            "needs_review": needs_review,
+            "unknown_fields": unknown_fields,
+            "blocking_reasons": reasons if not can_close else [],
+            "warnings": reasons if can_close else [],
+        }
+
     def perform_create(self, serializer):
         appointment = serializer.save(clinic=self.request.user.clinic)
 
@@ -228,6 +258,25 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         exam = serializer.save()
         return Response(ClinicalExamReadSerializer(exam).data, status=200)
 
+    @action(detail=True, methods=["get"], url_path="visit-readiness")
+    def visit_readiness(self, request, pk=None):
+        """
+        GET /api/appointments/<id>/visit-readiness/
+        Returns backend readiness checks for closing a visit.
+        """
+        user = request.user
+        appt = self.get_object()  # clinic-scoped
+        exam = (
+            ClinicalExam.objects.filter(
+                appointment_id=appt.id,
+                clinic_id=user.clinic_id,
+            )
+            .order_by("id")
+            .first()
+        )
+        payload = self._build_visit_readiness_payload(appt=appt, exam=exam)
+        return Response(payload, status=200)
+
     @action(detail=True, methods=["post"], url_path="close-visit")
     def close_visit(self, request, pk=None):
         """
@@ -238,6 +287,25 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         if not IsDoctorOrAdmin().has_permission(request, self):
             raise PermissionDenied("Only doctors and clinic admins can close a visit.")
+
+        require_exam = bool(getattr(settings, "REQUIRE_CLINICAL_EXAM_FOR_VISIT_CLOSE", False))
+        if require_exam:
+            exam = (
+                ClinicalExam.objects.filter(
+                    appointment_id=appt.id,
+                    clinic_id=request.user.clinic_id,
+                )
+                .order_by("id")
+                .first()
+            )
+            if not exam:
+                return Response(
+                    {
+                        "detail": "Clinical exam is required before closing visit.",
+                        "code": "clinical_exam_missing",
+                    },
+                    status=400,
+                )
 
         # If your domain wants a different terminal status, adjust here.
         appt.status = "completed"
