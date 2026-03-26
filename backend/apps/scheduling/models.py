@@ -51,6 +51,10 @@ class Appointment(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         NO_SHOW = "no_show", "No-show"
 
+    class CancelledBy(models.TextChoices):
+        CLIENT = "client", "Client"
+        CLINIC = "clinic", "Clinic"
+
     clinic = models.ForeignKey(Clinic, on_delete=models.PROTECT, related_name="appointments")
     patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="appointments")
     vet = models.ForeignKey(
@@ -78,6 +82,13 @@ class Appointment(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED)
     reason = models.CharField(max_length=255, blank=True)
     internal_notes = models.TextField(blank=True)
+    cancellation_reason = models.CharField(max_length=255, blank=True)
+    cancelled_by = models.CharField(
+        max_length=20,
+        choices=CancelledBy.choices,
+        blank=True,
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

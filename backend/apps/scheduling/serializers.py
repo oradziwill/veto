@@ -41,6 +41,9 @@ class AppointmentWriteSerializer(serializers.ModelSerializer):
             "status",
             "reason",
             "internal_notes",
+            "cancellation_reason",
+            "cancelled_by",
+            "cancelled_at",
         ]
         read_only_fields = ["id"]
 
