@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import json
+import re
+import uuid
 from datetime import date as date_type
 
+import boto3
+from django.conf import settings
 from django.core.exceptions import PermissionDenied
-from django.db import models
+from django.db import models, transaction
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -18,22 +23,73 @@ from apps.medical.serializers import (
     ClinicalExamWriteSerializer,
 )
 from apps.patients.models import Patient
-from apps.scheduling.models import Appointment, HospitalStay, Room, WaitingQueueEntry
+from apps.scheduling.models import (
+    Appointment,
+    HospitalStay,
+    Room,
+    VisitRecording,
+    WaitingQueueEntry,
+)
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
     AppointmentWriteSerializer,
     HospitalStayReadSerializer,
     HospitalStayWriteSerializer,
     RoomSerializer,
+    VisitRecordingSerializer,
+    VisitRecordingUploadResponseSerializer,
     WaitingQueueEntryReadSerializer,
     WaitingQueueEntryWriteSerializer,
 )
 from apps.scheduling.services.availability import compute_availability
+from apps.scheduling.services.visit_recording_pipeline import (
+    get_recordings_bucket,
+    process_visit_recording,
+    safe_error_text,
+)
 from apps.scheduling.services.visit_transcription import (
     VisitTranscriptionError,
     structure_transcript_with_claude,
     transcribe_audio_with_whisper,
 )
+
+
+def _safe_s3_filename(original: str) -> str:
+    name = original or "recording"
+    stem, dot, suffix = name.rpartition(".")
+    if not dot:
+        stem = name
+        suffix = ""
+    safe_stem = re.sub(r"[^\w\-.]", "_", stem)[:200]
+    safe_suffix = re.sub(r"[^\w]", "", suffix)[:10]
+    return (safe_stem or "recording") + (f".{safe_suffix}" if safe_suffix else "")
+
+
+def _get_recording_s3_client():
+    region = getattr(settings, "VISIT_RECORDINGS_S3_REGION", "") or getattr(
+        settings, "DOCUMENTS_S3_REGION", "us-east-1"
+    )
+    return boto3.client("s3", region_name=region)
+
+
+def _get_eventbridge_client():
+    region = getattr(settings, "VISIT_RECORDINGS_S3_REGION", "") or getattr(
+        settings, "DOCUMENTS_S3_REGION", "us-east-1"
+    )
+    return boto3.client("events", region_name=region)
+
+
+def _trigger_visit_recording_uploaded(recording_id: int) -> None:
+    detail = json.dumps({"visit_recording_id": int(recording_id)})
+    _get_eventbridge_client().put_events(
+        Entries=[
+            {
+                "Source": "veto.scheduling",
+                "DetailType": "visit_recording_uploaded",
+                "Detail": detail,
+            }
+        ]
+    )
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
@@ -261,6 +317,139 @@ class VisitTranscriptionView(APIView):
         )
 
         return Response({"transcript": transcript, "structured": structured}, status=200)
+
+
+class VisitRecordingUploadView(APIView):
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+    allowed_types = {
+        "audio/webm",
+        "audio/ogg",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/mpeg",
+        "video/webm",
+        "video/mp4",
+    }
+
+    def post(self, request, appointment_id: int):
+        appointment = (
+            Appointment.objects.filter(id=appointment_id, clinic_id=request.user.clinic_id)
+            .select_related("patient")
+            .first()
+        )
+        if not appointment:
+            return Response({"detail": "Appointment not found."}, status=404)
+
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Missing file in multipart field 'file'."}, status=400)
+
+        max_mb = int(getattr(settings, "VISIT_RECORDINGS_MAX_UPLOAD_MB", 200))
+        if upload.size > max_mb * 1024 * 1024:
+            return Response({"detail": f"Recording exceeds {max_mb}MB limit."}, status=400)
+        content_type = (upload.content_type or "").lower()
+        if content_type not in self.allowed_types:
+            return Response(
+                {"detail": "Unsupported media type. Allowed: webm, wav, ogg, mp3, mp4."},
+                status=400,
+            )
+
+        bucket = get_recordings_bucket()
+        if not bucket:
+            return Response(
+                {
+                    "detail": (
+                        "Recording storage is not configured. Set VISIT_RECORDINGS_S3_BUCKET "
+                        "or DOCUMENTS_DATA_S3_BUCKET."
+                    )
+                },
+                status=400,
+            )
+
+        safe_filename = _safe_s3_filename(upload.name or "recording.webm")
+        job_id = uuid.uuid4()
+        input_s3_key = f"visit_recordings/{job_id}/{safe_filename}"
+
+        try:
+            _get_recording_s3_client().upload_fileobj(
+                upload,
+                bucket,
+                input_s3_key,
+                ExtraArgs={"ContentType": upload.content_type or "application/octet-stream"},
+            )
+        except Exception as exc:
+            return Response({"detail": f"Upload to storage failed: {exc}"}, status=400)
+
+        with transaction.atomic():
+            recording = VisitRecording.objects.create(
+                clinic_id=request.user.clinic_id,
+                appointment=appointment,
+                uploaded_by=request.user,
+                original_filename=upload.name or "recording.webm",
+                content_type=upload.content_type or "",
+                size_bytes=upload.size,
+                status=VisitRecording.Status.UPLOADED,
+                input_s3_key=input_s3_key,
+                job_id=job_id,
+            )
+
+        process_inline = bool(getattr(settings, "VISIT_RECORDINGS_PROCESS_INLINE_ON_UPLOAD", False))
+        if process_inline:
+            claimed = VisitRecording.objects.filter(
+                pk=recording.pk,
+                status=VisitRecording.Status.UPLOADED,
+            ).update(status=VisitRecording.Status.PROCESSING)
+            if claimed == 1:
+                try:
+                    response = _get_recording_s3_client().get_object(
+                        Bucket=bucket, Key=input_s3_key
+                    )
+                    audio_bytes = response["Body"].read()
+                    recording.refresh_from_db()
+                    process_visit_recording(recording=recording, audio_bytes=audio_bytes)
+                except Exception as exc:
+                    recording.refresh_from_db()
+                    recording.status = VisitRecording.Status.FAILED
+                    recording.last_error = safe_error_text(exc)
+                    recording.save(update_fields=["status", "last_error", "updated_at"])
+
+        try:
+            _trigger_visit_recording_uploaded(recording.id)
+        except Exception:
+            # Best-effort only; processing can still be done by command/scheduler.
+            pass
+
+        return Response(VisitRecordingUploadResponseSerializer(recording).data, status=201)
+
+
+class VisitRecordingListView(APIView):
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+
+    def get(self, request, appointment_id: int):
+        appointment = Appointment.objects.filter(
+            id=appointment_id,
+            clinic_id=request.user.clinic_id,
+        ).first()
+        if not appointment:
+            return Response({"detail": "Appointment not found."}, status=404)
+        items = VisitRecording.objects.filter(
+            appointment_id=appointment.id,
+            clinic_id=request.user.clinic_id,
+        ).order_by("-created_at")
+        return Response(VisitRecordingSerializer(items, many=True).data, status=200)
+
+
+class VisitRecordingDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+
+    def get(self, request, recording_id: int):
+        item = VisitRecording.objects.filter(
+            id=recording_id,
+            clinic_id=request.user.clinic_id,
+        ).first()
+        if not item:
+            return Response({"detail": "Visit recording not found."}, status=404)
+        return Response(VisitRecordingSerializer(item).data, status=200)
 
 
 class HospitalStayViewSet(viewsets.ModelViewSet):

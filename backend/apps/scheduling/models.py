@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -248,6 +250,62 @@ class WaitingQueueEntry(models.Model):
 
     def __str__(self) -> str:
         return f"Queue#{self.position} {self.patient} @ {self.clinic} ({self.status})"
+
+
+class VisitRecording(models.Model):
+    class Status(models.TextChoices):
+        UPLOADED = "uploaded", "Uploaded"
+        PROCESSING = "processing", "Processing"
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="visit_recordings",
+    )
+    appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name="visit_recordings",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="uploaded_visit_recordings",
+    )
+
+    job_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    original_filename = models.CharField(max_length=512)
+    content_type = models.CharField(max_length=255, blank=True)
+    size_bytes = models.BigIntegerField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.UPLOADED,
+        db_index=True,
+    )
+    last_error = models.TextField(blank=True)
+
+    input_s3_key = models.CharField(max_length=1024, blank=True)
+    transcript = models.TextField(blank=True)
+    summary_text = models.TextField(blank=True)
+    summary_structured = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["clinic", "status"]),
+            models.Index(fields=["appointment", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"VisitRecording({self.id}, appointment={self.appointment_id}, status={self.status})"
 
 
 # Register additional scheduling models kept in separate modules
