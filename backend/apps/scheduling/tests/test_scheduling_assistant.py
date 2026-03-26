@@ -156,3 +156,59 @@ def test_schedule_capacity_insights_rejects_invalid_window(api_client, doctor):
         {"from": "2026-03-10", "to": "invalid"},
     )
     assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_schedule_capacity_insights_rejects_invalid_vet_filter(api_client, doctor):
+    api_client.force_authenticate(user=doctor)
+    response = api_client.get(
+        "/api/schedule/capacity-insights/",
+        {"vet": "not-a-number"},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_schedule_capacity_insights_hourly_rejects_too_wide_window(api_client, doctor):
+    api_client.force_authenticate(user=doctor)
+    response = api_client.get(
+        "/api/schedule/capacity-insights/",
+        {"from": "2026-03-01", "to": "2026-03-20", "granularity": "hour"},
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_schedule_capacity_insights_supports_rows_limit(api_client, doctor, clinic):
+    target_day = timezone.localdate() + timedelta(days=1)
+    VetWorkingHours.objects.create(
+        vet=doctor,
+        weekday=target_day.weekday(),
+        start_time=datetime.strptime("09:00", "%H:%M").time(),
+        end_time=datetime.strptime("17:00", "%H:%M").time(),
+        is_active=True,
+    )
+
+    api_client.force_authenticate(user=doctor)
+    response = api_client.get(
+        "/api/schedule/capacity-insights/",
+        {
+            "from": target_day.isoformat(),
+            "to": (target_day + timedelta(days=2)).isoformat(),
+            "rows_limit": 1,
+        },
+    )
+    assert response.status_code == 200
+    assert len(response.data["rows"]) == 1
+    assert response.data["meta"]["rows_limit"] == 1
+    assert response.data["meta"]["rows_truncated"] is True
+
+
+@pytest.mark.django_db
+def test_schedule_optimization_rejects_invalid_limit(api_client, doctor):
+    api_client.force_authenticate(user=doctor)
+    response = api_client.get(
+        "/api/schedule/optimization-suggestions/",
+        {"limit": "999"},
+    )
+    assert response.status_code == 400
