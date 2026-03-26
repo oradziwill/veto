@@ -3,11 +3,14 @@ Billing API views.
 """
 
 import calendar
+import csv
 from datetime import date, timedelta
 from decimal import Decimal
+from io import StringIO
 
 from django.db.models import Count, DecimalField, F, Sum
 from django.db.models.functions import TruncDate, TruncMonth
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -217,6 +220,20 @@ class RevenueSummaryView(APIView):
 
     permission_classes = [IsAuthenticated, HasClinic, IsClinicAdmin]
 
+    @staticmethod
+    def _wants_csv(request) -> bool:
+        return (request.query_params.get("export") or "").strip().lower() == "csv"
+
+    @staticmethod
+    def _csv_response(*, filename: str, headers: list[str], rows: list[list[str]]):
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(headers)
+        writer.writerows(rows)
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
     def get(self, request):
         period_param = (request.query_params.get("period") or "monthly").strip().lower()
         if period_param not in ("monthly", "daily"):
@@ -404,5 +421,20 @@ class RevenueSummaryView(APIView):
                     }
                 )
             payload["monthly"] = monthly
+
+        if self._wants_csv(request):
+            rows = [
+                [
+                    item["label"],
+                    item["invoiced"],
+                    item["paid"],
+                ]
+                for item in payload["by_period"]
+            ]
+            return self._csv_response(
+                filename=f"revenue-summary-{payload['from']}-to-{payload['to']}.csv",
+                headers=["label", "invoiced", "paid"],
+                rows=rows,
+            )
 
         return Response(payload)

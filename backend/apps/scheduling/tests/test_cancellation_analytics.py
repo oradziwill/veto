@@ -146,3 +146,43 @@ def test_cancellation_analytics_invalid_date_range_returns_400():
         {"date_from": "2026-05-01", "date_to": "2026-04-01"},
     )
     assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+def test_cancellation_analytics_supports_csv_export():
+    clinic = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
+    vet = User.objects.create_user(
+        username="vet_csv",
+        password="pass",
+        clinic=clinic,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
+    )
+    owner = Client.objects.create(first_name="A", last_name="B")
+    ClientClinic.objects.create(client=owner, clinic=clinic)
+    patient = Patient.objects.create(clinic=clinic, owner=owner, name="CSV", species="dog")
+    Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=vet,
+        starts_at="2026-04-10T10:00:00Z",
+        ends_at="2026-04-10T10:30:00Z",
+        visit_type=Appointment.VisitType.OUTPATIENT,
+        status=Appointment.Status.CANCELLED,
+        cancelled_by=Appointment.CancelledBy.CLIENT,
+        cancellation_reason="Owner unavailable",
+        cancelled_at=datetime(2026, 4, 10, 9, 30, tzinfo=UTC),
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=vet)
+    resp = client.get(
+        cancellation_analytics_url(),
+        {"date_from": "2026-04-01", "date_to": "2026-04-30", "export": "csv"},
+    )
+    assert resp.status_code == 200
+    assert resp["Content-Type"].startswith("text/csv")
+    content = resp.content.decode("utf-8")
+    assert "section,key,value" in content
+    assert "totals,cancelled_count,1" in content
