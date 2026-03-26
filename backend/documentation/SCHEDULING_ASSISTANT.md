@@ -25,11 +25,15 @@ Query params:
 - `granularity=day|hour` (default: `day`)
 - `vet=<id>` (optional)
 - `overload_threshold_pct=<float>` (optional, default `85`)
+- `rows_limit=<int>` (optional, default `1000`, max `5000`)
 
 Defaults and limits:
 
 - when `from` and `to` are omitted, backend uses a 14-day window from current local date
 - date window cannot exceed 60 days
+- for `granularity=hour`, max window is 15 days
+- `vet` must be a valid vet user from the same clinic
+- `overload_threshold_pct` must be between `1` and `100`
 
 Response highlights:
 
@@ -38,6 +42,7 @@ Response highlights:
 - `by_day[]` aggregate load by day
 - `rows[]` detailed rows (day/hour based on granularity)
 - `overload_windows[]`
+- `meta` with applied filters and truncation flags for payload safety
 
 ### 2) Optimization Suggestions
 
@@ -50,6 +55,11 @@ Query params:
 - `vet=<id>` (optional)
 - `limit=<int>` (default `5`, max `20`)
 - `overload_threshold_pct=<float>` (optional, default `85`)
+
+Validation:
+- `limit` must be integer in range `1..20`
+- `vet` must be clinic vet
+- `overload_threshold_pct` must be between `1` and `100`
 
 Response highlights:
 
