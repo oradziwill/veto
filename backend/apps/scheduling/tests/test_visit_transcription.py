@@ -39,7 +39,13 @@ def test_visit_transcription_endpoint_happy_path_creates_or_updates_exam(
     api_client.force_authenticate(user=doctor)
 
     def _fake_whisper(**_kwargs):
-        return "Owner reports vomiting for two days."
+        return (
+            "Owner reports vomiting for two days. "
+            "Mild dehydration, temp 38.5C. "
+            "Suspected gastroenteritis. "
+            "Metronidazole 250mg BID for 5 days. "
+            "Bland diet for 3 days."
+        )
 
     def _fake_claude(*, transcript):
         assert "vomiting" in transcript
@@ -65,13 +71,13 @@ def test_visit_transcription_endpoint_happy_path_creates_or_updates_exam(
     assert response.status_code == 200
     assert response.data["transcript"].startswith("Owner reports")
     assert "structured" in response.data
-    assert response.data["structured"]["diagnosis"] == "Suspected gastroenteritis."
+    assert response.data["structured"]["diagnosis"] == "Suspected gastroenteritis"
 
     exam = ClinicalExam.objects.get(appointment=appointment)
     assert exam.transcript.startswith("Owner reports")
-    assert exam.ai_notes_raw["clinical_findings"] == "Mild dehydration, temp 38.5C."
-    assert exam.initial_diagnosis == "Suspected gastroenteritis."
-    assert exam.owner_instructions == "Bland diet for 3 days."
+    assert exam.ai_notes_raw["clinical_findings"] == "Mild dehydration, temp 38.5C"
+    assert exam.initial_diagnosis == "Suspected gastroenteritis"
+    assert exam.owner_instructions == "Bland diet for 3 days"
 
 
 @pytest.mark.django_db
