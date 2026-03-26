@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import hmac
 from datetime import date, timedelta
+from io import StringIO
 
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Min, Q
 from django.db.models.functions import TruncDate, TruncMonth
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
@@ -248,6 +251,28 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
             },
             "by_period": by_period,
         }
+
+        if (request.query_params.get("export") or "").strip().lower() == "csv":
+            buffer = StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow(["label", "total", "sent", "delivered", "failed", "cancelled"])
+            for row in by_period:
+                writer.writerow(
+                    [
+                        row["label"],
+                        row["total"],
+                        row["sent"],
+                        row["delivered"],
+                        row["failed"],
+                        row["cancelled"],
+                    ]
+                )
+            response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = (
+                f'attachment; filename="reminder-analytics-{from_date.isoformat()}-to-{to_date.isoformat()}.csv"'
+            )
+            return response
+
         return Response(payload, status=200)
 
     @action(

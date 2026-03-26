@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import csv
 import json
 import re
 import uuid
 from datetime import date as date_type
 from datetime import timedelta
+from io import StringIO
 
 import boto3
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db import models, transaction
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
@@ -331,19 +334,44 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             else:
                 lead_time["over_7d"] += 1
 
-        return Response(
-            {
-                "date_from": date_from.isoformat(),
-                "date_to": date_to.isoformat(),
-                "totals": totals,
-                "by_vet": by_vet,
-                "by_visit_type": by_visit_type,
-                "by_weekday": by_weekday,
-                "cancelled_source": cancelled_source,
-                "cancelled_lead_time": lead_time,
-            },
-            status=200,
-        )
+        payload = {
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "totals": totals,
+            "by_vet": by_vet,
+            "by_visit_type": by_visit_type,
+            "by_weekday": by_weekday,
+            "cancelled_source": cancelled_source,
+            "cancelled_lead_time": lead_time,
+        }
+
+        if (request.query_params.get("export") or "").strip().lower() == "csv":
+            buffer = StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow(["section", "key", "value"])
+            writer.writerow(["totals", "cancelled_count", totals["cancelled_count"]])
+            writer.writerow(["totals", "no_show_count", totals["no_show_count"]])
+            writer.writerow(["totals", "total_count", totals["total_count"]])
+            for row in by_vet:
+                writer.writerow(
+                    ["by_vet", f"{row['vet_id']}:{row['vet_name']}", row["total_count"]]
+                )
+            for row in by_visit_type:
+                writer.writerow(["by_visit_type", row["visit_type"], row["total_count"]])
+            for row in by_weekday:
+                writer.writerow(["by_weekday", row["weekday"], row["total_count"]])
+            for key, value in cancelled_source.items():
+                writer.writerow(["cancelled_source", key, value])
+            for key, value in lead_time.items():
+                writer.writerow(["cancelled_lead_time", key, value])
+
+            response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = (
+                f'attachment; filename="cancellation-analytics-{payload["date_from"]}-to-{payload["date_to"]}.csv"'
+            )
+            return response
+
+        return Response(payload, status=200)
 
     @action(detail=True, methods=["get", "post", "patch"], url_path="exam")
     def exam(self, request, pk=None):

@@ -379,6 +379,32 @@ def test_reminder_analytics_rejects_invalid_period(api_client, clinic_admin):
 
 
 @pytest.mark.django_db
+def test_reminder_analytics_supports_csv_export(api_client, clinic_admin, clinic, patient):
+    now = timezone.now()
+    Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        reminder_type=Reminder.ReminderType.APPOINTMENT,
+        channel=Reminder.Channel.EMAIL,
+        provider=Reminder.Provider.SENDGRID,
+        status=Reminder.Status.SENT,
+        recipient="owner@example.com",
+        scheduled_for=now,
+        delivered_at=now,
+    )
+
+    api_client.force_authenticate(user=clinic_admin)
+    response = api_client.get(
+        "/api/reminders/analytics/",
+        {"period": "daily", "export": "csv"},
+    )
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("text/csv")
+    content = response.content.decode("utf-8")
+    assert "label,total,sent,delivered,failed,cancelled" in content
+
+
+@pytest.mark.django_db
 def test_reminder_experiment_attribution_groups_variants_and_outcomes(
     api_client, clinic_admin, clinic, patient, doctor
 ):

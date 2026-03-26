@@ -460,3 +460,38 @@ def test_revenue_summary_no_breakdown_omits_monthly_key(clinic_admin, api_client
     r = api_client.get("/api/billing/revenue-summary/")
     assert r.status_code == 200
     assert "monthly" not in r.data
+
+
+@pytest.mark.django_db
+def test_revenue_summary_supports_csv_export(
+    clinic_admin,
+    client_with_membership,
+    patient,
+    api_client,
+):
+    inv = Invoice.objects.create(
+        clinic=clinic_admin.clinic,
+        client=client_with_membership,
+        patient=patient,
+        status="sent",
+    )
+    InvoiceLine.objects.create(
+        invoice=inv,
+        description="CSV service",
+        quantity=1,
+        unit_price=50,
+    )
+    Invoice.objects.filter(pk=inv.pk).update(
+        created_at=timezone.datetime(2026, 8, 1, 10, 0, 0, tzinfo=timezone.UTC)
+    )
+
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get(
+        "/api/billing/revenue-summary/",
+        {"from": "2026-08-01", "to": "2026-08-31", "period": "monthly", "export": "csv"},
+    )
+    assert r.status_code == 200
+    assert r["Content-Type"].startswith("text/csv")
+    content = r.content.decode("utf-8")
+    assert "label,invoiced,paid" in content
+    assert "2026-08,50.00,0.00" in content
