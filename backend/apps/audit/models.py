@@ -29,9 +29,18 @@ class AuditLog(models.Model):
     class Meta:
         ordering = ["-created_at", "-id"]
         indexes = [
-            models.Index(fields=["clinic", "created_at"]),
-            models.Index(fields=["clinic", "action"]),
-            models.Index(fields=["clinic", "entity_type", "entity_id"]),
+            models.Index(
+                fields=["clinic", "created_at"],
+                name="audit_audlo_clinic__5fce9d_idx",
+            ),
+            models.Index(
+                fields=["clinic", "action"],
+                name="audit_audlo_clinic__ad06da_idx",
+            ),
+            models.Index(
+                fields=["clinic", "entity_type", "entity_id"],
+                name="audit_audlo_clinic__406f18_idx",
+            ),
         ]
 
     def __str__(self):
