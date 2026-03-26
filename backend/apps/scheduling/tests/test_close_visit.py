@@ -5,6 +5,7 @@ from apps.medical.models import ClinicalExam
 from apps.patients.models import Patient
 from apps.scheduling.models import Appointment
 from apps.tenancy.models import Clinic
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -171,12 +172,45 @@ def test_close_visit_requires_clinical_exam():
 
     client = APIClient()
     client.force_authenticate(user=vet)
-    resp = client.post(close_visit_url(appt.id), {}, format="json")
+    with override_settings(REQUIRE_CLINICAL_EXAM_FOR_VISIT_CLOSE=True):
+        resp = client.post(close_visit_url(appt.id), {}, format="json")
 
     assert resp.status_code == 400
     assert resp.data["code"] == "clinical_exam_missing"
     appt.refresh_from_db()
     assert appt.status == "checked_in"
+
+
+@pytest.mark.django_db
+def test_close_visit_allows_missing_exam_by_default():
+    clinic = Clinic.objects.create(name="C1", address="a", phone="p", email="e@e.com")
+    vet = User.objects.create_user(
+        username="vet_default_relaxed",
+        password="pass",
+        clinic=clinic,
+        is_vet=True,
+        is_staff=True,
+        role=User.Role.DOCTOR,
+    )
+    owner = Client.objects.create(first_name="A", last_name="B")
+    ClientClinic.objects.create(client=owner, clinic=clinic)
+    patient = Patient.objects.create(clinic=clinic, owner=owner, name="P", species="dog")
+    appt = Appointment.objects.create(
+        clinic=clinic,
+        patient=patient,
+        vet=vet,
+        starts_at="2025-12-23T11:00:00Z",
+        ends_at="2025-12-23T11:30:00Z",
+        status="checked_in",
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=vet)
+    resp = client.post(close_visit_url(appt.id), {}, format="json")
+
+    assert resp.status_code in (200, 204)
+    appt.refresh_from_db()
+    assert appt.status == "completed"
 
 
 @pytest.mark.django_db

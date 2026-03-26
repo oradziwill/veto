@@ -288,22 +288,24 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         if not IsDoctorOrAdmin().has_permission(request, self):
             raise PermissionDenied("Only doctors and clinic admins can close a visit.")
 
-        exam = (
-            ClinicalExam.objects.filter(
-                appointment_id=appt.id,
-                clinic_id=request.user.clinic_id,
+        require_exam = bool(getattr(settings, "REQUIRE_CLINICAL_EXAM_FOR_VISIT_CLOSE", False))
+        if require_exam:
+            exam = (
+                ClinicalExam.objects.filter(
+                    appointment_id=appt.id,
+                    clinic_id=request.user.clinic_id,
+                )
+                .order_by("id")
+                .first()
             )
-            .order_by("id")
-            .first()
-        )
-        if not exam:
-            return Response(
-                {
-                    "detail": "Clinical exam is required before closing visit.",
-                    "code": "clinical_exam_missing",
-                },
-                status=400,
-            )
+            if not exam:
+                return Response(
+                    {
+                        "detail": "Clinical exam is required before closing visit.",
+                        "code": "clinical_exam_missing",
+                    },
+                    status=400,
+                )
 
         # If your domain wants a different terminal status, adjust here.
         appt.status = "completed"

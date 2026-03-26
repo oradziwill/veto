@@ -26,6 +26,7 @@ POST /api/appointments/<appointment_id>/close-visit/
 - User must be authenticated
 - User must belong to the same clinic as the appointment
 - User must have role `doctor` or `admin`
+- Optional strict rule: if `REQUIRE_CLINICAL_EXAM_FOR_VISIT_CLOSE=True`, visit can be closed only when `ClinicalExam` exists
 
 ---
 
@@ -34,7 +35,7 @@ POST /api/appointments/<appointment_id>/close-visit/
 ### Success
 - HTTP 200 or 204
 - Appointment status is transitioned to a final state (e.g. `completed`)
-- Clinical exam must exist before closing
+- Clinical exam requirement is enforced only when strict setting is enabled
 
 ---
 
