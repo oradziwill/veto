@@ -66,7 +66,7 @@ This creates a default `drsmith` (doctor) and `receptionist` user with password 
 
 ### Via API (programmatic)
 
-Only superusers or clinic admins can create users. There is no public registration endpoint.
+Only clinic admins can manage clinic users. There is no public registration endpoint.
 
 ```bash
 curl -X POST http://localhost:8000/api/users/ \
@@ -76,9 +76,16 @@ curl -X POST http://localhost:8000/api/users/ \
     "username": "newvet",
     "password": "securepass",
     "role": "doctor",
-    "clinic": 1
+    "first_name": "Jan",
+    "last_name": "Kowalski",
+    "email": "jan@example.com"
   }'
 ```
+
+Notes:
+- `clinic` is derived from authenticated admin and cannot be set cross-clinic.
+- `role` is one of: `doctor`, `receptionist`, `admin`.
+- `PATCH /api/users/<id>/` allows role/activity updates.
 
 ---
 
