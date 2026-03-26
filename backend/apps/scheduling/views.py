@@ -23,6 +23,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
+from apps.audit.services import log_audit_event
 from apps.medical.models import ClinicalExam
 from apps.medical.serializers import (
     ClinicalExamReadSerializer,
@@ -212,10 +213,21 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
 
     def perform_update(self, serializer):
+        old_status = serializer.instance.status if serializer.instance else None
         appointment = serializer.save(clinic=self.request.user.clinic)
         if appointment.status == Appointment.Status.CANCELLED and appointment.cancelled_at is None:
             appointment.cancelled_at = timezone.now()
             appointment.save(update_fields=["cancelled_at", "updated_at"])
+        if old_status and old_status != appointment.status:
+            log_audit_event(
+                clinic_id=self.request.user.clinic_id,
+                actor=self.request.user,
+                action="appointment_status_changed",
+                entity_type="appointment",
+                entity_id=appointment.id,
+                before={"status": old_status},
+                after={"status": appointment.status},
+            )
 
     @action(detail=False, methods=["get"], url_path="cancellation-analytics")
     def cancellation_analytics(self, request):
@@ -476,8 +488,18 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 )
 
         # If your domain wants a different terminal status, adjust here.
+        old_status = appt.status
         appt.status = "completed"
         appt.save(update_fields=["status"])
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="visit_closed",
+            entity_type="appointment",
+            entity_id=appt.id,
+            before={"status": old_status},
+            after={"status": appt.status},
+        )
 
         return Response(status=204)
 
