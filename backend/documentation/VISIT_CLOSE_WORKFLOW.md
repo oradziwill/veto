@@ -17,7 +17,7 @@ This workflow is the foundation for:
 
 ### Close Visit
 
-POST /api/appointments/<appointment_id>/close_visit/
+POST /api/appointments/<appointment_id>/close-visit/
 
 ---
 
@@ -25,7 +25,7 @@ POST /api/appointments/<appointment_id>/close_visit/
 
 - User must be authenticated
 - User must belong to the same clinic as the appointment
-- User must have `is_vet = True`
+- User must have role `doctor` or `admin`
 
 ---
 
@@ -34,7 +34,7 @@ POST /api/appointments/<appointment_id>/close_visit/
 ### Success
 - HTTP 200 or 204
 - Appointment status is transitioned to a final state (e.g. `completed`)
-- Visit is considered closed and immutable for downstream logic
+- Clinical exam must exist before closing
 
 ---
 
@@ -42,7 +42,7 @@ POST /api/appointments/<appointment_id>/close_visit/
 
 | Condition | Status |
 |---------|--------|
-| User is not a vet | 403 |
+| User is not doctor/admin | 403 |
 | Appointment not found in clinic | 404 |
 | Appointment does not exist | 404 |
 | No clinical exam exists | 400 |
@@ -54,6 +54,20 @@ POST /api/appointments/<appointment_id>/close_visit/
 - Appointment **must reference a valid vet user**
 - Appointment **must belong to user’s clinic**
 - Appointment **must have a ClinicalExam**
+
+---
+
+## Readiness Endpoint
+
+GET /api/appointments/<appointment_id>/visit-readiness/
+
+Returns backend readiness checks before closing a visit:
+- `can_close_visit`
+- `has_clinical_exam`
+- `blocking_reasons`
+- `needs_review`
+- `unknown_fields`
+- `warnings`
 
 ---
 
