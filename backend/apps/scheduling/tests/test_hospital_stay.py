@@ -105,6 +105,26 @@ def test_staff_can_access_nursing_dashboard(receptionist, doctor, patient, api_c
 
 
 @pytest.mark.django_db
+def test_staff_can_access_shift_handover_report(receptionist, doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now() - timedelta(hours=1),
+    )
+    api_client.force_authenticate(user=receptionist)
+
+    r = api_client.get("/api/hospital-stays/shift-handover-report/?hours=12")
+    assert r.status_code == 200
+    assert r.data["hours"] == 12
+    assert "summary" in r.data
+    assert "admissions_count" in r.data["summary"]
+    stay_ids = [item["hospital_stay_id"] for item in r.data["admissions"]]
+    assert stay.id in stay_ids
+
+
+@pytest.mark.django_db
 def test_doctor_can_manage_hospital_stay_notes(doctor, patient, api_client):
     stay = HospitalStay.objects.create(
         clinic=doctor.clinic,

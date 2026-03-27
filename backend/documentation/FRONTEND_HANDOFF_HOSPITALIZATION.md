@@ -16,6 +16,7 @@ Base entity:
 - `GET /api/hospital-stays/`
 - `POST /api/hospital-stays/`
 - `GET /api/hospital-stays/nursing-dashboard/?window_minutes=30&limit=50`
+- `GET /api/hospital-stays/shift-handover-report/?hours=12`
 - `POST /api/hospital-stays/<id>/discharge/`
 - `GET /api/hospital-stays/<id>/discharge-summary/`
 - `PUT /api/hospital-stays/<id>/discharge-summary/`
@@ -55,6 +56,7 @@ Medication schedule generator:
 Permissions:
 - same as hospital stays (`doctor` and `admin`)
 - nursing dashboard is available to `staff` and `vet`
+- shift handover report is available to `staff` and `vet`
 
 ## Payload examples
 
@@ -211,3 +213,6 @@ PDF export behavior:
    - one page/table for admitted stays sorted by urgency
    - columns: patient, attending vet, cage/room, last round note time, meds overdue/due soon, high-priority tasks open
    - click-through to stay details
+8. Shift Handover:
+   - generate handover card/report from `/shift-handover-report/`
+   - show summary counters + four lists: admissions, discharges, open high tasks, latest notes
