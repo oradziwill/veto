@@ -146,6 +146,13 @@ Structured discharge summary per hospitalization stay (one summary per stay):
 - **Download summary PDF**: `GET /api/hospital-stays/<id>/discharge-summary/pdf/`
   - Returns `application/pdf` attachment.
   - Requires saved summary (returns 404 if summary does not exist yet).
+- **Discharge packet**: `GET /api/hospital-stays/<id>/discharge-packet/`
+  - Returns one aggregated payload for FE handoff:
+    - `hospital_stay` basic context
+    - `discharge_summary`
+    - `medications_on_discharge`
+    - `follow_up_date`
+    - `pdf_download_url`
 
 Current blocking checks before discharge:
 - missing saved discharge summary

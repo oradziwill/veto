@@ -24,6 +24,7 @@ Base entity:
 - `PUT /api/hospital-stays/<id>/discharge-summary/`
 - `POST /api/hospital-stays/<id>/discharge-summary/finalize/`
 - `GET /api/hospital-stays/<id>/discharge-summary/pdf/`
+- `GET /api/hospital-stays/<id>/discharge-packet/`
 - `GET /api/hospital-stays/<id>/discharge-safety-checks/`
 
 Rounds notes:
@@ -187,6 +188,10 @@ PDF export behavior:
 - response is an attachment (`Content-Disposition`) ready for print/download button
 - FE should only enable "Download PDF" when summary has been saved successfully
 
+Discharge packet behavior:
+- `GET /discharge-packet/` returns all core discharge data in one request
+- includes `pdf_download_url` so FE can directly wire "Download PDF" without constructing URL
+
 ## UI recommendations
 
 1. Hospital stay details page with two tabs:
@@ -210,6 +215,7 @@ PDF export behavior:
    - lock printable version when `finalized_at` is set
    - add `Download PDF` CTA that opens/saves `/discharge-summary/pdf/`
    - show "Ready to discharge" badge from `/discharge-safety-checks/`
+   - for final handoff screen use `/discharge-packet/` as the source of truth
 
 7. Nursing Dashboard:
    - one page/table for admitted stays sorted by urgency

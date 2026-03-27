@@ -1501,6 +1501,45 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
+    @action(detail=True, methods=["get"], url_path="discharge-packet")
+    def discharge_packet(self, request, pk=None):
+        """
+        Aggregated payload for discharge workflow:
+        - stay summary context
+        - discharge summary
+        - discharge medication list
+        - direct URL to generated PDF endpoint
+        """
+        stay = self.get_object()
+        summary = HospitalDischargeSummary.objects.filter(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not summary:
+            return Response({"detail": "Discharge summary not found."}, status=404)
+
+        summary_data = HospitalDischargeSummaryReadSerializer(summary).data
+        pdf_url = request.build_absolute_uri(
+            f"/api/hospital-stays/{stay.id}/discharge-summary/pdf/"
+        )
+        return Response(
+            {
+                "hospital_stay": {
+                    "id": stay.id,
+                    "patient_id": stay.patient_id,
+                    "attending_vet_id": stay.attending_vet_id,
+                    "admitted_at": stay.admitted_at.isoformat() if stay.admitted_at else None,
+                    "discharged_at": stay.discharged_at.isoformat() if stay.discharged_at else None,
+                    "discharge_notes": stay.discharge_notes,
+                },
+                "discharge_summary": summary_data,
+                "medications_on_discharge": summary_data.get("medications_on_discharge", []),
+                "follow_up_date": summary_data.get("follow_up_date"),
+                "pdf_download_url": pdf_url,
+            },
+            status=200,
+        )
+
     @action(detail=True, methods=["get", "post"], url_path="notes")
     def notes(self, request, pk=None):
         stay = self.get_object()

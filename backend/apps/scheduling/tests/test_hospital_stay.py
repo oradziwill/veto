@@ -473,6 +473,46 @@ def test_doctor_can_download_discharge_summary_pdf(doctor, patient, api_client):
 
 
 @pytest.mark.django_db
+def test_doctor_can_fetch_discharge_packet(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="discharged",
+        admitted_at=timezone.now() - timedelta(hours=20),
+        discharged_at=timezone.now() - timedelta(hours=1),
+        discharge_notes="Stable, sent home",
+    )
+    api_client.force_authenticate(user=doctor)
+
+    save = api_client.put(
+        f"/api/hospital-stays/{stay.id}/discharge-summary/",
+        {
+            "diagnosis": "Recovered",
+            "hospitalization_course": "No complications.",
+            "procedures": "Observation",
+            "medications_on_discharge": [
+                {"medication_name": "Amoxicillin", "dose": "25", "dose_unit": "mg"}
+            ],
+            "home_care_instructions": "Limit activity.",
+            "warning_signs": "Lethargy",
+            "follow_up_date": "2026-04-10",
+        },
+        format="json",
+    )
+    assert save.status_code == 200
+
+    packet = api_client.get(f"/api/hospital-stays/{stay.id}/discharge-packet/")
+    assert packet.status_code == 200
+    assert packet.data["hospital_stay"]["id"] == stay.id
+    assert packet.data["discharge_summary"]["diagnosis"] == "Recovered"
+    assert packet.data["medications_on_discharge"][0]["medication_name"] == "Amoxicillin"
+    assert packet.data["pdf_download_url"].endswith(
+        f"/api/hospital-stays/{stay.id}/discharge-summary/pdf/"
+    )
+
+
+@pytest.mark.django_db
 def test_medications_due_returns_due_items(doctor, patient, api_client):
     stay = HospitalStay.objects.create(
         clinic=doctor.clinic,
