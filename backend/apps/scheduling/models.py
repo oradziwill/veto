@@ -212,6 +212,105 @@ class HospitalStay(models.Model):
         return f"HospitalStay {self.patient} @ {self.clinic} ({self.status})"
 
 
+class HospitalStayNote(models.Model):
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="hospital_stay_notes",
+    )
+    hospital_stay = models.ForeignKey(
+        HospitalStay,
+        on_delete=models.CASCADE,
+        related_name="notes",
+    )
+    note_type = models.CharField(max_length=40, blank=True, default="round")
+    note = models.TextField()
+    vitals = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hospital_stay_notes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["clinic", "hospital_stay", "-created_at"],
+                name="scheduli_hospita_1a2f2c_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"HospitalStayNote(stay={self.hospital_stay_id})"
+
+
+class HospitalStayTask(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    class Priority(models.TextChoices):
+        LOW = "low", "Low"
+        NORMAL = "normal", "Normal"
+        HIGH = "high", "High"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="hospital_stay_tasks",
+    )
+    hospital_stay = models.ForeignKey(
+        HospitalStay,
+        on_delete=models.CASCADE,
+        related_name="tasks",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    priority = models.CharField(max_length=16, choices=Priority.choices, default=Priority.NORMAL)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    due_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_hospital_stay_tasks",
+    )
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="completed_hospital_stay_tasks",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["status", "due_at", "id"]
+        indexes = [
+            models.Index(
+                fields=["clinic", "hospital_stay", "status"],
+                name="scheduli_hospita_0c0f9a_idx",
+            ),
+            models.Index(
+                fields=["clinic", "due_at"],
+                name="scheduli_hospita_8c7856_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"HospitalStayTask(stay={self.hospital_stay_id}, status={self.status})"
+
+
 class WaitingQueueEntry(models.Model):
     """Walk-in patient queue. Receptionist/doctor adds patients; doctor calls them."""
 

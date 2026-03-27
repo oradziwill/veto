@@ -33,6 +33,8 @@ from apps.patients.models import Patient
 from apps.scheduling.models import (
     Appointment,
     HospitalStay,
+    HospitalStayNote,
+    HospitalStayTask,
     Room,
     VisitRecording,
     WaitingQueueEntry,
@@ -40,7 +42,11 @@ from apps.scheduling.models import (
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
     AppointmentWriteSerializer,
+    HospitalStayNoteReadSerializer,
+    HospitalStayNoteWriteSerializer,
     HospitalStayReadSerializer,
+    HospitalStayTaskReadSerializer,
+    HospitalStayTaskWriteSerializer,
     HospitalStayWriteSerializer,
     RoomSerializer,
     VisitRecordingSerializer,
@@ -779,6 +785,111 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay.discharge_notes = request.data.get("discharge_notes", "")
         stay.save(update_fields=["status", "discharged_at", "discharge_notes", "updated_at"])
         return Response(HospitalStayReadSerializer(stay).data)
+
+    @action(detail=True, methods=["get", "post"], url_path="notes")
+    def notes(self, request, pk=None):
+        stay = self.get_object()
+        if request.method == "GET":
+            items = HospitalStayNote.objects.filter(
+                clinic_id=request.user.clinic_id,
+                hospital_stay=stay,
+            ).order_by("-created_at", "-id")
+            return Response(HospitalStayNoteReadSerializer(items, many=True).data, status=200)
+
+        serializer = HospitalStayNoteWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note = serializer.save(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+            created_by=request.user,
+        )
+        return Response(HospitalStayNoteReadSerializer(note).data, status=201)
+
+    @action(
+        detail=True,
+        methods=["patch", "delete"],
+        url_path=r"notes/(?P<note_id>[^/.]+)",
+    )
+    def note_detail(self, request, pk=None, note_id=None):
+        stay = self.get_object()
+        note = HospitalStayNote.objects.filter(
+            id=note_id,
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not note:
+            return Response({"detail": "Note not found."}, status=404)
+
+        if request.method == "DELETE":
+            note.delete()
+            return Response(status=204)
+
+        serializer = HospitalStayNoteWriteSerializer(note, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        note = serializer.save()
+        return Response(HospitalStayNoteReadSerializer(note).data, status=200)
+
+    @action(detail=True, methods=["get", "post"], url_path="tasks")
+    def tasks(self, request, pk=None):
+        stay = self.get_object()
+        if request.method == "GET":
+            items = HospitalStayTask.objects.filter(
+                clinic_id=request.user.clinic_id,
+                hospital_stay=stay,
+            ).order_by("status", "due_at", "id")
+            return Response(HospitalStayTaskReadSerializer(items, many=True).data, status=200)
+
+        serializer = HospitalStayTaskWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task = serializer.save(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+            created_by=request.user,
+        )
+        if task.status == HospitalStayTask.Status.COMPLETED:
+            task.completed_at = timezone.now()
+            task.completed_by = request.user
+            task.save(update_fields=["completed_at", "completed_by", "updated_at"])
+        return Response(HospitalStayTaskReadSerializer(task).data, status=201)
+
+    @action(
+        detail=True,
+        methods=["patch", "delete"],
+        url_path=r"tasks/(?P<task_id>[^/.]+)",
+    )
+    def task_detail(self, request, pk=None, task_id=None):
+        stay = self.get_object()
+        task = HospitalStayTask.objects.filter(
+            id=task_id,
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not task:
+            return Response({"detail": "Task not found."}, status=404)
+
+        if request.method == "DELETE":
+            task.delete()
+            return Response(status=204)
+
+        previous_status = task.status
+        serializer = HospitalStayTaskWriteSerializer(task, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        task = serializer.save()
+        if (
+            previous_status != HospitalStayTask.Status.COMPLETED
+            and task.status == HospitalStayTask.Status.COMPLETED
+        ):
+            task.completed_at = timezone.now()
+            task.completed_by = request.user
+            task.save(update_fields=["completed_at", "completed_by", "updated_at"])
+        if (
+            previous_status == HospitalStayTask.Status.COMPLETED
+            and task.status != HospitalStayTask.Status.COMPLETED
+        ):
+            task.completed_at = None
+            task.completed_by = None
+            task.save(update_fields=["completed_at", "completed_by", "updated_at"])
+        return Response(HospitalStayTaskReadSerializer(task).data, status=200)
 
 
 class RoomViewSet(viewsets.ReadOnlyModelViewSet):

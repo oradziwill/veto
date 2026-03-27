@@ -21,11 +21,43 @@ For in-patient hospitalization, use **HospitalStay**:
 - **Discharge**: `POST /api/hospital-stays/<id>/discharge/`
   - Body: `{ "discharge_notes": "..." }`
 
+### Hospital Rounds Notes (new)
+
+To avoid creating extra appointments during hospitalization:
+
+- **List notes**: `GET /api/hospital-stays/<id>/notes/`
+- **Create note**: `POST /api/hospital-stays/<id>/notes/`
+  - Body:
+    - `note_type` (optional, default `"round"`)
+    - `note` (required)
+    - `vitals` (optional JSON object, e.g. `{ "temp_c": 38.7, "hr_bpm": 110 }`)
+- **Update note**: `PATCH /api/hospital-stays/<id>/notes/<note_id>/`
+- **Delete note**: `DELETE /api/hospital-stays/<id>/notes/<note_id>/`
+
+### Hospital Tasks (new)
+
+Track treatment tasks within one hospitalization stay:
+
+- **List tasks**: `GET /api/hospital-stays/<id>/tasks/`
+- **Create task**: `POST /api/hospital-stays/<id>/tasks/`
+  - Body:
+    - `title` (required)
+    - `description` (optional)
+    - `priority` (`low|normal|high`, default `normal`)
+    - `status` (`pending|in_progress|completed|cancelled`, default `pending`)
+    - `due_at` (optional datetime)
+- **Update task**: `PATCH /api/hospital-stays/<id>/tasks/<task_id>/`
+- **Delete task**: `DELETE /api/hospital-stays/<id>/tasks/<task_id>/`
+
+When task status is changed to `completed`, backend auto-fills:
+- `completed_at`
+- `completed_by`
+
 ### Workflow
 
 1. Create hospitalization appointment (or use existing)
 2. Create HospitalStay linked to admission appointment
-3. Patient is admitted; daily care as needed
+3. During stay, staff records rounds in `notes` and treatment plan in `tasks`
 4. Discharge when ready
 
 ---

@@ -5,6 +5,8 @@ from apps.patients.serializers import PatientReadSerializer, VetMiniSerializer
 from apps.scheduling.models import (
     Appointment,
     HospitalStay,
+    HospitalStayNote,
+    HospitalStayTask,
     Room,
     VisitRecording,
     WaitingQueueEntry,
@@ -100,6 +102,56 @@ class HospitalStayWriteSerializer(serializers.ModelSerializer):
         ):
             raise serializers.ValidationError("Vet must belong to your clinic.")
         return value
+
+
+class HospitalStayNoteReadSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return None
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+    class Meta:
+        model = HospitalStayNote
+        fields = "__all__"
+
+
+class HospitalStayNoteWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalStayNote
+        fields = ["note_type", "note", "vitals"]
+
+
+class HospitalStayTaskReadSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    completed_by_name = serializers.SerializerMethodField()
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return None
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+    def get_completed_by_name(self, obj):
+        if not obj.completed_by:
+            return None
+        return obj.completed_by.get_full_name() or obj.completed_by.username
+
+    class Meta:
+        model = HospitalStayTask
+        fields = "__all__"
+
+
+class HospitalStayTaskWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalStayTask
+        fields = [
+            "title",
+            "description",
+            "priority",
+            "status",
+            "due_at",
+        ]
 
 
 class WaitingQueueEntryReadSerializer(serializers.ModelSerializer):
