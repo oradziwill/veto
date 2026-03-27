@@ -311,6 +311,96 @@ class HospitalStayTask(models.Model):
         return f"HospitalStayTask(stay={self.hospital_stay_id}, status={self.status})"
 
 
+class HospitalMedicationOrder(models.Model):
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="hospital_medication_orders",
+    )
+    hospital_stay = models.ForeignKey(
+        HospitalStay,
+        on_delete=models.CASCADE,
+        related_name="medication_orders",
+    )
+    medication_name = models.CharField(max_length=255)
+    dose = models.DecimalField(max_digits=8, decimal_places=2)
+    dose_unit = models.CharField(max_length=32, default="mg")
+    route = models.CharField(max_length=32, blank=True, default="")
+    frequency_hours = models.PositiveSmallIntegerField(default=8)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    instructions = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_hospital_medication_orders",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["clinic", "hospital_stay", "is_active"],
+                name="scheduli_hospita_7740cc_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"HospitalMedicationOrder(stay={self.hospital_stay_id}, med={self.medication_name})"
+
+
+class HospitalMedicationAdministration(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        GIVEN = "given", "Given"
+        SKIPPED = "skipped", "Skipped"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="hospital_medication_administrations",
+    )
+    medication_order = models.ForeignKey(
+        HospitalMedicationOrder,
+        on_delete=models.CASCADE,
+        related_name="administrations",
+    )
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    administered_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    administered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hospital_medication_administrations",
+    )
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-scheduled_for", "-created_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["clinic", "status", "scheduled_for"],
+                name="scheduli_hospita_7d2ec2_idx",
+            ),
+            models.Index(
+                fields=["clinic", "medication_order"],
+                name="scheduli_hospita_91e80a_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"HospitalMedicationAdministration(order={self.medication_order_id}, status={self.status})"
+
+
 class WaitingQueueEntry(models.Model):
     """Walk-in patient queue. Receptionist/doctor adds patients; doctor calls them."""
 

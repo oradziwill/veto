@@ -4,6 +4,8 @@ from rest_framework import serializers
 from apps.patients.serializers import PatientReadSerializer, VetMiniSerializer
 from apps.scheduling.models import (
     Appointment,
+    HospitalMedicationAdministration,
+    HospitalMedicationOrder,
     HospitalStay,
     HospitalStayNote,
     HospitalStayTask,
@@ -151,6 +153,59 @@ class HospitalStayTaskWriteSerializer(serializers.ModelSerializer):
             "priority",
             "status",
             "due_at",
+        ]
+
+
+class HospitalMedicationOrderReadSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return None
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+    class Meta:
+        model = HospitalMedicationOrder
+        fields = "__all__"
+
+
+class HospitalMedicationOrderWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalMedicationOrder
+        fields = [
+            "medication_name",
+            "dose",
+            "dose_unit",
+            "route",
+            "frequency_hours",
+            "starts_at",
+            "ends_at",
+            "instructions",
+            "is_active",
+        ]
+
+
+class HospitalMedicationAdministrationReadSerializer(serializers.ModelSerializer):
+    administered_by_name = serializers.SerializerMethodField()
+
+    def get_administered_by_name(self, obj):
+        if not obj.administered_by:
+            return None
+        return obj.administered_by.get_full_name() or obj.administered_by.username
+
+    class Meta:
+        model = HospitalMedicationAdministration
+        fields = "__all__"
+
+
+class HospitalMedicationAdministrationWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalMedicationAdministration
+        fields = [
+            "scheduled_for",
+            "administered_at",
+            "status",
+            "note",
         ]
 
 
