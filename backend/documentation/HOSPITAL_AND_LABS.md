@@ -53,6 +53,43 @@ When task status is changed to `completed`, backend auto-fills:
 - `completed_at`
 - `completed_by`
 
+### Medication MAR (new)
+
+Medication orders and administration events inside one hospitalization stay:
+
+- **List medication orders**: `GET /api/hospital-stays/<id>/medications/`
+- **Create medication order**: `POST /api/hospital-stays/<id>/medications/`
+  - Body:
+    - `medication_name` (required)
+    - `dose` (required, decimal)
+    - `dose_unit` (optional, default `mg`)
+    - `route` (optional, e.g. `iv`, `oral`)
+    - `frequency_hours` (optional, default `8`)
+    - `starts_at` (required datetime)
+    - `ends_at` (optional datetime)
+    - `instructions` (optional)
+    - `is_active` (optional, default `true`)
+- **Update medication order**: `PATCH /api/hospital-stays/<id>/medications/<medication_id>/`
+- **Delete medication order**: `DELETE /api/hospital-stays/<id>/medications/<medication_id>/`
+
+Administration events:
+
+- **List administrations**: `GET /api/hospital-stays/<id>/medications/<medication_id>/administrations/`
+- **Create administration event**: `POST /api/hospital-stays/<id>/medications/<medication_id>/administrations/`
+  - Body:
+    - `scheduled_for` (optional datetime)
+    - `administered_at` (optional datetime)
+    - `status` (`pending|given|skipped`, default `pending`)
+    - `note` (optional)
+- **Update administration event**: `PATCH /api/hospital-stays/<id>/medications/<medication_id>/administrations/<administration_id>/`
+
+Auto-behavior:
+- if status is set to `given` and `administered_at` is empty:
+  - backend sets `administered_at=now`
+  - backend sets `administered_by=request.user`
+- if status changes from `given` to another status:
+  - backend clears `administered_at` and `administered_by`
+
 ### Workflow
 
 1. Create hospitalization appointment (or use existing)

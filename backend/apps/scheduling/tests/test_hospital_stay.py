@@ -153,3 +153,93 @@ def test_doctor_can_manage_hospital_stay_tasks(doctor, patient, api_client):
     listing = api_client.get(f"/api/hospital-stays/{stay.id}/tasks/")
     assert listing.status_code == 200
     assert len(listing.data) == 1
+
+
+@pytest.mark.django_db
+def test_doctor_can_manage_hospital_medication_orders(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    create = api_client.post(
+        f"/api/hospital-stays/{stay.id}/medications/",
+        {
+            "medication_name": "Amoxicillin",
+            "dose": "25.00",
+            "dose_unit": "mg",
+            "route": "iv",
+            "frequency_hours": 8,
+            "starts_at": timezone.now().isoformat(),
+            "instructions": "Post-op protocol",
+            "is_active": True,
+        },
+        format="json",
+    )
+    assert create.status_code == 201
+    med_id = create.data["id"]
+
+    listing = api_client.get(f"/api/hospital-stays/{stay.id}/medications/")
+    assert listing.status_code == 200
+    assert len(listing.data) == 1
+    assert listing.data[0]["id"] == med_id
+
+    patch = api_client.patch(
+        f"/api/hospital-stays/{stay.id}/medications/{med_id}/",
+        {"is_active": False},
+        format="json",
+    )
+    assert patch.status_code == 200
+    assert patch.data["is_active"] is False
+
+
+@pytest.mark.django_db
+def test_doctor_can_record_medication_administration(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    med = api_client.post(
+        f"/api/hospital-stays/{stay.id}/medications/",
+        {
+            "medication_name": "Metronidazole",
+            "dose": "15.00",
+            "dose_unit": "mg",
+            "route": "oral",
+            "frequency_hours": 12,
+            "starts_at": timezone.now().isoformat(),
+            "instructions": "",
+            "is_active": True,
+        },
+        format="json",
+    )
+    assert med.status_code == 201
+    med_id = med.data["id"]
+
+    create_admin = api_client.post(
+        f"/api/hospital-stays/{stay.id}/medications/{med_id}/administrations/",
+        {"status": "given", "note": "Given with food"},
+        format="json",
+    )
+    assert create_admin.status_code == 201
+    admin_id = create_admin.data["id"]
+    assert create_admin.data["administered_at"] is not None
+    assert create_admin.data["administered_by"] == doctor.id
+
+    patch_admin = api_client.patch(
+        f"/api/hospital-stays/{stay.id}/medications/{med_id}/administrations/{admin_id}/",
+        {"status": "skipped", "note": "Vomited before dose"},
+        format="json",
+    )
+    assert patch_admin.status_code == 200
+    assert patch_admin.data["status"] == "skipped"
+    assert patch_admin.data["administered_at"] is None

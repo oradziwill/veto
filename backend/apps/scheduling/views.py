@@ -32,6 +32,8 @@ from apps.medical.serializers import (
 from apps.patients.models import Patient
 from apps.scheduling.models import (
     Appointment,
+    HospitalMedicationAdministration,
+    HospitalMedicationOrder,
     HospitalStay,
     HospitalStayNote,
     HospitalStayTask,
@@ -42,6 +44,10 @@ from apps.scheduling.models import (
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
     AppointmentWriteSerializer,
+    HospitalMedicationAdministrationReadSerializer,
+    HospitalMedicationAdministrationWriteSerializer,
+    HospitalMedicationOrderReadSerializer,
+    HospitalMedicationOrderWriteSerializer,
     HospitalStayNoteReadSerializer,
     HospitalStayNoteWriteSerializer,
     HospitalStayReadSerializer,
@@ -890,6 +896,142 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             task.completed_by = None
             task.save(update_fields=["completed_at", "completed_by", "updated_at"])
         return Response(HospitalStayTaskReadSerializer(task).data, status=200)
+
+    @action(detail=True, methods=["get", "post"], url_path="medications")
+    def medications(self, request, pk=None):
+        stay = self.get_object()
+        if request.method == "GET":
+            items = HospitalMedicationOrder.objects.filter(
+                clinic_id=request.user.clinic_id,
+                hospital_stay=stay,
+            ).order_by("-created_at", "-id")
+            return Response(
+                HospitalMedicationOrderReadSerializer(items, many=True).data, status=200
+            )
+
+        serializer = HospitalMedicationOrderWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        medication = serializer.save(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+            created_by=request.user,
+        )
+        return Response(HospitalMedicationOrderReadSerializer(medication).data, status=201)
+
+    @action(
+        detail=True,
+        methods=["patch", "delete"],
+        url_path=r"medications/(?P<medication_id>[^/.]+)",
+    )
+    def medication_detail(self, request, pk=None, medication_id=None):
+        stay = self.get_object()
+        medication = HospitalMedicationOrder.objects.filter(
+            id=medication_id,
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not medication:
+            return Response({"detail": "Medication order not found."}, status=404)
+
+        if request.method == "DELETE":
+            medication.delete()
+            return Response(status=204)
+
+        serializer = HospitalMedicationOrderWriteSerializer(
+            medication, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        medication = serializer.save()
+        return Response(HospitalMedicationOrderReadSerializer(medication).data, status=200)
+
+    @action(
+        detail=True,
+        methods=["get", "post"],
+        url_path=r"medications/(?P<medication_id>[^/.]+)/administrations",
+    )
+    def medication_administrations(self, request, pk=None, medication_id=None):
+        stay = self.get_object()
+        medication = HospitalMedicationOrder.objects.filter(
+            id=medication_id,
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not medication:
+            return Response({"detail": "Medication order not found."}, status=404)
+
+        if request.method == "GET":
+            items = HospitalMedicationAdministration.objects.filter(
+                clinic_id=request.user.clinic_id,
+                medication_order=medication,
+            ).order_by("-scheduled_for", "-created_at", "-id")
+            return Response(
+                HospitalMedicationAdministrationReadSerializer(items, many=True).data,
+                status=200,
+            )
+
+        serializer = HospitalMedicationAdministrationWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        administration = serializer.save(
+            clinic_id=request.user.clinic_id,
+            medication_order=medication,
+        )
+        if administration.status == HospitalMedicationAdministration.Status.GIVEN:
+            if administration.administered_at is None:
+                administration.administered_at = timezone.now()
+            administration.administered_by = request.user
+            administration.save(update_fields=["administered_at", "administered_by", "updated_at"])
+        return Response(
+            HospitalMedicationAdministrationReadSerializer(administration).data,
+            status=201,
+        )
+
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path=r"medications/(?P<medication_id>[^/.]+)/administrations/(?P<administration_id>[^/.]+)",
+    )
+    def medication_administration_detail(
+        self, request, pk=None, medication_id=None, administration_id=None
+    ):
+        stay = self.get_object()
+        medication = HospitalMedicationOrder.objects.filter(
+            id=medication_id,
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not medication:
+            return Response({"detail": "Medication order not found."}, status=404)
+
+        administration = HospitalMedicationAdministration.objects.filter(
+            id=administration_id,
+            clinic_id=request.user.clinic_id,
+            medication_order=medication,
+        ).first()
+        if not administration:
+            return Response({"detail": "Medication administration not found."}, status=404)
+
+        previous_status = administration.status
+        serializer = HospitalMedicationAdministrationWriteSerializer(
+            administration, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        administration = serializer.save()
+        if administration.status == HospitalMedicationAdministration.Status.GIVEN:
+            if administration.administered_at is None:
+                administration.administered_at = timezone.now()
+            if previous_status != HospitalMedicationAdministration.Status.GIVEN:
+                administration.administered_by = request.user
+            administration.save(update_fields=["administered_at", "administered_by", "updated_at"])
+        if (
+            previous_status == HospitalMedicationAdministration.Status.GIVEN
+            and administration.status != HospitalMedicationAdministration.Status.GIVEN
+        ):
+            administration.administered_at = None
+            administration.administered_by = None
+            administration.save(update_fields=["administered_at", "administered_by", "updated_at"])
+        return Response(
+            HospitalMedicationAdministrationReadSerializer(administration).data, status=200
+        )
 
 
 class RoomViewSet(viewsets.ReadOnlyModelViewSet):
