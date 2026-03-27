@@ -756,7 +756,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         # Staff dashboard should be accessible to broader clinic staff.
-        if self.action in ("nursing_dashboard",):
+        if self.action in ("nursing_dashboard", "shift_handover_report"):
             return [IsAuthenticated(), HasClinic(), IsStaffOrVet()]
         return [permission() for permission in self.permission_classes]
 
@@ -909,6 +909,162 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 "window_minutes": window_minutes,
                 "count": len(items),
                 "items": items,
+            },
+            status=200,
+        )
+
+    @action(detail=False, methods=["get"], url_path="shift-handover-report")
+    def shift_handover_report(self, request):
+        """
+        Shift handover report for hospitalization operations.
+        """
+        hours = request.query_params.get("hours", "12")
+        try:
+            hours_int = int(hours)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid hours."}, status=400)
+        if hours_int < 1 or hours_int > 72:
+            return Response({"detail": "hours must be between 1 and 72."}, status=400)
+
+        now = timezone.now()
+        since = now - timedelta(hours=hours_int)
+
+        admissions_qs = (
+            HospitalStay.objects.filter(
+                clinic_id=request.user.clinic_id,
+                admitted_at__gte=since,
+                admitted_at__lte=now,
+            )
+            .select_related("patient", "attending_vet")
+            .order_by("-admitted_at")
+        )
+        discharges_qs = (
+            HospitalStay.objects.filter(
+                clinic_id=request.user.clinic_id,
+                discharged_at__gte=since,
+                discharged_at__lte=now,
+            )
+            .select_related("patient", "attending_vet")
+            .order_by("-discharged_at")
+        )
+        open_high_tasks_qs = (
+            HospitalStayTask.objects.filter(
+                clinic_id=request.user.clinic_id,
+                priority=HospitalStayTask.Priority.HIGH,
+            )
+            .exclude(status=HospitalStayTask.Status.COMPLETED)
+            .select_related("hospital_stay", "hospital_stay__patient")
+            .order_by("due_at", "id")
+        )
+        latest_notes_qs = (
+            HospitalStayNote.objects.filter(
+                clinic_id=request.user.clinic_id,
+                created_at__gte=since,
+                created_at__lte=now,
+            )
+            .select_related("hospital_stay", "hospital_stay__patient", "created_by")
+            .order_by("-created_at", "-id")
+        )
+
+        active_orders = HospitalMedicationOrder.objects.filter(
+            clinic_id=request.user.clinic_id,
+            is_active=True,
+            hospital_stay__status=HospitalStay.Status.ADMITTED,
+        )
+        overdue_medication_count = 0
+        for order in active_orders:
+            if order.ends_at and order.ends_at < now:
+                continue
+            last_given = (
+                HospitalMedicationAdministration.objects.filter(
+                    clinic_id=request.user.clinic_id,
+                    medication_order=order,
+                    status=HospitalMedicationAdministration.Status.GIVEN,
+                    administered_at__isnull=False,
+                )
+                .order_by("-administered_at", "-id")
+                .first()
+            )
+            next_due_at = (
+                order.starts_at
+                if not last_given
+                else (last_given.administered_at + timedelta(hours=int(order.frequency_hours or 0)))
+            )
+            if next_due_at < now:
+                overdue_medication_count += 1
+
+        admissions = []
+        for stay in admissions_qs[:100]:
+            admissions.append(
+                {
+                    "hospital_stay_id": stay.id,
+                    "patient_id": stay.patient_id,
+                    "patient_name": str(stay.patient),
+                    "attending_vet_id": stay.attending_vet_id,
+                    "admitted_at": stay.admitted_at.isoformat() if stay.admitted_at else None,
+                    "reason": stay.reason,
+                    "cage_or_room": stay.cage_or_room,
+                }
+            )
+
+        discharges = []
+        for stay in discharges_qs[:100]:
+            discharges.append(
+                {
+                    "hospital_stay_id": stay.id,
+                    "patient_id": stay.patient_id,
+                    "patient_name": str(stay.patient),
+                    "attending_vet_id": stay.attending_vet_id,
+                    "discharged_at": stay.discharged_at.isoformat() if stay.discharged_at else None,
+                    "discharge_notes": stay.discharge_notes,
+                }
+            )
+
+        open_high_tasks = []
+        for task in open_high_tasks_qs[:100]:
+            open_high_tasks.append(
+                {
+                    "task_id": task.id,
+                    "hospital_stay_id": task.hospital_stay_id,
+                    "patient_id": task.hospital_stay.patient_id,
+                    "patient_name": str(task.hospital_stay.patient),
+                    "title": task.title,
+                    "status": task.status,
+                    "due_at": task.due_at.isoformat() if task.due_at else None,
+                }
+            )
+
+        latest_notes = []
+        for note in latest_notes_qs[:100]:
+            latest_notes.append(
+                {
+                    "note_id": note.id,
+                    "hospital_stay_id": note.hospital_stay_id,
+                    "patient_id": note.hospital_stay.patient_id,
+                    "patient_name": str(note.hospital_stay.patient),
+                    "created_at": note.created_at.isoformat(),
+                    "created_by_id": note.created_by_id,
+                    "note_type": note.note_type,
+                    "note": note.note,
+                }
+            )
+
+        return Response(
+            {
+                "now": now.isoformat(),
+                "since": since.isoformat(),
+                "hours": hours_int,
+                "summary": {
+                    "admissions_count": admissions_qs.count(),
+                    "discharges_count": discharges_qs.count(),
+                    "open_high_tasks_count": open_high_tasks_qs.count(),
+                    "latest_notes_count": latest_notes_qs.count(),
+                    "overdue_medication_orders_count": overdue_medication_count,
+                },
+                "admissions": admissions,
+                "discharges": discharges,
+                "open_high_tasks": open_high_tasks,
+                "latest_notes": latest_notes,
             },
             status=200,
         )

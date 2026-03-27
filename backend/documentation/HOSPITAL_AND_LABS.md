@@ -171,6 +171,17 @@ Clinic-wide triage view for active hospital stays:
     - `open_high_priority_tasks`
     - `meds_overdue`, `meds_due_soon` (computed within the requested window)
 
+### Shift Handover Report (new)
+
+Operational handover report for current/next shift:
+
+- **Handover report**: `GET /api/hospital-stays/shift-handover-report/?hours=12`
+  - Accessible to clinic `staff` and `vet` roles.
+  - `hours`: integer \(1..72\), default `12`
+  - Returns:
+    - `summary` counts (admissions, discharges, open high tasks, latest notes, overdue meds)
+    - detailed lists: `admissions`, `discharges`, `open_high_tasks`, `latest_notes`
+
 ---
 
 ## 2. Labs
