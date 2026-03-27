@@ -19,6 +19,7 @@ Base entity:
 - `GET /api/hospital-stays/<id>/discharge-summary/`
 - `PUT /api/hospital-stays/<id>/discharge-summary/`
 - `POST /api/hospital-stays/<id>/discharge-summary/finalize/`
+- `GET /api/hospital-stays/<id>/discharge-summary/pdf/`
 
 Rounds notes:
 - `GET /api/hospital-stays/<id>/notes/`
@@ -159,6 +160,11 @@ Finalize behavior:
 - `POST /discharge-summary/finalize/` works only when stay status is `discharged`
 - sets `finalized_at` and `generated_by`
 
+PDF export behavior:
+- `GET /discharge-summary/pdf/` returns binary PDF (`application/pdf`)
+- response is an attachment (`Content-Disposition`) ready for print/download button
+- FE should only enable "Download PDF" when summary has been saved successfully
+
 ## UI recommendations
 
 1. Hospital stay details page with two tabs:
@@ -178,3 +184,4 @@ Finalize behavior:
 6. Discharge Summary:
    - prefill form from draft (`GET /discharge-summary/`) and let doctor edit before save
    - lock printable version when `finalized_at` is set
+   - add `Download PDF` CTA that opens/saves `/discharge-summary/pdf/`

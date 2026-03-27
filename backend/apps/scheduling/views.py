@@ -64,6 +64,7 @@ from apps.scheduling.serializers import (
     WaitingQueueEntryWriteSerializer,
 )
 from apps.scheduling.services.availability import compute_availability
+from apps.scheduling.services.discharge_pdf import render_discharge_summary_pdf_bytes
 from apps.scheduling.services.visit_recording_pipeline import (
     get_recordings_bucket,
     process_visit_recording,
@@ -906,6 +907,26 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         data = HospitalDischargeSummaryReadSerializer(summary).data
         data["source"] = "saved"
         return Response(data, status=200)
+
+    @action(detail=True, methods=["get"], url_path="discharge-summary/pdf")
+    def discharge_summary_pdf(self, request, pk=None):
+        stay = self.get_object()
+        summary = HospitalDischargeSummary.objects.filter(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not summary:
+            return Response(
+                {"detail": "Discharge summary not found."},
+                status=404,
+            )
+
+        summary_data = HospitalDischargeSummaryReadSerializer(summary).data
+        pdf_bytes = render_discharge_summary_pdf_bytes(summary_data)
+        filename = f"discharge_summary_stay_{stay.id}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
     @action(detail=True, methods=["get", "post"], url_path="notes")
     def notes(self, request, pk=None):
