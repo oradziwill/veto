@@ -1169,6 +1169,91 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             HospitalMedicationAdministrationReadSerializer(administration).data, status=200
         )
 
+    @action(detail=True, methods=["get"], url_path="medications-due")
+    def medications_due(self, request, pk=None):
+        stay = self.get_object()
+
+        window = request.query_params.get("window_minutes", "30")
+        include_overdue = request.query_params.get("include_overdue", "1")
+        try:
+            window_minutes = int(window)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid window_minutes."}, status=400)
+        if window_minutes < 0 or window_minutes > 24 * 60:
+            return Response(
+                {"detail": "window_minutes must be between 0 and 1440."},
+                status=400,
+            )
+
+        include_overdue_bool = str(include_overdue).lower() not in ("0", "false", "no")
+        now = timezone.now()
+        horizon = now + timedelta(minutes=window_minutes)
+
+        orders = HospitalMedicationOrder.objects.filter(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+            is_active=True,
+        ).order_by("-created_at", "-id")
+
+        due_items = []
+        for order in orders:
+            if order.ends_at and order.ends_at < now:
+                continue
+            if order.starts_at and order.starts_at > horizon:
+                continue
+
+            last_given = (
+                HospitalMedicationAdministration.objects.filter(
+                    clinic_id=request.user.clinic_id,
+                    medication_order=order,
+                    status=HospitalMedicationAdministration.Status.GIVEN,
+                    administered_at__isnull=False,
+                )
+                .order_by("-administered_at", "-id")
+                .first()
+            )
+
+            if last_given is None:
+                next_due_at = order.starts_at
+            else:
+                next_due_at = last_given.administered_at + timedelta(
+                    hours=int(order.frequency_hours or 0)
+                )
+
+            overdue = next_due_at < now
+            if overdue and not include_overdue_bool:
+                continue
+            if not overdue and next_due_at > horizon:
+                continue
+
+            due_items.append(
+                {
+                    "medication_order": HospitalMedicationOrderReadSerializer(order).data,
+                    "last_given_at": (
+                        last_given.administered_at.isoformat()
+                        if last_given and last_given.administered_at
+                        else None
+                    ),
+                    "next_due_at": next_due_at.isoformat(),
+                    "is_overdue": overdue,
+                    "overdue_minutes": (
+                        int((now - next_due_at).total_seconds() // 60) if overdue else 0
+                    ),
+                }
+            )
+
+        due_items.sort(key=lambda x: x["next_due_at"])
+        return Response(
+            {
+                "hospital_stay_id": stay.id,
+                "now": now.isoformat(),
+                "window_minutes": window_minutes,
+                "include_overdue": include_overdue_bool,
+                "items": due_items,
+            },
+            status=200,
+        )
+
 
 class RoomViewSet(viewsets.ReadOnlyModelViewSet):
     """List rooms for the user's clinic (for dropdowns and calendar). Manage rooms in Django admin."""

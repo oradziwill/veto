@@ -1,5 +1,7 @@
 """Tests for HospitalStay API."""
 
+from datetime import timedelta
+
 import pytest
 from apps.scheduling.models import HospitalStay
 from django.utils import timezone
@@ -364,3 +366,37 @@ def test_doctor_can_download_discharge_summary_pdf(doctor, patient, api_client):
     assert response["Content-Type"] == "application/pdf"
     assert response["Content-Disposition"].endswith(f'discharge_summary_stay_{stay.id}.pdf"')
     assert response.content.startswith(b"%PDF-1.4")
+
+
+@pytest.mark.django_db
+def test_medications_due_returns_due_items(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    order = api_client.post(
+        f"/api/hospital-stays/{stay.id}/medications/",
+        {
+            "medication_name": "Amoxicillin",
+            "dose": "25.00",
+            "dose_unit": "mg",
+            "route": "iv",
+            "frequency_hours": 8,
+            "starts_at": (timezone.now() - timedelta(minutes=5)).isoformat(),
+            "instructions": "",
+            "is_active": True,
+        },
+        format="json",
+    )
+    assert order.status_code == 201
+
+    due = api_client.get(f"/api/hospital-stays/{stay.id}/medications-due/?window_minutes=30")
+    assert due.status_code == 200
+    assert len(due.data["items"]) == 1
+    assert due.data["items"][0]["medication_order"]["medication_name"] == "Amoxicillin"
+    assert due.data["items"][0]["next_due_at"] is not None

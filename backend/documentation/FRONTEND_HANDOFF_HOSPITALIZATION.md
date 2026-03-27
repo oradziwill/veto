@@ -44,6 +44,9 @@ Medication administrations:
 - `POST /api/hospital-stays/<id>/medications/<medication_id>/administrations/`
 - `PATCH /api/hospital-stays/<id>/medications/<medication_id>/administrations/<administration_id>/`
 
+Medication due alerts:
+- `GET /api/hospital-stays/<id>/medications-due/?window_minutes=30&include_overdue=1`
+
 Permissions:
 - same as hospital stays (`doctor` and `admin`)
 
@@ -181,6 +184,7 @@ PDF export behavior:
 5. MAR:
    - show active medication orders with next due time (computed in FE from `starts_at + frequency_hours`)
    - provide one-click "Given" action (PATCH administration status to `given`)
+   - optionally drive MAR "Now due" panel from `/medications-due/` (server-side due calculation)
 6. Discharge Summary:
    - prefill form from draft (`GET /discharge-summary/`) and let doctor edit before save
    - lock printable version when `finalized_at` is set
