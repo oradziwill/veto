@@ -1073,6 +1073,11 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 {"detail": "Stay is already discharged."},
                 status=400,
             )
+        before = {
+            "status": stay.status,
+            "discharged_at": stay.discharged_at,
+            "discharge_notes": stay.discharge_notes,
+        }
         require_safety = bool(getattr(settings, "REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE", False))
         if require_safety:
             safety = self._compute_discharge_safety_checks(stay)
@@ -1090,6 +1095,19 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay.discharged_at = timezone.now()
         stay.discharge_notes = request.data.get("discharge_notes", "")
         stay.save(update_fields=["status", "discharged_at", "discharge_notes", "updated_at"])
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="hospital_stay_discharged",
+            entity_type="hospital_stay",
+            entity_id=stay.id,
+            before=before,
+            after={
+                "status": stay.status,
+                "discharged_at": stay.discharged_at.isoformat() if stay.discharged_at else None,
+                "discharge_notes": stay.discharge_notes,
+            },
+        )
         return Response(HospitalStayReadSerializer(stay).data)
 
     @action(detail=True, methods=["get"], url_path="discharge-safety-checks")
@@ -1125,6 +1143,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             partial=bool(summary),
         )
         serializer.is_valid(raise_exception=True)
+        before = HospitalDischargeSummaryReadSerializer(summary).data if summary else {}
         if summary:
             summary = serializer.save()
         else:
@@ -1135,6 +1154,16 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             )
         data = HospitalDischargeSummaryReadSerializer(summary).data
         data["source"] = "saved"
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="hospital_discharge_summary_saved",
+            entity_type="hospital_discharge_summary",
+            entity_id=summary.id,
+            before=before,
+            after=HospitalDischargeSummaryReadSerializer(summary).data,
+            metadata={"hospital_stay_id": stay.id},
+        )
         return Response(data, status=200)
 
     @action(detail=True, methods=["post"], url_path="discharge-summary/finalize")
@@ -1154,11 +1183,26 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 {"detail": "Patient must be discharged before finalizing summary."},
                 status=400,
             )
+        before = {
+            "finalized_at": summary.finalized_at.isoformat() if summary.finalized_at else None
+        }
         summary.finalized_at = timezone.now()
         summary.generated_by = request.user
         summary.save(update_fields=["finalized_at", "generated_by", "updated_at"])
         data = HospitalDischargeSummaryReadSerializer(summary).data
         data["source"] = "saved"
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="hospital_discharge_summary_finalized",
+            entity_type="hospital_discharge_summary",
+            entity_id=summary.id,
+            before=before,
+            after={
+                "finalized_at": summary.finalized_at.isoformat() if summary.finalized_at else None
+            },
+            metadata={"hospital_stay_id": stay.id},
+        )
         return Response(data, status=200)
 
     @action(detail=True, methods=["get"], url_path="discharge-summary/pdf")
@@ -1245,6 +1289,19 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             task.completed_at = timezone.now()
             task.completed_by = request.user
             task.save(update_fields=["completed_at", "completed_by", "updated_at"])
+            log_audit_event(
+                clinic_id=request.user.clinic_id,
+                actor=request.user,
+                action="hospital_task_completed",
+                entity_type="hospital_stay_task",
+                entity_id=task.id,
+                before={"status": HospitalStayTask.Status.PENDING},
+                after={
+                    "status": task.status,
+                    "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                },
+                metadata={"hospital_stay_id": stay.id},
+            )
         return Response(HospitalStayTaskReadSerializer(task).data, status=201)
 
     @action(
@@ -1277,6 +1334,19 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             task.completed_at = timezone.now()
             task.completed_by = request.user
             task.save(update_fields=["completed_at", "completed_by", "updated_at"])
+            log_audit_event(
+                clinic_id=request.user.clinic_id,
+                actor=request.user,
+                action="hospital_task_completed",
+                entity_type="hospital_stay_task",
+                entity_id=task.id,
+                before={"status": previous_status},
+                after={
+                    "status": task.status,
+                    "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                },
+                metadata={"hospital_stay_id": stay.id},
+            )
         if (
             previous_status == HospitalStayTask.Status.COMPLETED
             and task.status != HospitalStayTask.Status.COMPLETED
@@ -1462,6 +1532,28 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 administration.administered_at = timezone.now()
             administration.administered_by = request.user
             administration.save(update_fields=["administered_at", "administered_by", "updated_at"])
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="hospital_medication_admin_created",
+            entity_type="hospital_medication_administration",
+            entity_id=administration.id,
+            before={},
+            after={
+                "status": administration.status,
+                "scheduled_for": (
+                    administration.scheduled_for.isoformat()
+                    if administration.scheduled_for
+                    else None
+                ),
+                "administered_at": (
+                    administration.administered_at.isoformat()
+                    if administration.administered_at
+                    else None
+                ),
+            },
+            metadata={"hospital_stay_id": stay.id, "medication_order_id": medication.id},
+        )
         return Response(
             HospitalMedicationAdministrationReadSerializer(administration).data,
             status=201,
@@ -1511,6 +1603,17 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             administration.administered_at = None
             administration.administered_by = None
             administration.save(update_fields=["administered_at", "administered_by", "updated_at"])
+        if previous_status != administration.status:
+            log_audit_event(
+                clinic_id=request.user.clinic_id,
+                actor=request.user,
+                action="hospital_medication_admin_status_changed",
+                entity_type="hospital_medication_administration",
+                entity_id=administration.id,
+                before={"status": previous_status},
+                after={"status": administration.status},
+                metadata={"hospital_stay_id": stay.id, "medication_order_id": medication.id},
+            )
         return Response(
             HospitalMedicationAdministrationReadSerializer(administration).data, status=200
         )
