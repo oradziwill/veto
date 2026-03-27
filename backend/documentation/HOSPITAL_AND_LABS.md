@@ -182,6 +182,22 @@ Operational handover report for current/next shift:
     - `summary` counts (admissions, discharges, open high tasks, latest notes, overdue meds)
     - detailed lists: `admissions`, `discharges`, `open_high_tasks`, `latest_notes`
 
+### Hospital KPI Analytics (new)
+
+Hospitalization KPI metrics for operations/admin monitoring:
+
+- **KPI analytics**: `GET /api/hospital-stays/kpi-analytics/?hours=24`
+  - `hours`: integer \(1..2160\), default `24`
+  - Returns:
+    - `discharged_count`
+    - `active_stays_count`
+    - `avg_stay_hours`
+    - `summary_completion_pct`
+    - `finalized_summary_pct`
+    - `task_completion_pct`
+    - `overdue_medication_orders_count`
+- **CSV export**: `GET /api/hospital-stays/kpi-analytics/?hours=24&export=csv`
+
 ---
 
 ## 2. Labs
