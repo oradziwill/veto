@@ -4,6 +4,7 @@ from rest_framework import serializers
 from apps.patients.serializers import PatientReadSerializer, VetMiniSerializer
 from apps.scheduling.models import (
     Appointment,
+    HospitalDischargeSummary,
     HospitalMedicationAdministration,
     HospitalMedicationOrder,
     HospitalStay,
@@ -206,6 +207,33 @@ class HospitalMedicationAdministrationWriteSerializer(serializers.ModelSerialize
             "administered_at",
             "status",
             "note",
+        ]
+
+
+class HospitalDischargeSummaryReadSerializer(serializers.ModelSerializer):
+    generated_by_name = serializers.SerializerMethodField()
+
+    def get_generated_by_name(self, obj):
+        if not obj.generated_by:
+            return None
+        return obj.generated_by.get_full_name() or obj.generated_by.username
+
+    class Meta:
+        model = HospitalDischargeSummary
+        fields = "__all__"
+
+
+class HospitalDischargeSummaryWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HospitalDischargeSummary
+        fields = [
+            "diagnosis",
+            "hospitalization_course",
+            "procedures",
+            "medications_on_discharge",
+            "home_care_instructions",
+            "warning_signs",
+            "follow_up_date",
         ]
 
 

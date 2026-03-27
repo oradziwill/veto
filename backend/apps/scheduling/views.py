@@ -32,6 +32,7 @@ from apps.medical.serializers import (
 from apps.patients.models import Patient
 from apps.scheduling.models import (
     Appointment,
+    HospitalDischargeSummary,
     HospitalMedicationAdministration,
     HospitalMedicationOrder,
     HospitalStay,
@@ -44,6 +45,8 @@ from apps.scheduling.models import (
 from apps.scheduling.serializers import (
     AppointmentReadSerializer,
     AppointmentWriteSerializer,
+    HospitalDischargeSummaryReadSerializer,
+    HospitalDischargeSummaryWriteSerializer,
     HospitalMedicationAdministrationReadSerializer,
     HospitalMedicationAdministrationWriteSerializer,
     HospitalMedicationOrderReadSerializer,
@@ -775,6 +778,61 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(clinic_id=self.request.user.clinic_id, status="admitted")
 
+    def _build_discharge_summary_draft(self, stay: HospitalStay) -> dict:
+        latest_note = (
+            HospitalStayNote.objects.filter(
+                clinic_id=self.request.user.clinic_id,
+                hospital_stay=stay,
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        completed_tasks = HospitalStayTask.objects.filter(
+            clinic_id=self.request.user.clinic_id,
+            hospital_stay=stay,
+            status=HospitalStayTask.Status.COMPLETED,
+        ).order_by("-updated_at", "-id")[:5]
+        active_medications = HospitalMedicationOrder.objects.filter(
+            clinic_id=self.request.user.clinic_id,
+            hospital_stay=stay,
+            is_active=True,
+        ).order_by("-created_at", "-id")
+
+        meds_for_discharge = []
+        for medication in active_medications:
+            meds_for_discharge.append(
+                {
+                    "medication_name": medication.medication_name,
+                    "dose": str(medication.dose),
+                    "dose_unit": medication.dose_unit,
+                    "route": medication.route,
+                    "frequency_hours": medication.frequency_hours,
+                    "instructions": medication.instructions,
+                }
+            )
+
+        course_lines = []
+        if latest_note and latest_note.note:
+            course_lines.append(f"Latest round note: {latest_note.note}")
+        if completed_tasks:
+            course_lines.append(
+                "Completed tasks: "
+                + "; ".join([task.title for task in completed_tasks if task.title])
+            )
+        course_text = "\n".join(course_lines).strip()
+
+        return {
+            "diagnosis": "",
+            "hospitalization_course": course_text,
+            "procedures": "",
+            "medications_on_discharge": meds_for_discharge,
+            "home_care_instructions": "",
+            "warning_signs": "",
+            "follow_up_date": None,
+            "finalized_at": None,
+            "source": "draft",
+        }
+
     @action(detail=True, methods=["post"], url_path="discharge")
     def discharge(self, request, pk=None):
         """Discharge the patient from hospital."""
@@ -791,6 +849,63 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay.discharge_notes = request.data.get("discharge_notes", "")
         stay.save(update_fields=["status", "discharged_at", "discharge_notes", "updated_at"])
         return Response(HospitalStayReadSerializer(stay).data)
+
+    @action(detail=True, methods=["get", "put"], url_path="discharge-summary")
+    def discharge_summary(self, request, pk=None):
+        stay = self.get_object()
+        summary = HospitalDischargeSummary.objects.filter(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+
+        if request.method == "GET":
+            if summary:
+                data = HospitalDischargeSummaryReadSerializer(summary).data
+                data["source"] = "saved"
+                return Response(data, status=200)
+            return Response(self._build_discharge_summary_draft(stay), status=200)
+
+        serializer = HospitalDischargeSummaryWriteSerializer(
+            summary,
+            data=request.data,
+            partial=bool(summary),
+        )
+        serializer.is_valid(raise_exception=True)
+        if summary:
+            summary = serializer.save()
+        else:
+            summary = serializer.save(
+                clinic_id=request.user.clinic_id,
+                hospital_stay=stay,
+                generated_by=request.user,
+            )
+        data = HospitalDischargeSummaryReadSerializer(summary).data
+        data["source"] = "saved"
+        return Response(data, status=200)
+
+    @action(detail=True, methods=["post"], url_path="discharge-summary/finalize")
+    def finalize_discharge_summary(self, request, pk=None):
+        stay = self.get_object()
+        summary = HospitalDischargeSummary.objects.filter(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        if not summary:
+            return Response(
+                {"detail": "Create discharge summary before finalizing."},
+                status=400,
+            )
+        if stay.status != HospitalStay.Status.DISCHARGED:
+            return Response(
+                {"detail": "Patient must be discharged before finalizing summary."},
+                status=400,
+            )
+        summary.finalized_at = timezone.now()
+        summary.generated_by = request.user
+        summary.save(update_fields=["finalized_at", "generated_by", "updated_at"])
+        data = HospitalDischargeSummaryReadSerializer(summary).data
+        data["source"] = "saved"
+        return Response(data, status=200)
 
     @action(detail=True, methods=["get", "post"], url_path="notes")
     def notes(self, request, pk=None):

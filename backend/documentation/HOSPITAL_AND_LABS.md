@@ -90,6 +90,25 @@ Auto-behavior:
 - if status changes from `given` to another status:
   - backend clears `administered_at` and `administered_by`
 
+### Discharge Summary API (new)
+
+Structured discharge summary per hospitalization stay (one summary per stay):
+
+- **Get summary**: `GET /api/hospital-stays/<id>/discharge-summary/`
+  - Returns saved summary (`source=saved`) or backend-generated draft (`source=draft`).
+- **Save summary**: `PUT /api/hospital-stays/<id>/discharge-summary/`
+  - Body:
+    - `diagnosis` (text)
+    - `hospitalization_course` (text)
+    - `procedures` (text)
+    - `medications_on_discharge` (JSON array)
+    - `home_care_instructions` (text)
+    - `warning_signs` (text)
+    - `follow_up_date` (date, optional)
+- **Finalize summary**: `POST /api/hospital-stays/<id>/discharge-summary/finalize/`
+  - Allowed only after hospital stay status is `discharged`.
+  - Sets `finalized_at` and `generated_by`.
+
 ### Workflow
 
 1. Create hospitalization appointment (or use existing)
