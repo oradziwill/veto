@@ -10,8 +10,16 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 
-from .models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
+from .models import (
+    ClinicalExamTemplate,
+    MedicalRecord,
+    PatientHistoryEntry,
+    Prescription,
+    Vaccination,
+)
 from .serializers import (
+    ClinicalExamTemplateReadSerializer,
+    ClinicalExamTemplateWriteSerializer,
     MedicalRecordReadSerializer,
     MedicalRecordWriteSerializer,
     PatientHistoryEntryReadSerializer,
@@ -38,6 +46,29 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
             clinic_id=self.request.user.clinic_id,
             created_by=self.request.user,
         )
+
+
+class ClinicalExamTemplateViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+
+    def get_queryset(self):
+        return ClinicalExamTemplate.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
+            "name", "id"
+        )
+
+    def get_serializer_class(self):
+        if self.action in ("list", "retrieve"):
+            return ClinicalExamTemplateReadSerializer
+        return ClinicalExamTemplateWriteSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        template = serializer.save(
+            clinic_id=self.request.user.clinic_id,
+            created_by=self.request.user,
+        )
+        return Response(ClinicalExamTemplateReadSerializer(template).data, status=201)
 
 
 class PatientHistoryEntryViewSet(viewsets.ModelViewSet):
