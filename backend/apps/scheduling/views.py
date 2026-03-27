@@ -1069,6 +1069,126 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             status=200,
         )
 
+    @action(detail=False, methods=["get"], url_path="kpi-analytics")
+    def kpi_analytics(self, request):
+        """
+        Hospitalization KPI analytics for operations/admin.
+        """
+        hours = request.query_params.get("hours", "24")
+        export = (request.query_params.get("export") or "").strip().lower()
+        try:
+            hours_int = int(hours)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid hours."}, status=400)
+        if hours_int < 1 or hours_int > 24 * 90:
+            return Response({"detail": "hours must be between 1 and 2160."}, status=400)
+
+        now = timezone.now()
+        since = now - timedelta(hours=hours_int)
+
+        discharged_stays = HospitalStay.objects.filter(
+            clinic_id=request.user.clinic_id,
+            status=HospitalStay.Status.DISCHARGED,
+            discharged_at__isnull=False,
+            discharged_at__gte=since,
+            discharged_at__lte=now,
+        )
+        discharged_count = discharged_stays.count()
+
+        avg_stay_hours = 0.0
+        if discharged_count:
+            total_seconds = 0.0
+            with_summary_count = 0
+            finalized_summary_count = 0
+            for stay in discharged_stays:
+                total_seconds += max((stay.discharged_at - stay.admitted_at).total_seconds(), 0.0)
+                summary = HospitalDischargeSummary.objects.filter(
+                    clinic_id=request.user.clinic_id,
+                    hospital_stay=stay,
+                ).first()
+                if summary:
+                    with_summary_count += 1
+                    if summary.finalized_at:
+                        finalized_summary_count += 1
+            avg_stay_hours = round(total_seconds / discharged_count / 3600.0, 2)
+            summary_completion_pct = round((with_summary_count / discharged_count) * 100.0, 2)
+            finalized_summary_pct = round((finalized_summary_count / discharged_count) * 100.0, 2)
+        else:
+            summary_completion_pct = 0.0
+            finalized_summary_pct = 0.0
+
+        active_stays_count = HospitalStay.objects.filter(
+            clinic_id=request.user.clinic_id,
+            status=HospitalStay.Status.ADMITTED,
+        ).count()
+
+        tasks_in_period = HospitalStayTask.objects.filter(
+            clinic_id=request.user.clinic_id,
+            created_at__gte=since,
+            created_at__lte=now,
+        )
+        tasks_total = tasks_in_period.count()
+        tasks_completed = tasks_in_period.filter(status=HospitalStayTask.Status.COMPLETED).count()
+        task_completion_pct = (
+            round((tasks_completed / tasks_total) * 100.0, 2) if tasks_total else 0.0
+        )
+
+        overdue_medication_orders_count = 0
+        active_orders = HospitalMedicationOrder.objects.filter(
+            clinic_id=request.user.clinic_id,
+            is_active=True,
+            hospital_stay__status=HospitalStay.Status.ADMITTED,
+        )
+        for order in active_orders:
+            if order.ends_at and order.ends_at < now:
+                continue
+            last_given = (
+                HospitalMedicationAdministration.objects.filter(
+                    clinic_id=request.user.clinic_id,
+                    medication_order=order,
+                    status=HospitalMedicationAdministration.Status.GIVEN,
+                    administered_at__isnull=False,
+                )
+                .order_by("-administered_at", "-id")
+                .first()
+            )
+            next_due_at = (
+                order.starts_at
+                if not last_given
+                else (last_given.administered_at + timedelta(hours=int(order.frequency_hours or 0)))
+            )
+            if next_due_at < now:
+                overdue_medication_orders_count += 1
+
+        payload = {
+            "now": now.isoformat(),
+            "since": since.isoformat(),
+            "hours": hours_int,
+            "kpis": {
+                "discharged_count": discharged_count,
+                "active_stays_count": active_stays_count,
+                "avg_stay_hours": avg_stay_hours,
+                "summary_completion_pct": summary_completion_pct,
+                "finalized_summary_pct": finalized_summary_pct,
+                "task_completion_pct": task_completion_pct,
+                "overdue_medication_orders_count": overdue_medication_orders_count,
+            },
+        }
+
+        if export == "csv":
+            buffer = StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow(["metric", "value"])
+            for key, value in payload["kpis"].items():
+                writer.writerow([key, value])
+            response = HttpResponse(buffer.getvalue(), content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = (
+                f'attachment; filename="hospital_kpi_analytics_{now:%Y%m%d_%H%M%S}.csv"'
+            )
+            return response
+
+        return Response(payload, status=200)
+
     def _build_discharge_summary_draft(self, stay: HospitalStay) -> dict:
         latest_note = (
             HospitalStayNote.objects.filter(

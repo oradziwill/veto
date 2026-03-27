@@ -17,6 +17,8 @@ Base entity:
 - `POST /api/hospital-stays/`
 - `GET /api/hospital-stays/nursing-dashboard/?window_minutes=30&limit=50`
 - `GET /api/hospital-stays/shift-handover-report/?hours=12`
+- `GET /api/hospital-stays/kpi-analytics/?hours=24`
+- `GET /api/hospital-stays/kpi-analytics/?hours=24&export=csv`
 - `POST /api/hospital-stays/<id>/discharge/`
 - `GET /api/hospital-stays/<id>/discharge-summary/`
 - `PUT /api/hospital-stays/<id>/discharge-summary/`
@@ -216,3 +218,6 @@ PDF export behavior:
 8. Shift Handover:
    - generate handover card/report from `/shift-handover-report/`
    - show summary counters + four lists: admissions, discharges, open high tasks, latest notes
+9. KPI Analytics:
+   - build admin KPI widgets from `/kpi-analytics/`
+   - optional `Export CSV` button wired to `?export=csv`

@@ -125,6 +125,26 @@ def test_staff_can_access_shift_handover_report(receptionist, doctor, patient, a
 
 
 @pytest.mark.django_db
+def test_doctor_can_access_hospital_kpi_analytics(doctor, patient, api_client):
+    HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="discharged",
+        admitted_at=timezone.now() - timedelta(hours=10),
+        discharged_at=timezone.now() - timedelta(hours=2),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    r = api_client.get("/api/hospital-stays/kpi-analytics/?hours=24")
+    assert r.status_code == 200
+    assert r.data["hours"] == 24
+    assert "kpis" in r.data
+    assert "avg_stay_hours" in r.data["kpis"]
+    assert r.data["kpis"]["discharged_count"] >= 1
+
+
+@pytest.mark.django_db
 def test_doctor_can_manage_hospital_stay_notes(doctor, patient, api_client):
     stay = HospitalStay.objects.create(
         clinic=doctor.clinic,
