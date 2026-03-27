@@ -171,6 +171,7 @@ Discharge safety behavior:
   - `blocking_reasons[]`
   - `warnings[]`
 - FE should render blocking reasons to the user and prevent repeated submit until fixed
+- By default, discharge is not blocked unless `settings.REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE=True` (opt-in rollout).
 
 PDF export behavior:
 - `GET /discharge-summary/pdf/` returns binary PDF (`application/pdf`)

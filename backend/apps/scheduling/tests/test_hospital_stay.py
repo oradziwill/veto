@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 from apps.scheduling.models import HospitalStay
+from django.test import override_settings
 from django.utils import timezone
 
 
@@ -443,13 +444,14 @@ def test_discharge_is_blocked_until_safety_requirements_are_met(doctor, patient,
     )
     api_client.force_authenticate(user=doctor)
 
-    blocked = api_client.post(
-        f"/api/hospital-stays/{stay.id}/discharge/",
-        {"discharge_notes": "Trying early discharge"},
-        format="json",
-    )
-    assert blocked.status_code == 400
-    assert blocked.data["code"] == "discharge_safety_failed"
+    with override_settings(REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE=True):
+        blocked = api_client.post(
+            f"/api/hospital-stays/{stay.id}/discharge/",
+            {"discharge_notes": "Trying early discharge"},
+            format="json",
+        )
+        assert blocked.status_code == 400
+        assert blocked.data["code"] == "discharge_safety_failed"
 
     save_summary = api_client.put(
         f"/api/hospital-stays/{stay.id}/discharge-summary/",
@@ -466,9 +468,10 @@ def test_discharge_is_blocked_until_safety_requirements_are_met(doctor, patient,
     )
     assert save_summary.status_code == 200
 
-    allowed = api_client.post(
-        f"/api/hospital-stays/{stay.id}/discharge/",
-        {"discharge_notes": "Criteria met"},
-        format="json",
-    )
-    assert allowed.status_code == 200
+    with override_settings(REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE=True):
+        allowed = api_client.post(
+            f"/api/hospital-stays/{stay.id}/discharge/",
+            {"discharge_notes": "Criteria met"},
+            format="json",
+        )
+        assert allowed.status_code == 200

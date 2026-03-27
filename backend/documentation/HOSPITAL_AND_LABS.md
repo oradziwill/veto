@@ -20,7 +20,7 @@ For in-patient hospitalization, use **HospitalStay**:
   - Optional: `admission_appointment`, `reason`, `cage_or_room`
 - **Discharge**: `POST /api/hospital-stays/<id>/discharge/`
   - Body: `{ "discharge_notes": "..." }`
-  - Discharge is blocked when safety checks have blocking reasons.
+  - If `settings.REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE=True`, discharge is blocked when safety checks have blocking reasons.
   - Error payload includes `blocking_reasons` and `warnings`.
 - **Discharge safety checks**: `GET /api/hospital-stays/<id>/discharge-safety-checks/`
   - Returns:

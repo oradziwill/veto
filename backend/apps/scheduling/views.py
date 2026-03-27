@@ -939,17 +939,19 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 {"detail": "Stay is already discharged."},
                 status=400,
             )
-        safety = self._compute_discharge_safety_checks(stay)
-        if not safety["ready_to_discharge"]:
-            return Response(
-                {
-                    "detail": "Discharge blocked by safety checks.",
-                    "code": "discharge_safety_failed",
-                    "blocking_reasons": safety["blocking_reasons"],
-                    "warnings": safety["warnings"],
-                },
-                status=400,
-            )
+        require_safety = bool(getattr(settings, "REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE", False))
+        if require_safety:
+            safety = self._compute_discharge_safety_checks(stay)
+            if not safety["ready_to_discharge"]:
+                return Response(
+                    {
+                        "detail": "Discharge blocked by safety checks.",
+                        "code": "discharge_safety_failed",
+                        "blocking_reasons": safety["blocking_reasons"],
+                        "warnings": safety["warnings"],
+                    },
+                    status=400,
+                )
         stay.status = "discharged"
         stay.discharged_at = timezone.now()
         stay.discharge_notes = request.data.get("discharge_notes", "")
