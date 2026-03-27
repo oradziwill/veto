@@ -56,3 +56,34 @@ def test_clinic_user_create_writes_audit_log(api_client, clinic_admin):
         entity_id=str(created_user_id),
     ).first()
     assert event is not None
+
+
+@pytest.mark.django_db
+def test_hospital_stay_discharge_writes_audit_log(api_client, doctor, patient):
+    from django.utils import timezone
+
+    from apps.scheduling.models import HospitalStay
+
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+    response = api_client.post(
+        f"/api/hospital-stays/{stay.id}/discharge/",
+        {"discharge_notes": "Stable, sent home"},
+        format="json",
+    )
+    assert response.status_code == 200
+
+    event = AuditLog.objects.filter(
+        clinic_id=doctor.clinic_id,
+        action="hospital_stay_discharged",
+        entity_type="hospital_stay",
+        entity_id=str(stay.id),
+    ).first()
+    assert event is not None
+    assert event.after.get("status") == "discharged"
