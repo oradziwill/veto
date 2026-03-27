@@ -160,6 +160,17 @@ Current blocking checks before discharge:
 3. During stay, staff records rounds in `notes` and treatment plan in `tasks`
 4. Discharge when ready
 
+### Nursing Dashboard (new)
+
+Clinic-wide triage view for active hospital stays:
+
+- **Dashboard**: `GET /api/hospital-stays/nursing-dashboard/?window_minutes=30&limit=50`
+  - Accessible to clinic `staff` and `vet` roles.
+  - Returns admitted stays enriched with:
+    - `last_round_note`, `last_round_at`
+    - `open_high_priority_tasks`
+    - `meds_overdue`, `meds_due_soon` (computed within the requested window)
+
 ---
 
 ## 2. Labs

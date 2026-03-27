@@ -87,6 +87,24 @@ def test_receptionist_cannot_create_hospital_stay(
 
 
 @pytest.mark.django_db
+def test_staff_can_access_nursing_dashboard(receptionist, doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=receptionist)
+
+    r = api_client.get("/api/hospital-stays/nursing-dashboard/?window_minutes=30&limit=50")
+    assert r.status_code == 200
+    assert r.data["count"] >= 1
+    ids = [item["id"] for item in r.data["items"]]
+    assert stay.id in ids
+
+
+@pytest.mark.django_db
 def test_doctor_can_manage_hospital_stay_notes(doctor, patient, api_client):
     stay = HospitalStay.objects.create(
         clinic=doctor.clinic,
