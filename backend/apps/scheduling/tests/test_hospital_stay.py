@@ -400,3 +400,75 @@ def test_medications_due_returns_due_items(doctor, patient, api_client):
     assert len(due.data["items"]) == 1
     assert due.data["items"][0]["medication_order"]["medication_name"] == "Amoxicillin"
     assert due.data["items"][0]["next_due_at"] is not None
+
+
+@pytest.mark.django_db
+def test_discharge_safety_checks_report_blockers(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    create_task = api_client.post(
+        f"/api/hospital-stays/{stay.id}/tasks/",
+        {
+            "title": "Critical follow-up",
+            "priority": "high",
+            "status": "pending",
+        },
+        format="json",
+    )
+    assert create_task.status_code == 201
+
+    checks = api_client.get(f"/api/hospital-stays/{stay.id}/discharge-safety-checks/")
+    assert checks.status_code == 200
+    assert checks.data["ready_to_discharge"] is False
+    codes = [item["code"] for item in checks.data["blocking_reasons"]]
+    assert "discharge_summary_missing" in codes
+    assert "high_priority_tasks_open" in codes
+
+
+@pytest.mark.django_db
+def test_discharge_is_blocked_until_safety_requirements_are_met(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    blocked = api_client.post(
+        f"/api/hospital-stays/{stay.id}/discharge/",
+        {"discharge_notes": "Trying early discharge"},
+        format="json",
+    )
+    assert blocked.status_code == 400
+    assert blocked.data["code"] == "discharge_safety_failed"
+
+    save_summary = api_client.put(
+        f"/api/hospital-stays/{stay.id}/discharge-summary/",
+        {
+            "diagnosis": "Recovered",
+            "hospitalization_course": "Stable",
+            "procedures": "Observation",
+            "medications_on_discharge": [],
+            "home_care_instructions": "Keep rest for 3 days.",
+            "warning_signs": "Fever and vomiting.",
+            "follow_up_date": "2026-04-10",
+        },
+        format="json",
+    )
+    assert save_summary.status_code == 200
+
+    allowed = api_client.post(
+        f"/api/hospital-stays/{stay.id}/discharge/",
+        {"discharge_notes": "Criteria met"},
+        format="json",
+    )
+    assert allowed.status_code == 200

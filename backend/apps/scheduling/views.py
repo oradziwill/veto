@@ -834,6 +834,100 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             "source": "draft",
         }
 
+    def _compute_discharge_safety_checks(self, stay: HospitalStay) -> dict:
+        summary = HospitalDischargeSummary.objects.filter(
+            clinic_id=self.request.user.clinic_id,
+            hospital_stay=stay,
+        ).first()
+        blocking_reasons = []
+        warnings = []
+
+        if not summary:
+            blocking_reasons.append(
+                {
+                    "code": "discharge_summary_missing",
+                    "detail": "Create and save discharge summary before discharge.",
+                }
+            )
+        else:
+            if not (summary.home_care_instructions or "").strip():
+                blocking_reasons.append(
+                    {
+                        "code": "home_care_instructions_missing",
+                        "detail": "Home care instructions are required before discharge.",
+                    }
+                )
+            if not (summary.warning_signs or "").strip():
+                blocking_reasons.append(
+                    {
+                        "code": "warning_signs_missing",
+                        "detail": "Warning signs are required before discharge.",
+                    }
+                )
+            if summary.finalized_at is None:
+                warnings.append(
+                    {
+                        "code": "discharge_summary_not_finalized",
+                        "detail": "Discharge summary is not finalized yet.",
+                    }
+                )
+
+        unresolved_high_priority_tasks = HospitalStayTask.objects.filter(
+            clinic_id=self.request.user.clinic_id,
+            hospital_stay=stay,
+            priority=HospitalStayTask.Priority.HIGH,
+        ).exclude(status=HospitalStayTask.Status.COMPLETED)
+        if unresolved_high_priority_tasks.exists():
+            blocking_reasons.append(
+                {
+                    "code": "high_priority_tasks_open",
+                    "detail": "All high-priority tasks must be completed before discharge.",
+                    "count": unresolved_high_priority_tasks.count(),
+                }
+            )
+
+        overdue_count = 0
+        now = timezone.now()
+        active_orders = HospitalMedicationOrder.objects.filter(
+            clinic_id=self.request.user.clinic_id,
+            hospital_stay=stay,
+            is_active=True,
+        )
+        for order in active_orders:
+            if order.ends_at and order.ends_at < now:
+                continue
+            last_given = (
+                HospitalMedicationAdministration.objects.filter(
+                    clinic_id=self.request.user.clinic_id,
+                    medication_order=order,
+                    status=HospitalMedicationAdministration.Status.GIVEN,
+                    administered_at__isnull=False,
+                )
+                .order_by("-administered_at", "-id")
+                .first()
+            )
+            next_due_at = (
+                order.starts_at
+                if not last_given
+                else (last_given.administered_at + timedelta(hours=int(order.frequency_hours or 0)))
+            )
+            if next_due_at < now:
+                overdue_count += 1
+        if overdue_count:
+            warnings.append(
+                {
+                    "code": "overdue_medications",
+                    "detail": "There are overdue medication administrations.",
+                    "count": overdue_count,
+                }
+            )
+
+        return {
+            "ready_to_discharge": len(blocking_reasons) == 0,
+            "blocking_reasons": blocking_reasons,
+            "warnings": warnings,
+        }
+
     @action(detail=True, methods=["post"], url_path="discharge")
     def discharge(self, request, pk=None):
         """Discharge the patient from hospital."""
@@ -845,11 +939,34 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 {"detail": "Stay is already discharged."},
                 status=400,
             )
+        safety = self._compute_discharge_safety_checks(stay)
+        if not safety["ready_to_discharge"]:
+            return Response(
+                {
+                    "detail": "Discharge blocked by safety checks.",
+                    "code": "discharge_safety_failed",
+                    "blocking_reasons": safety["blocking_reasons"],
+                    "warnings": safety["warnings"],
+                },
+                status=400,
+            )
         stay.status = "discharged"
         stay.discharged_at = timezone.now()
         stay.discharge_notes = request.data.get("discharge_notes", "")
         stay.save(update_fields=["status", "discharged_at", "discharge_notes", "updated_at"])
         return Response(HospitalStayReadSerializer(stay).data)
+
+    @action(detail=True, methods=["get"], url_path="discharge-safety-checks")
+    def discharge_safety_checks(self, request, pk=None):
+        stay = self.get_object()
+        safety = self._compute_discharge_safety_checks(stay)
+        return Response(
+            {
+                "hospital_stay_id": stay.id,
+                **safety,
+            },
+            status=200,
+        )
 
     @action(detail=True, methods=["get", "put"], url_path="discharge-summary")
     def discharge_summary(self, request, pk=None):
