@@ -12,7 +12,7 @@ import boto3
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db import models, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Max, OuterRef, Q, Subquery
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -754,6 +754,12 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
 
+    def get_permissions(self):
+        # Staff dashboard should be accessible to broader clinic staff.
+        if self.action in ("nursing_dashboard",):
+            return [IsAuthenticated(), HasClinic(), IsStaffOrVet()]
+        return [permission() for permission in self.permission_classes]
+
     def get_queryset(self):
         user = self.request.user
         return (
@@ -778,6 +784,134 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(clinic_id=self.request.user.clinic_id, status="admitted")
+
+    @action(detail=False, methods=["get"], url_path="nursing-dashboard")
+    def nursing_dashboard(self, request):
+        """
+        Clinic-wide dashboard for active hospital stays (admitted).
+        Intended for nursing/front-desk workflow triage.
+        """
+        window = request.query_params.get("window_minutes", "30")
+        limit = request.query_params.get("limit", "50")
+        try:
+            window_minutes = int(window)
+            limit_int = int(limit)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid window_minutes or limit."}, status=400)
+        if window_minutes < 0 or window_minutes > 24 * 60:
+            return Response(
+                {"detail": "window_minutes must be between 0 and 1440."},
+                status=400,
+            )
+        if limit_int < 1 or limit_int > 200:
+            return Response({"detail": "limit must be between 1 and 200."}, status=400)
+
+        now = timezone.now()
+        horizon = now + timedelta(minutes=window_minutes)
+
+        latest_note_qs = HospitalStayNote.objects.filter(
+            clinic_id=request.user.clinic_id,
+            hospital_stay_id=OuterRef("pk"),
+        ).order_by("-created_at", "-id")
+
+        stays = (
+            HospitalStay.objects.filter(
+                clinic_id=request.user.clinic_id,
+                status=HospitalStay.Status.ADMITTED,
+            )
+            .select_related("patient", "attending_vet")
+            .annotate(
+                last_round_note=Subquery(latest_note_qs.values("note")[:1]),
+                last_round_at=Subquery(latest_note_qs.values("created_at")[:1]),
+                open_high_priority_tasks=Count(
+                    "tasks",
+                    filter=Q(tasks__priority=HospitalStayTask.Priority.HIGH)
+                    & ~Q(tasks__status=HospitalStayTask.Status.COMPLETED),
+                    distinct=True,
+                ),
+            )
+            .order_by("-admitted_at")[:limit_int]
+        )
+
+        stay_ids = [s.id for s in stays]
+        meds_overdue_by_stay: dict[int, int] = {sid: 0 for sid in stay_ids}
+        meds_due_soon_by_stay: dict[int, int] = {sid: 0 for sid in stay_ids}
+
+        if stay_ids:
+            orders = (
+                HospitalMedicationOrder.objects.filter(
+                    clinic_id=request.user.clinic_id,
+                    hospital_stay_id__in=stay_ids,
+                    is_active=True,
+                )
+                .annotate(
+                    last_given_at=Max(
+                        "administrations__administered_at",
+                        filter=Q(
+                            administrations__status=HospitalMedicationAdministration.Status.GIVEN
+                        ),
+                    )
+                )
+                .only(
+                    "id",
+                    "hospital_stay_id",
+                    "frequency_hours",
+                    "starts_at",
+                    "ends_at",
+                    "is_active",
+                )
+            )
+
+            for order in orders:
+                if order.ends_at and order.ends_at < now:
+                    continue
+                freq = int(order.frequency_hours or 0)
+                if freq <= 0:
+                    continue
+                next_due_at = (
+                    order.starts_at
+                    if not order.last_given_at
+                    else (order.last_given_at + timedelta(hours=freq))
+                )
+                if next_due_at < now:
+                    meds_overdue_by_stay[order.hospital_stay_id] = (
+                        meds_overdue_by_stay.get(order.hospital_stay_id, 0) + 1
+                    )
+                elif next_due_at <= horizon:
+                    meds_due_soon_by_stay[order.hospital_stay_id] = (
+                        meds_due_soon_by_stay.get(order.hospital_stay_id, 0) + 1
+                    )
+
+        items = []
+        for stay in stays:
+            data = HospitalStayReadSerializer(stay).data
+            data["last_round_note"] = getattr(stay, "last_round_note", None)
+            last_round_at = getattr(stay, "last_round_at", None)
+            data["last_round_at"] = last_round_at.isoformat() if last_round_at else None
+            data["open_high_priority_tasks"] = int(getattr(stay, "open_high_priority_tasks", 0))
+            data["meds_overdue"] = meds_overdue_by_stay.get(stay.id, 0)
+            data["meds_due_soon"] = meds_due_soon_by_stay.get(stay.id, 0)
+            items.append(data)
+
+        # Sort by urgency: overdue meds, then due soon, then open high tasks, then most recent admit
+        items.sort(
+            key=lambda x: (
+                -int(x.get("meds_overdue") or 0),
+                -int(x.get("meds_due_soon") or 0),
+                -int(x.get("open_high_priority_tasks") or 0),
+                x.get("admitted_at") or "",
+            )
+        )
+
+        return Response(
+            {
+                "now": now.isoformat(),
+                "window_minutes": window_minutes,
+                "count": len(items),
+                "items": items,
+            },
+            status=200,
+        )
 
     def _build_discharge_summary_draft(self, stay: HospitalStay) -> dict:
         latest_note = (
