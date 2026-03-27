@@ -90,6 +90,22 @@ Auto-behavior:
 - if status changes from `given` to another status:
   - backend clears `administered_at` and `administered_by`
 
+### Medication Due Alerts (new)
+
+Returns active medication orders that are due now/soon for a hospitalization stay:
+
+- **Due medications**: `GET /api/hospital-stays/<id>/medications-due/?window_minutes=30&include_overdue=1`
+  - `window_minutes`: integer \(0..1440\), default `30`
+  - `include_overdue`: `1|0`, default `1`
+
+Response:
+- `items[]` with:
+  - `medication_order` (full order payload)
+  - `last_given_at` (nullable datetime)
+  - `next_due_at` (datetime)
+  - `is_overdue` (bool)
+  - `overdue_minutes` (int)
+
 ### Discharge Summary API (new)
 
 Structured discharge summary per hospitalization stay (one summary per stay):
