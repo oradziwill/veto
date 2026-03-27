@@ -211,6 +211,10 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
 }
 
+# Hospitalization workflow feature flags
+# If True: block /discharge/ when safety checks have blocking reasons.
+REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE = False
+
 REMINDER_EMAIL_PROVIDER = os.getenv("REMINDER_EMAIL_PROVIDER", "internal")
 REMINDER_SMS_PROVIDER = os.getenv("REMINDER_SMS_PROVIDER", "internal")
 REMINDER_WEBHOOK_TOKEN = os.getenv("REMINDER_WEBHOOK_TOKEN", "")

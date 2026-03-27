@@ -20,6 +20,7 @@ Base entity:
 - `PUT /api/hospital-stays/<id>/discharge-summary/`
 - `POST /api/hospital-stays/<id>/discharge-summary/finalize/`
 - `GET /api/hospital-stays/<id>/discharge-summary/pdf/`
+- `GET /api/hospital-stays/<id>/discharge-safety-checks/`
 
 Rounds notes:
 - `GET /api/hospital-stays/<id>/notes/`
@@ -163,6 +164,15 @@ Finalize behavior:
 - `POST /discharge-summary/finalize/` works only when stay status is `discharged`
 - sets `finalized_at` and `generated_by`
 
+Discharge safety behavior:
+- `GET /discharge-safety-checks/` gives FE preflight validation
+- `POST /discharge/` may return `400` with:
+  - `code: "discharge_safety_failed"`
+  - `blocking_reasons[]`
+  - `warnings[]`
+- FE should render blocking reasons to the user and prevent repeated submit until fixed
+- By default, discharge is not blocked unless `settings.REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE=True` (opt-in rollout).
+
 PDF export behavior:
 - `GET /discharge-summary/pdf/` returns binary PDF (`application/pdf`)
 - response is an attachment (`Content-Disposition`) ready for print/download button
@@ -189,3 +199,4 @@ PDF export behavior:
    - prefill form from draft (`GET /discharge-summary/`) and let doctor edit before save
    - lock printable version when `finalized_at` is set
    - add `Download PDF` CTA that opens/saves `/discharge-summary/pdf/`
+   - show "Ready to discharge" badge from `/discharge-safety-checks/`

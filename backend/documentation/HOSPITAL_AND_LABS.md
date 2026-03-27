@@ -20,6 +20,13 @@ For in-patient hospitalization, use **HospitalStay**:
   - Optional: `admission_appointment`, `reason`, `cage_or_room`
 - **Discharge**: `POST /api/hospital-stays/<id>/discharge/`
   - Body: `{ "discharge_notes": "..." }`
+  - If `settings.REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE=True`, discharge is blocked when safety checks have blocking reasons.
+  - Error payload includes `blocking_reasons` and `warnings`.
+- **Discharge safety checks**: `GET /api/hospital-stays/<id>/discharge-safety-checks/`
+  - Returns:
+    - `ready_to_discharge` (bool)
+    - `blocking_reasons[]`
+    - `warnings[]`
 
 ### Hospital Rounds Notes (new)
 
@@ -127,6 +134,12 @@ Structured discharge summary per hospitalization stay (one summary per stay):
 - **Download summary PDF**: `GET /api/hospital-stays/<id>/discharge-summary/pdf/`
   - Returns `application/pdf` attachment.
   - Requires saved summary (returns 404 if summary does not exist yet).
+
+Current blocking checks before discharge:
+- missing saved discharge summary
+- missing `home_care_instructions` in summary
+- missing `warning_signs` in summary
+- open high-priority hospital tasks
 
 ### Workflow
 
