@@ -313,3 +313,54 @@ def test_doctor_can_save_and_finalize_discharge_summary(doctor, patient, api_cli
     )
     assert finalize.status_code == 200
     assert finalize.data["finalized_at"] is not None
+
+
+@pytest.mark.django_db
+def test_discharge_summary_pdf_requires_saved_summary(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    response = api_client.get(f"/api/hospital-stays/{stay.id}/discharge-summary/pdf/")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_doctor_can_download_discharge_summary_pdf(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="discharged",
+        admitted_at=timezone.now(),
+        discharged_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    save = api_client.put(
+        f"/api/hospital-stays/{stay.id}/discharge-summary/",
+        {
+            "diagnosis": "Recovered",
+            "hospitalization_course": "No complications.",
+            "procedures": "Observation",
+            "medications_on_discharge": [
+                {"medication_name": "Amoxicillin", "dose": "25", "dose_unit": "mg"}
+            ],
+            "home_care_instructions": "Limit activity.",
+            "warning_signs": "Lethargy",
+            "follow_up_date": "2026-04-10",
+        },
+        format="json",
+    )
+    assert save.status_code == 200
+
+    response = api_client.get(f"/api/hospital-stays/{stay.id}/discharge-summary/pdf/")
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response["Content-Disposition"].endswith(f'discharge_summary_stay_{stay.id}.pdf"')
+    assert response.content.startswith(b"%PDF-1.4")

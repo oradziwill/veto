@@ -108,6 +108,9 @@ Structured discharge summary per hospitalization stay (one summary per stay):
 - **Finalize summary**: `POST /api/hospital-stays/<id>/discharge-summary/finalize/`
   - Allowed only after hospital stay status is `discharged`.
   - Sets `finalized_at` and `generated_by`.
+- **Download summary PDF**: `GET /api/hospital-stays/<id>/discharge-summary/pdf/`
+  - Returns `application/pdf` attachment.
+  - Requires saved summary (returns 404 if summary does not exist yet).
 
 ### Workflow
 
