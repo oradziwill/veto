@@ -97,6 +97,18 @@ Auto-behavior:
 - if status changes from `given` to another status:
   - backend clears `administered_at` and `administered_by`
 
+### Medication Schedule Generator (new)
+
+Generate pending administration schedule entries for active medication orders (idempotent).
+
+- **Generate schedule**: `POST /api/hospital-stays/<id>/medications/generate-schedule/?horizon_hours=24&past_hours=12`
+  - `horizon_hours`: integer \(1..336\), default `24`
+  - `past_hours`: integer \(0..336\), default `12`
+
+Response:
+- `created` number of administrations created
+- `skipped_existing` number of already-existing scheduled entries in the window
+
 ### Medication Due Alerts (new)
 
 Returns active medication orders that are due now/soon for a hospitalization stay:
