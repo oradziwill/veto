@@ -249,6 +249,51 @@ def test_doctor_can_record_medication_administration(doctor, patient, api_client
 
 
 @pytest.mark.django_db
+def test_generate_medication_schedule_is_idempotent(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    starts_at = timezone.now() - timedelta(hours=1)
+    order = api_client.post(
+        f"/api/hospital-stays/{stay.id}/medications/",
+        {
+            "medication_name": "Amoxicillin",
+            "dose": "25.00",
+            "dose_unit": "mg",
+            "route": "iv",
+            "frequency_hours": 8,
+            "starts_at": starts_at.isoformat(),
+            "instructions": "",
+            "is_active": True,
+        },
+        format="json",
+    )
+    assert order.status_code == 201
+
+    first = api_client.post(
+        f"/api/hospital-stays/{stay.id}/medications/generate-schedule/?horizon_hours=24&past_hours=2",
+        {},
+        format="json",
+    )
+    assert first.status_code == 200
+    assert first.data["created"] >= 1
+
+    second = api_client.post(
+        f"/api/hospital-stays/{stay.id}/medications/generate-schedule/?horizon_hours=24&past_hours=2",
+        {},
+        format="json",
+    )
+    assert second.status_code == 200
+    assert second.data["created"] == 0
+
+
+@pytest.mark.django_db
 def test_discharge_summary_returns_draft_when_not_saved(doctor, patient, api_client):
     stay = HospitalStay.objects.create(
         clinic=doctor.clinic,

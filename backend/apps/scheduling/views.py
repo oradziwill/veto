@@ -1173,6 +1173,99 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         )
         return Response(HospitalMedicationOrderReadSerializer(medication).data, status=201)
 
+    @action(detail=True, methods=["post"], url_path="medications/generate-schedule")
+    def generate_medication_schedule(self, request, pk=None):
+        """
+        Generate pending medication administrations for active medication orders.
+        Idempotent: does not create duplicates for the same (order, scheduled_for).
+        """
+        stay = self.get_object()
+        horizon_hours = request.query_params.get("horizon_hours", "24")
+        past_hours = request.query_params.get("past_hours", "12")
+        try:
+            horizon_hours_int = int(horizon_hours)
+            past_hours_int = int(past_hours)
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid horizon_hours or past_hours."}, status=400)
+        if horizon_hours_int <= 0 or horizon_hours_int > 24 * 14:
+            return Response({"detail": "horizon_hours must be between 1 and 336."}, status=400)
+        if past_hours_int < 0 or past_hours_int > 24 * 14:
+            return Response({"detail": "past_hours must be between 0 and 336."}, status=400)
+
+        now = timezone.now()
+        window_start = now - timedelta(hours=past_hours_int)
+        window_end = now + timedelta(hours=horizon_hours_int)
+
+        orders = HospitalMedicationOrder.objects.filter(
+            clinic_id=request.user.clinic_id,
+            hospital_stay=stay,
+            is_active=True,
+        ).order_by("-created_at", "-id")
+
+        created = 0
+        skipped_existing = 0
+
+        with transaction.atomic():
+            for order in orders:
+                if order.ends_at and order.ends_at < window_start:
+                    continue
+                if order.starts_at and order.starts_at > window_end:
+                    continue
+
+                freq = int(order.frequency_hours or 0)
+                if freq <= 0:
+                    continue
+
+                start = max(order.starts_at, window_start)
+                # Align to the order starts_at cadence
+                delta_seconds = (start - order.starts_at).total_seconds()
+                steps = int(delta_seconds // (freq * 3600))
+                candidate = order.starts_at + timedelta(hours=freq * steps)
+                while candidate < start:
+                    candidate = candidate + timedelta(hours=freq)
+
+                existing_times = set(
+                    HospitalMedicationAdministration.objects.filter(
+                        clinic_id=request.user.clinic_id,
+                        medication_order=order,
+                        scheduled_for__gte=window_start,
+                        scheduled_for__lte=window_end,
+                    ).values_list("scheduled_for", flat=True)
+                )
+
+                to_create = []
+                while candidate <= window_end:
+                    if order.ends_at and candidate > order.ends_at:
+                        break
+                    if candidate in existing_times:
+                        skipped_existing += 1
+                    else:
+                        to_create.append(
+                            HospitalMedicationAdministration(
+                                clinic_id=request.user.clinic_id,
+                                medication_order=order,
+                                scheduled_for=candidate,
+                                status=HospitalMedicationAdministration.Status.PENDING,
+                            )
+                        )
+                        existing_times.add(candidate)
+                    candidate = candidate + timedelta(hours=freq)
+
+                if to_create:
+                    HospitalMedicationAdministration.objects.bulk_create(to_create)
+                    created += len(to_create)
+
+        return Response(
+            {
+                "hospital_stay_id": stay.id,
+                "window_start": window_start.isoformat(),
+                "window_end": window_end.isoformat(),
+                "created": created,
+                "skipped_existing": skipped_existing,
+            },
+            status=200,
+        )
+
     @action(
         detail=True,
         methods=["patch", "delete"],
