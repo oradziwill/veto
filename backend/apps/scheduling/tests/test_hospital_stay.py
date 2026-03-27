@@ -243,3 +243,73 @@ def test_doctor_can_record_medication_administration(doctor, patient, api_client
     assert patch_admin.status_code == 200
     assert patch_admin.data["status"] == "skipped"
     assert patch_admin.data["administered_at"] is None
+
+
+@pytest.mark.django_db
+def test_discharge_summary_returns_draft_when_not_saved(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    response = api_client.get(f"/api/hospital-stays/{stay.id}/discharge-summary/")
+    assert response.status_code == 200
+    assert response.data["source"] == "draft"
+    assert "medications_on_discharge" in response.data
+
+
+@pytest.mark.django_db
+def test_doctor_can_save_and_finalize_discharge_summary(doctor, patient, api_client):
+    stay = HospitalStay.objects.create(
+        clinic=doctor.clinic,
+        patient=patient,
+        attending_vet=doctor,
+        status="admitted",
+        admitted_at=timezone.now(),
+    )
+    api_client.force_authenticate(user=doctor)
+
+    save = api_client.put(
+        f"/api/hospital-stays/{stay.id}/discharge-summary/",
+        {
+            "diagnosis": "Post-op recovery",
+            "hospitalization_course": "Stable, no complications.",
+            "procedures": "Wound care and monitoring",
+            "medications_on_discharge": [
+                {"medication_name": "Amoxicillin", "dose": "25", "dose_unit": "mg"}
+            ],
+            "home_care_instructions": "Keep wound dry.",
+            "warning_signs": "Fever, lethargy",
+            "follow_up_date": "2026-04-10",
+        },
+        format="json",
+    )
+    assert save.status_code == 200
+    assert save.data["source"] == "saved"
+    assert save.data["diagnosis"] == "Post-op recovery"
+
+    finalize_before_discharge = api_client.post(
+        f"/api/hospital-stays/{stay.id}/discharge-summary/finalize/",
+        {},
+        format="json",
+    )
+    assert finalize_before_discharge.status_code == 400
+
+    discharge = api_client.post(
+        f"/api/hospital-stays/{stay.id}/discharge/",
+        {"discharge_notes": "Recovered well"},
+        format="json",
+    )
+    assert discharge.status_code == 200
+
+    finalize = api_client.post(
+        f"/api/hospital-stays/{stay.id}/discharge-summary/finalize/",
+        {},
+        format="json",
+    )
+    assert finalize.status_code == 200
+    assert finalize.data["finalized_at"] is not None

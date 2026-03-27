@@ -401,6 +401,52 @@ class HospitalMedicationAdministration(models.Model):
         return f"HospitalMedicationAdministration(order={self.medication_order_id}, status={self.status})"
 
 
+class HospitalDischargeSummary(models.Model):
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="hospital_discharge_summaries",
+    )
+    hospital_stay = models.OneToOneField(
+        HospitalStay,
+        on_delete=models.CASCADE,
+        related_name="discharge_summary",
+    )
+    diagnosis = models.TextField(blank=True)
+    hospitalization_course = models.TextField(blank=True)
+    procedures = models.TextField(blank=True)
+    medications_on_discharge = models.JSONField(default=list, blank=True)
+    home_care_instructions = models.TextField(blank=True)
+    warning_signs = models.TextField(blank=True)
+    follow_up_date = models.DateField(null=True, blank=True)
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_discharge_summaries",
+    )
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        indexes = [
+            models.Index(
+                fields=["clinic", "hospital_stay"],
+                name="scheduli_hospita_13ef93_idx",
+            ),
+            models.Index(
+                fields=["clinic", "-updated_at"],
+                name="scheduli_hospita_9126f4_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"HospitalDischargeSummary(stay={self.hospital_stay_id})"
+
+
 class WaitingQueueEntry(models.Model):
     """Walk-in patient queue. Receptionist/doctor adds patients; doctor calls them."""
 

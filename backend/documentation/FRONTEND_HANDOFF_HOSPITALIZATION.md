@@ -16,6 +16,9 @@ Base entity:
 - `GET /api/hospital-stays/`
 - `POST /api/hospital-stays/`
 - `POST /api/hospital-stays/<id>/discharge/`
+- `GET /api/hospital-stays/<id>/discharge-summary/`
+- `PUT /api/hospital-stays/<id>/discharge-summary/`
+- `POST /api/hospital-stays/<id>/discharge-summary/finalize/`
 
 Rounds notes:
 - `GET /api/hospital-stays/<id>/notes/`
@@ -123,6 +126,39 @@ Backend behavior:
 - when status changes from `given` to non-given:
   - clears `administered_at` and `administered_by`
 
+### Save discharge summary
+
+Request:
+```json
+{
+  "diagnosis": "Post-op recovery after foreign body removal",
+  "hospitalization_course": "Stable during 48h observation.",
+  "procedures": "Fluid therapy, wound monitoring",
+  "medications_on_discharge": [
+    {
+      "medication_name": "Amoxicillin",
+      "dose": "25",
+      "dose_unit": "mg",
+      "route": "oral",
+      "frequency_hours": 12,
+      "instructions": "for 5 days"
+    }
+  ],
+  "home_care_instructions": "Restricted activity for 7 days.",
+  "warning_signs": "Vomiting, fever, apathy",
+  "follow_up_date": "2026-04-10"
+}
+```
+
+Response fields include:
+- `id`, `hospital_stay`, `diagnosis`, `hospitalization_course`, `procedures`
+- `medications_on_discharge`, `home_care_instructions`, `warning_signs`, `follow_up_date`
+- `generated_by`, `generated_by_name`, `finalized_at`, `source`
+
+Finalize behavior:
+- `POST /discharge-summary/finalize/` works only when stay status is `discharged`
+- sets `finalized_at` and `generated_by`
+
 ## UI recommendations
 
 1. Hospital stay details page with two tabs:
@@ -139,3 +175,6 @@ Backend behavior:
 5. MAR:
    - show active medication orders with next due time (computed in FE from `starts_at + frequency_hours`)
    - provide one-click "Given" action (PATCH administration status to `given`)
+6. Discharge Summary:
+   - prefill form from draft (`GET /discharge-summary/`) and let doctor edit before save
+   - lock printable version when `finalized_at` is set
