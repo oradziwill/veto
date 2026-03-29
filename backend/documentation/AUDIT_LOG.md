@@ -7,7 +7,8 @@ This document describes the backend audit log added for clinic-critical operatio
 Provide a clinic-scoped, queryable audit trail for sensitive actions:
 - visit closure and visit status transitions,
 - clinic user management changes,
-- reminder resend operations.
+- reminder resend operations,
+- clinical exam template create/update/delete and applying a template to a visit exam.
 
 ## Data Model
 
@@ -51,6 +52,10 @@ Optional filters:
 - `clinic_user_updated` (`entity_type=user`)
 - `clinic_user_deleted` (`entity_type=user`)
 - `reminder_resend_queued` (`entity_type=reminder`)
+- `clinical_exam_template_created` (`entity_type=clinical_exam_template`)
+- `clinical_exam_template_updated` (`entity_type=clinical_exam_template`)
+- `clinical_exam_template_deleted` (`entity_type=clinical_exam_template`)
+- `clinical_exam_template_applied` (`entity_type=appointment`; `metadata` includes `template_id`, `template_name`, `clinical_exam_id`, `applied_fields`, `force`)
 
 ## Request correlation
 

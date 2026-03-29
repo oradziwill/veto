@@ -133,6 +133,45 @@ class ClinicalExam(models.Model):
         return f"ClinicalExam(appt={self.appointment_id})"
 
 
+class ClinicalExamTemplate(models.Model):
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="clinical_exam_templates",
+    )
+    name = models.CharField(max_length=120)
+    visit_type = models.CharField(max_length=40, blank=True, default="")
+    defaults = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_clinical_exam_templates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clinic", "name"],
+                name="medical_clinical_exam_template_name_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["clinic", "is_active"],
+                name="medical_ce_tpl_active_idx",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"ClinicalExamTemplate({self.name})"
+
+
 class Prescription(models.Model):
     """Prescription linked to a patient and optionally to a visit (MedicalRecord)."""
 

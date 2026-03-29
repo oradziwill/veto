@@ -24,7 +24,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.audit.services import log_audit_event
-from apps.medical.models import ClinicalExam
+from apps.medical.models import ClinicalExam, ClinicalExamTemplate
 from apps.medical.serializers import (
     ClinicalExamReadSerializer,
     ClinicalExamWriteSerializer,
@@ -453,6 +453,96 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         exam = serializer.save()
         return Response(ClinicalExamReadSerializer(exam).data, status=200)
+
+    @action(detail=True, methods=["post"], url_path="exam/apply-template")
+    def apply_exam_template(self, request, pk=None):
+        """
+        POST /api/appointments/<id>/exam/apply-template/
+        Body: {"template_id": <id>, "force": false}
+        """
+        if not IsDoctorOrAdmin().has_permission(request, self):
+            raise PermissionDenied("Only doctors and clinic admins can apply exam templates.")
+
+        appt = self.get_object()
+        template_id = request.data.get("template_id")
+        force = bool(request.data.get("force", False))
+        if not template_id:
+            return Response({"detail": "template_id is required."}, status=400)
+
+        template = ClinicalExamTemplate.objects.filter(
+            id=template_id,
+            clinic_id=request.user.clinic_id,
+            is_active=True,
+        ).first()
+        if not template:
+            return Response({"detail": "Template not found."}, status=404)
+
+        exam = (
+            ClinicalExam.objects.filter(
+                appointment_id=appt.id,
+                clinic_id=request.user.clinic_id,
+            )
+            .order_by("id")
+            .first()
+        )
+        if not exam:
+            exam = ClinicalExam.objects.create(
+                clinic_id=request.user.clinic_id,
+                appointment=appt,
+                created_by=request.user,
+            )
+
+        writable_fields = [
+            "initial_notes",
+            "clinical_examination",
+            "temperature_c",
+            "heart_rate_bpm",
+            "respiratory_rate_rpm",
+            "weight_kg",
+            "additional_notes",
+            "owner_instructions",
+            "initial_diagnosis",
+        ]
+        defaults = template.defaults or {}
+        payload = {field: getattr(exam, field) for field in writable_fields}
+        applied_fields = []
+        for field in writable_fields:
+            if field not in defaults:
+                continue
+            current = payload.get(field)
+            if force or current in (None, ""):
+                payload[field] = defaults[field]
+                applied_fields.append(field)
+
+        before_values = {field: getattr(exam, field) for field in applied_fields}
+        serializer = ClinicalExamWriteSerializer(exam, data=payload, partial=True)
+        serializer.is_valid(raise_exception=True)
+        exam = serializer.save()
+        after_values = {field: getattr(exam, field) for field in applied_fields}
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="clinical_exam_template_applied",
+            entity_type="appointment",
+            entity_id=appt.id,
+            before=before_values,
+            after=after_values,
+            metadata={
+                "clinical_exam_id": exam.id,
+                "template_id": template.id,
+                "template_name": template.name,
+                "applied_fields": applied_fields,
+                "force": force,
+            },
+        )
+        data = ClinicalExamReadSerializer(exam).data
+        data["template_meta"] = {
+            "template_id": template.id,
+            "template_name": template.name,
+            "applied_fields": applied_fields,
+            "force": force,
+        }
+        return Response(data, status=200)
 
     @action(detail=True, methods=["get"], url_path="visit-readiness")
     def visit_readiness(self, request, pk=None):
