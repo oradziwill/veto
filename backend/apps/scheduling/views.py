@@ -514,9 +514,27 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 payload[field] = defaults[field]
                 applied_fields.append(field)
 
+        before_values = {field: getattr(exam, field) for field in applied_fields}
         serializer = ClinicalExamWriteSerializer(exam, data=payload, partial=True)
         serializer.is_valid(raise_exception=True)
         exam = serializer.save()
+        after_values = {field: getattr(exam, field) for field in applied_fields}
+        log_audit_event(
+            clinic_id=request.user.clinic_id,
+            actor=request.user,
+            action="clinical_exam_template_applied",
+            entity_type="appointment",
+            entity_id=appt.id,
+            before=before_values,
+            after=after_values,
+            metadata={
+                "clinical_exam_id": exam.id,
+                "template_id": template.id,
+                "template_name": template.name,
+                "applied_fields": applied_fields,
+                "force": force,
+            },
+        )
         data = ClinicalExamReadSerializer(exam).data
         data["template_meta"] = {
             "template_id": template.id,

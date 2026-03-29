@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
+from apps.audit.services import log_audit_event
 
 from .models import (
     ClinicalExamTemplate,
@@ -28,6 +29,15 @@ from .serializers import (
     VaccinationReadSerializer,
     VaccinationWriteSerializer,
 )
+
+
+def _clinical_exam_template_audit_payload(template: ClinicalExamTemplate) -> dict:
+    return {
+        "name": template.name,
+        "visit_type": template.visit_type,
+        "is_active": template.is_active,
+        "defaults": template.defaults or {},
+    }
 
 
 class MedicalRecordViewSet(viewsets.ModelViewSet):
@@ -62,13 +72,65 @@ class ClinicalExamTemplateViewSet(viewsets.ModelViewSet):
         return ClinicalExamTemplateWriteSerializer
 
     def create(self, request, *args, **kwargs):
+        clinic_id = self.request.user.clinic_id
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         template = serializer.save(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=clinic_id,
             created_by=self.request.user,
         )
+        log_audit_event(
+            clinic_id=clinic_id,
+            actor=request.user,
+            action="clinical_exam_template_created",
+            entity_type="clinical_exam_template",
+            entity_id=template.id,
+            after=_clinical_exam_template_audit_payload(template),
+        )
         return Response(ClinicalExamTemplateReadSerializer(template).data, status=201)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        before = _clinical_exam_template_audit_payload(instance)
+        template = serializer.save()
+        log_audit_event(
+            clinic_id=self.request.user.clinic_id,
+            actor=self.request.user,
+            action="clinical_exam_template_updated",
+            entity_type="clinical_exam_template",
+            entity_id=template.id,
+            before=before,
+            after=_clinical_exam_template_audit_payload(template),
+        )
+        return template
+
+    def perform_destroy(self, instance):
+        clinic_id = self.request.user.clinic_id
+        entity_id = instance.id
+        before = _clinical_exam_template_audit_payload(instance)
+        super().perform_destroy(instance)
+        log_audit_event(
+            clinic_id=clinic_id,
+            actor=self.request.user,
+            action="clinical_exam_template_deleted",
+            entity_type="clinical_exam_template",
+            entity_id=entity_id,
+            before=before,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(
+            ClinicalExamTemplateReadSerializer(serializer.instance).data,
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
 
 class PatientHistoryEntryViewSet(viewsets.ModelViewSet):
