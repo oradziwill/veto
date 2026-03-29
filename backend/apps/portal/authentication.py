@@ -25,6 +25,12 @@ class PortalJWTAuthentication(authentication.BaseAuthentication):
 
     www_authenticate_realm = "portal"
 
+    def authenticate_header(self, request):
+        # Required so DRF returns 401 (NotAuthenticated) instead of 403 when
+        # IsAuthenticated fails — get_authenticate_header() uses only the
+        # first configured authenticator (see rest_framework.views.APIView).
+        return f'Bearer realm="{self.www_authenticate_realm}"'
+
     def authenticate(self, request):
         header = authentication.get_authorization_header(request)
         if not header or not header.startswith(b"Bearer "):
