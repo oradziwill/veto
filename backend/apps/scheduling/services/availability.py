@@ -153,7 +153,7 @@ def compute_availability(
             .first()
         )
         if wh:
-            if wh.is_day_off:
+            if getattr(wh, "is_day_off", False):
                 return {
                     "timezone": str(tz),
                     "work_intervals": [],

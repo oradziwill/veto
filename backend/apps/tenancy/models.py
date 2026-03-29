@@ -18,6 +18,11 @@ class Clinic(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    online_booking_enabled = models.BooleanField(
+        default=True,
+        help_text="Allow pet owners to request appointments via the public booking portal.",
+    )
+
     def save(self, *args, **kwargs):
         if not self.slug:
             base = slugify(self.name)[:200] or "clinic"

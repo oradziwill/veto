@@ -418,6 +418,7 @@ Config in `pyproject.toml`.
 - `documentation/CHANGELOG_cleanup-and-next-steps.md` – Changes in this branch
 - `documentation/FRONTEND_HANDOFF_backend-core-v1.md` – API integration guide
 - `documentation/AVAILABILITY_API.md` – Availability endpoint
+- `documentation/CLIENT_PORTAL_BOOKING.md` – Client portal (OTP + online booking API)
 - `documentation/CLINICAL_EXAM_DOCUMENTATION.md` – Clinical exam API
 - `documentation/VISIT_CLOSE_WORKFLOW.md` – Visit close flow
 - `documentation/SCHEDULING_ASSISTANT.md` – Scheduling assistant backend (capacity + suggestions)
