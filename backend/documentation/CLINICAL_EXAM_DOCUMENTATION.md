@@ -27,6 +27,11 @@ This document is intended for backend, frontend, and reviewers.
 - `GET /api/appointments/{id}/exam/`
 - `POST /api/appointments/{id}/exam/`
 - `PATCH /api/appointments/{id}/exam/`
+- `POST /api/appointments/{id}/exam/apply-template/`
+- `GET /api/medical/clinical-exam-templates/`
+- `POST /api/medical/clinical-exam-templates/`
+- `PATCH /api/medical/clinical-exam-templates/{id}/`
+- `DELETE /api/medical/clinical-exam-templates/{id}/`
 
 ---
 
@@ -78,6 +83,20 @@ Creates a clinical exam.
 ### PATCH
 Partial update of an existing exam.
 - Does not overwrite unspecified fields
+
+### Apply Template
+Applies a clinic template defaults to exam fields.
+- Creates exam automatically if missing
+- By default fills only empty fields
+- Supports force overwrite via `{"force": true}`
+
+Request body:
+```json
+{
+  "template_id": 1,
+  "force": false
+}
+```
 
 ### Permissions
 - User must belong to the same clinic
@@ -148,6 +167,10 @@ Frontend can assume:
 - Exam may or may not exist for an appointment
 - PATCH is safe for autosave-style UX
 - Empty POST payload is valid
+- Template flow:
+  - Fetch templates from `/api/medical/clinical-exam-templates/`
+  - Apply selected template via `/api/appointments/{id}/exam/apply-template/`
+  - Inspect `template_meta.applied_fields` to highlight what changed
 
 ---
 

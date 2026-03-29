@@ -5,6 +5,7 @@ from rest_framework import serializers
 from apps.billing.models import Invoice
 from apps.medical.models import (
     ClinicalExam,
+    ClinicalExamTemplate,
     MedicalRecord,
     PatientHistoryEntry,
     Prescription,
@@ -65,6 +66,61 @@ class ClinicalExamWriteSerializer(serializers.ModelSerializer):
         # Basic sanity bounds; adjust/remove if you dislike constraints
         if value < 20 or value > 50:
             raise serializers.ValidationError("temperature_c looks out of range.")
+        return value
+
+
+class ClinicalExamTemplateReadSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return None
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+    class Meta:
+        model = ClinicalExamTemplate
+        fields = [
+            "id",
+            "clinic",
+            "name",
+            "visit_type",
+            "defaults",
+            "is_active",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ClinicalExamTemplateWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClinicalExamTemplate
+        fields = [
+            "name",
+            "visit_type",
+            "defaults",
+            "is_active",
+        ]
+
+    def validate_defaults(self, value):
+        allowed_fields = {
+            "initial_notes",
+            "clinical_examination",
+            "temperature_c",
+            "heart_rate_bpm",
+            "respiratory_rate_rpm",
+            "weight_kg",
+            "additional_notes",
+            "owner_instructions",
+            "initial_diagnosis",
+        }
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("defaults must be a JSON object.")
+        invalid = sorted(set(value.keys()) - allowed_fields)
+        if invalid:
+            raise serializers.ValidationError(f"Unsupported default field(s): {', '.join(invalid)}")
         return value
 
 
