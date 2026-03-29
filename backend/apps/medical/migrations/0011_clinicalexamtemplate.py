@@ -56,7 +56,7 @@ class Migration(migrations.Migration):
             model_name="clinicalexamtemplate",
             index=models.Index(
                 fields=["clinic", "is_active"],
-                name="medical_clinical_tpl_active_idx",
+                name="medical_ce_tpl_active_idx",
             ),
         ),
     ]
