@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "apps.documents.apps.DocumentsConfig",
     "apps.audit.apps.AuditConfig",
     "apps.reports.apps.ReportsConfig",
+    "apps.portal.apps.PortalConfig",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -172,6 +173,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "apps.portal.authentication.PortalJWTAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
@@ -210,6 +212,16 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=8),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
 }
+
+# Client booking portal (OTP + short-lived portal JWT; not staff SimpleJWT)
+PORTAL_OTP_EXPIRE_MINUTES = int(os.getenv("PORTAL_OTP_EXPIRE_MINUTES", "15"))
+PORTAL_ACCESS_TOKEN_LIFETIME = timedelta(hours=int(os.getenv("PORTAL_ACCESS_TOKEN_HOURS", "24")))
+# SECURITY: never enable in production — only for local dev / tests
+PORTAL_RETURN_OTP_IN_RESPONSE = os.getenv("PORTAL_RETURN_OTP_IN_RESPONSE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Hospitalization workflow feature flags
 # If True: block /discharge/ when safety checks have blocking reasons.
