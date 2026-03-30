@@ -28,8 +28,9 @@ Only these paths below need the portal Bearer header.
 3. **Login**
    - Email step: `POST /api/portal/auth/request-code/` with `{ "clinic_slug", "email" }`.
    - Show one generic success message (backend intentionally does not reveal whether the email exists).
-   - Code step: `POST /api/portal/auth/confirm-code/` with `{ "clinic_slug", "email", "code" }` → store `access`.
-   - **Local/dev only:** response may contain `_dev_otp` when `PORTAL_RETURN_OTP_IN_RESPONSE` is enabled — never rely on this in production UI.
+   - **Code step:** `POST /api/portal/auth/confirm-code/` with `{ "clinic_slug", "email", "code" }` → store `access`.
+   - **Magic link (alternative):** read `token` from the email link query/hash (see **`PORTAL_MAGIC_LINK_URL_TEMPLATE`**) or paste the token; `POST /api/portal/auth/magic-link/` with `{ "token" }` → store `access`. Same challenge as the code — using one invalidates the other.
+   - **Local/dev only:** response may contain `_dev_otp` and `_dev_magic_link_token` when `PORTAL_RETURN_OTP_IN_RESPONSE` is enabled — never rely on this in production UI.
 4. **After login**
    - `GET /api/portal/me/patients/` — pet picker.
    - `GET /api/portal/me/patients/<id>/` — **pet card** (demographics, upcoming visits for that pet, vaccinations, last weight). **404** if the pet is not yours in this clinic.
@@ -53,6 +54,7 @@ Only these paths below need the portal Bearer header.
 | Vets | GET | `/api/portal/clinics/<slug>/vets/` |
 | Slots (public) | GET | `/api/portal/clinics/<slug>/availability/?date=...&vet=...&room=...` |
 | Request OTP | POST | `/api/portal/auth/request-code/` |
+| Magic link login | POST | `/api/portal/auth/magic-link/` |
 | Confirm OTP | POST | `/api/portal/auth/confirm-code/` |
 | Pets | GET | `/api/portal/me/patients/` |
 | Pet card | GET | `/api/portal/me/patients/<id>/` |
@@ -80,6 +82,16 @@ Response (always **200** if slug valid and booking enabled):
 
 Do not branch UI on “email exists unknown” — same copy for all successful responses.
 
+### `POST .../auth/magic-link/`
+
+After `request-code`, the email (or dev **`_dev_magic_link_token`**) contains a long **token** — no `clinic_slug` / `email` in the request (token identifies the challenge).
+
+```json
+{ "token": "<one-time token>" }
+```
+
+Success **200**: `{ "access": "<portal_jwt>" }` — same shape as confirm-code. **400** if invalid/expired/already used. **403** if `online_booking_enabled` is false for that clinic. **429** on too many attempts.
+
 ### `POST .../auth/confirm-code/`
 
 ```json
@@ -97,6 +109,8 @@ Success **200**:
 ```
 
 Invalid / expired **400**: `{ "detail": "Invalid or expired code." }`
+
+Use **either** magic-link **or** 6-digit code for a given challenge — not both.
 
 ### `POST .../appointments/`
 

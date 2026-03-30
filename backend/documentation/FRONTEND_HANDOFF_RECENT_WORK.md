@@ -59,9 +59,10 @@ Authorization: Bearer <portal_access>
 ### OTP
 
 1. `POST /api/portal/auth/request-code/` — `{ "clinic_slug", "email" }` — generic **200** message (no email enumeration).
-2. `POST /api/portal/auth/confirm-code/` — `{ "clinic_slug", "email", "code" }` → `{ "access": "<jwt>" }`.
+2. `POST /api/portal/auth/magic-link/` — `{ "token" }` — one-time token from email (or dev `_dev_magic_link_token`) → same **`access`** JWT as confirm-code; mutually exclusive with the 6-digit code for the same challenge.
+3. `POST /api/portal/auth/confirm-code/` — `{ "clinic_slug", "email", "code" }` → `{ "access": "<jwt>" }`.
 
-Dev/staging only: `_dev_otp` on request-code when backend flag is enabled — do not use in production.
+Dev/staging only: `_dev_otp` and `_dev_magic_link_token` on request-code when backend flag is enabled — do not use in production.
 
 ### Authenticated portal
 

@@ -21,6 +21,13 @@ class PortalLoginChallenge(models.Model):
         related_name="portal_login_challenges",
     )
     code_hash = models.CharField(max_length=255)
+    magic_token_digest = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="SHA-256 hex digest of one-time magic link token (empty for legacy rows).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     consumed_at = models.DateTimeField(null=True, blank=True)

@@ -249,6 +249,11 @@ PORTAL_OTP_CONFIRM_LIMIT_PER_MAILBOX = int(os.getenv("PORTAL_OTP_CONFIRM_LIMIT_P
 PORTAL_OTP_CONFIRM_MAILBOX_WINDOW_SEC = int(
     os.getenv("PORTAL_OTP_CONFIRM_MAILBOX_WINDOW_SEC", "900")
 )
+# POST /api/portal/auth/magic-link/ (one-time token from email)
+PORTAL_MAGIC_LINK_LIMIT_PER_IP = int(os.getenv("PORTAL_MAGIC_LINK_LIMIT_PER_IP", "60"))
+PORTAL_MAGIC_LINK_IP_WINDOW_SEC = int(os.getenv("PORTAL_MAGIC_LINK_IP_WINDOW_SEC", "900"))
+# Optional: "https://app.example/booking?portal_token={token}" — {token} replaced with secret
+PORTAL_MAGIC_LINK_URL_TEMPLATE = os.getenv("PORTAL_MAGIC_LINK_URL_TEMPLATE", "").strip()
 # Dev/staging: allow POST .../complete-deposit/ with {"simulated": true}
 PORTAL_ALLOW_SIMULATED_PAYMENT = os.getenv("PORTAL_ALLOW_SIMULATED_PAYMENT", "").lower() in (
     "1",
