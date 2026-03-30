@@ -7,6 +7,7 @@ urlpatterns = [
     path("clinics/<slug:slug>/vets/", views.PortalClinicVetsPublicView.as_view()),
     path("clinics/<slug:slug>/availability/", views.PortalClinicAvailabilityPublicView.as_view()),
     path("auth/request-code/", views.PortalAuthRequestCodeView.as_view()),
+    path("auth/magic-link/", views.PortalAuthMagicLinkView.as_view()),
     path("auth/confirm-code/", views.PortalAuthConfirmCodeView.as_view()),
     path("me/patients/<int:patient_id>/", views.PortalPatientDetailView.as_view()),
     path("me/patients/", views.PortalMePatientsView.as_view()),

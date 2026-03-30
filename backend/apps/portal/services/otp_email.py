@@ -20,9 +20,18 @@ def sendgrid_configured() -> bool:
     )
 
 
-def send_portal_otp_email(*, to_email: str, code: str, clinic_name: str) -> None:
+def send_portal_otp_email(
+    *,
+    to_email: str,
+    code: str,
+    clinic_name: str,
+    magic_link_url: str | None = None,
+    magic_plain_token: str | None = None,
+) -> None:
     """
     Raises ValueError if SendGrid returns an error response.
+    When magic_link_url is set, adds a one-click sign-in line; otherwise may append
+    magic_plain_token for copy-paste in the app if provided.
     """
     api_key = str(getattr(settings, "REMINDER_SENDGRID_API_KEY", "")).strip()
     from_email = str(getattr(settings, "REMINDER_SENDGRID_FROM_EMAIL", "")).strip()
@@ -35,8 +44,15 @@ def send_portal_otp_email(*, to_email: str, code: str, clinic_name: str) -> None
     body = (
         f"Your login code for {clinic_name} is: {code}\n\n"
         f"This code expires in {expire} minutes.\n"
-        "If you did not request this, you can ignore this email.\n"
     )
+    if magic_link_url:
+        body += f"\nOr sign in with this link:\n{magic_link_url}\n"
+    elif magic_plain_token:
+        body += (
+            "\nOr use this one-time sign-in token in the app (with “magic link” login):\n"
+            f"{magic_plain_token}\n"
+        )
+    body += "\nIf you did not request this, you can ignore this email.\n"
     payload = {
         "from": {"email": from_email, "name": from_name},
         "personalizations": [{"to": [{"email": to_email}]}],

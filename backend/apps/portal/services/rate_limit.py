@@ -41,3 +41,7 @@ def portal_confirm_ip_key(ip: str) -> str:
 
 def portal_confirm_mailbox_key(clinic_slug: str, email: str) -> str:
     return f"portal:otp:cfm:mb:{clinic_slug}:{email}"
+
+
+def portal_magic_link_ip_key(ip: str) -> str:
+    return f"portal:magic:ip:{ip}"

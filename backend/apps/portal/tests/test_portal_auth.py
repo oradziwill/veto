@@ -71,3 +71,5 @@ def test_request_code_sends_email_when_enabled(
     assert kwargs["to_email"] == email
     assert kwargs["clinic_name"] == clinic.name
     assert len(kwargs["code"]) == 6
+    assert kwargs.get("magic_plain_token")
+    assert kwargs.get("magic_link_url") is None

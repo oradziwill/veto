@@ -31,8 +31,9 @@ where `<access>` is the string returned by `POST /api/portal/auth/confirm-code/`
    Body: `clinic_slug`, `email`, `code`.
    Response: `{ "access": "<portal_jwt>" }`.
    **429** if confirm rate limits are exceeded.
+3. **Magic link (optional):** each `request-code` also issues a long one-time **token** (digest stored on `PortalLoginChallenge`). **`POST /api/portal/auth/magic-link/`** with body **`{ "token": "<plaintext>" }`** returns the same **`{ "access" }`** as confirm-code. Consuming the token **or** the 6-digit code marks the challenge used; the other method then fails. **429** uses `PORTAL_MAGIC_LINK_*` limits. If **`PORTAL_MAGIC_LINK_URL_TEMPLATE`** is set (must contain `{token}`), the email includes a full sign-in URL; otherwise it includes the raw token for copy-paste.
 
-**Development / tests only:** if `PORTAL_RETURN_OTP_IN_RESPONSE` is enabled (see Configuration), `request-code` may include `_dev_otp` in the JSON. **Never enable in production.**
+**Development / tests only:** if `PORTAL_RETURN_OTP_IN_RESPONSE` is enabled (see Configuration), `request-code` may include `_dev_otp` and **`_dev_magic_link_token`**. **Never enable in production.**
 
 ## Public endpoints (no JWT)
 
@@ -111,6 +112,8 @@ Returns **404** unless the patient belongs to the portal user for the token’s 
 | `PORTAL_OTP_CONFIRM_LIMIT_PER_IP` / `PORTAL_OTP_CONFIRM_IP_WINDOW_SEC` | Max `confirm-code` attempts per IP (default 80/15 min). |
 | `PORTAL_OTP_CONFIRM_LIMIT_PER_MAILBOX` / `PORTAL_OTP_CONFIRM_MAILBOX_WINDOW_SEC` | Max `confirm-code` per slug + email (default 30/15 min). |
 | `REMINDER_SENDGRID_API_KEY`, `REMINDER_SENDGRID_FROM_EMAIL`, `REMINDER_SENDGRID_FROM_NAME` | Shared with reminder email delivery; required for portal OTP email. |
+| `PORTAL_MAGIC_LINK_URL_TEMPLATE` | Optional email link, e.g. `https://app.example/booking?portal_token={token}` — `{token}` replaced with the secret (must appear once if set). |
+| `PORTAL_MAGIC_LINK_LIMIT_PER_IP`, `PORTAL_MAGIC_LINK_IP_WINDOW_SEC` | Throttle `POST …/auth/magic-link/`. |
 | `PORTAL_ALLOW_SIMULATED_PAYMENT` | If true (or `DEBUG` true), `POST …/complete-deposit/` may use `{ "simulated": true }`. Env: `PORTAL_ALLOW_SIMULATED_PAYMENT` (`1`/`true`/`yes`) |
 | `STRIPE_SECRET_KEY` | Stripe secret API key; enables Checkout + session retrieve. Env: `STRIPE_SECRET_KEY` |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `POST …/stripe/webhook/`. Env: `STRIPE_WEBHOOK_SECRET` |
