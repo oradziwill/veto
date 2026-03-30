@@ -154,7 +154,12 @@ def test_complete_deposit_rejects_simulated_when_disabled(
 
 
 @pytest.mark.django_db
-@override_settings(PORTAL_RETURN_OTP_IN_RESPONSE=True, PORTAL_ALLOW_SIMULATED_PAYMENT=True)
+@override_settings(
+    PORTAL_RETURN_OTP_IN_RESPONSE=True,
+    PORTAL_ALLOW_SIMULATED_PAYMENT=True,
+    STRIPE_SECRET_KEY="",
+    STRIPE_WEBHOOK_SECRET="",
+)
 def test_complete_deposit_without_live_provider_returns_501(
     api_client, clinic, doctor_with_all_weekdays_hours, patient, client_with_membership
 ):
@@ -186,3 +191,38 @@ def test_complete_deposit_without_live_provider_returns_501(
         format="json",
     )
     assert resp.status_code == 501
+
+
+@pytest.mark.django_db
+@override_settings(PORTAL_RETURN_OTP_IN_RESPONSE=True, STRIPE_SECRET_KEY="sk_test_dummy")
+def test_complete_deposit_without_body_with_stripe_returns_400(
+    api_client, clinic, doctor_with_all_weekdays_hours, patient, client_with_membership
+):
+    clinic.portal_booking_deposit_amount = Decimal("10.00")
+    clinic.save(update_fields=["portal_booking_deposit_amount"])
+    slug = clinic.slug
+    today = timezone.localdate().isoformat()
+    av = api_client.get(
+        f"/api/portal/clinics/{slug}/availability/",
+        {"date": today, "vet": doctor_with_all_weekdays_hours.id},
+    )
+    slot = av.data["free"][0]
+    access = _otp_flow(api_client, clinic, client_with_membership.email)
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+    book = api_client.post(
+        "/api/portal/appointments/",
+        {
+            "patient_id": patient.id,
+            "vet_id": doctor_with_all_weekdays_hours.id,
+            "starts_at": slot["start"],
+            "ends_at": slot["end"],
+        },
+        format="json",
+    )
+    inv_id = book.data["deposit_invoice_id"]
+    resp = api_client.post(
+        f"/api/portal/invoices/{inv_id}/complete-deposit/",
+        {},
+        format="json",
+    )
+    assert resp.status_code == 400

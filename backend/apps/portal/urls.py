@@ -17,4 +17,9 @@ urlpatterns = [
         "invoices/<int:invoice_id>/complete-deposit/",
         views.PortalInvoiceCompleteDepositView.as_view(),
     ),
+    path(
+        "invoices/<int:invoice_id>/stripe-checkout/",
+        views.PortalInvoiceStripeCheckoutView.as_view(),
+    ),
+    path("stripe/webhook/", views.PortalStripeWebhookView.as_view()),
 ]

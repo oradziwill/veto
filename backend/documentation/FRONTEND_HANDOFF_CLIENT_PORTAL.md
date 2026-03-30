@@ -37,8 +37,9 @@ Only these paths below need the portal Bearer header.
 5. **Book**
    - `POST /api/portal/appointments/` with exact `starts_at` / `ends_at` from a **fresh** `free` slot (see contract below).
    - If the clinic’s configured deposit is non-zero (see **`portal_booking_deposit_pln`** on the public clinic payload), response **`status`** is **`scheduled`** and **`payment_required`** is true until deposit is paid; use **`deposit_invoice_id`** with **`POST …/invoices/<id>/complete-deposit/`** (see below).
-6. **Deposit (MVP)**
-   - After a deposit booking, call **`POST /api/portal/invoices/<deposit_invoice_id>/complete-deposit/`** with **`{ "simulated": true }`** when your environment allows it (`PORTAL_ALLOW_SIMULATED_PAYMENT` or server `DEBUG`). **501** without `simulated`; live PSP not wired yet. Success **200** returns the same appointment summary shape as create (now **`confirmed`**, **`payment_required`** false if paid).
+6. **Deposit**
+   - **Stripe (production):** `POST /api/portal/invoices/<deposit_invoice_id>/stripe-checkout/` with **`success_url`** and **`cancel_url`** (HTTPS in production; both required). Response **`checkout_url`**, **`session_id`**. Open **`checkout_url`** in the browser; on success Stripe redirects to **`success_url`** — include **`{CHECKOUT_SESSION_ID}`** in the query string (see Stripe docs) so the SPA can read the session id and call **`POST …/complete-deposit/`** with **`{ "stripe_session_id": "<id>" }`**. The backend also accepts Stripe **`checkout.session.completed`** webhooks at **`POST /api/portal/stripe/webhook/`** (server-side secret: **`STRIPE_WEBHOOK_SECRET`**).
+   - **Simulated (dev):** **`POST …/complete-deposit/`** with **`{ "simulated": true }`** when `PORTAL_ALLOW_SIMULATED_PAYMENT` or **`DEBUG`** allows it.
 7. **My visits**
    - `GET /api/portal/appointments/` — list from start of **today (server local calendar day)** onward, excludes cancelled; each row may include **`deposit_invoice_id`** and **`payment_required`**.
 8. **Cancel**
@@ -58,7 +59,9 @@ Only these paths below need the portal Bearer header.
 | Slots (auth, optional) | GET | `/api/portal/availability/?date=...&vet=...` |
 | List visits | GET | `/api/portal/appointments/` |
 | Book | POST | `/api/portal/appointments/` |
-| Complete deposit (MVP) | POST | `/api/portal/invoices/<invoice_id>/complete-deposit/` |
+| Start Stripe Checkout | POST | `/api/portal/invoices/<invoice_id>/stripe-checkout/` |
+| Complete deposit | POST | `/api/portal/invoices/<invoice_id>/complete-deposit/` |
+| Stripe webhook | POST | `/api/portal/stripe/webhook/` |
 | Cancel | POST | `/api/portal/appointments/<id>/cancel/` |
 
 ## Request / response contracts
@@ -113,20 +116,40 @@ Success **201**: appointment summary: `id`, `starts_at`, `ends_at`, `status`, `r
 
 **409** — `"Selected time is no longer available."` — refresh availability and ask user to pick another slot.
 
+### `POST .../invoices/<invoice_id>/stripe-checkout/`
+
+```json
+{
+  "success_url": "https://app.example/booking/success?session_id={CHECKOUT_SESSION_ID}",
+  "cancel_url": "https://app.example/booking/cancel"
+}
+```
+
+- **200** — `{ "checkout_url", "session_id" }`
+- **400** — missing/invalid URLs, non-PLN invoice, not draft.
+- **501** — `STRIPE_SECRET_KEY` not configured.
+
 ### `POST .../invoices/<invoice_id>/complete-deposit/`
 
-Body (MVP):
+Either after Checkout:
+
+```json
+{ "stripe_session_id": "cs_..." }
+```
+
+or Dev simulation:
 
 ```json
 { "simulated": true }
 ```
 
 - **200** — deposit recorded; visit **`confirmed`** when invoice fully paid; response body matches the booking summary shape from create.
-- **400** — invoice not draft, already paid, etc.
+- **400** — wrong body (e.g. empty when Stripe is configured), invoice/session mismatch, session not paid, etc.
 - **403** — simulated payments disabled (`PORTAL_ALLOW_SIMULATED_PAYMENT` false and `DEBUG` false).
 - **404** — invoice not found or not this client’s portal deposit invoice.
 - **409** — appointment already cancelled.
-- **501** — request without `"simulated": true` (live provider not integrated).
+- **501** — Stripe not configured and no usable `simulated`; or cannot verify session with Stripe.
+- **502** — Stripe API error when retrieving the session.
 
 ## Availability payload (for UI)
 

@@ -229,6 +229,10 @@ PORTAL_ALLOW_SIMULATED_PAYMENT = os.getenv("PORTAL_ALLOW_SIMULATED_PAYMENT", "")
     "yes",
 )
 
+# Stripe (portal booking deposit — Checkout Session + webhook)
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+
 # Hospitalization workflow feature flags
 # If True: block /discharge/ when safety checks have blocking reasons.
 REQUIRE_DISCHARGE_SAFETY_FOR_DISCHARGE = False
