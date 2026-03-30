@@ -127,6 +127,14 @@ else:
         }
     }
 
+# Cache (portal OTP rate limits; use Redis in multi-instance production if needed)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "veto-default-cache",
+    }
+}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -221,6 +229,25 @@ PORTAL_RETURN_OTP_IN_RESPONSE = os.getenv("PORTAL_RETURN_OTP_IN_RESPONSE", "").l
     "1",
     "true",
     "yes",
+)
+# Send portal login OTP via SendGrid (uses REMINDER_SENDGRID_* API key / from-address)
+PORTAL_OTP_EMAIL_ENABLED = os.getenv("PORTAL_OTP_EMAIL_ENABLED", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+# Rate limits (django.core.cache counters; 429 when exceeded)
+PORTAL_OTP_REQUEST_LIMIT_PER_IP = int(os.getenv("PORTAL_OTP_REQUEST_LIMIT_PER_IP", "60"))
+PORTAL_OTP_REQUEST_IP_WINDOW_SEC = int(os.getenv("PORTAL_OTP_REQUEST_IP_WINDOW_SEC", "3600"))
+PORTAL_OTP_REQUEST_LIMIT_PER_MAILBOX = int(os.getenv("PORTAL_OTP_REQUEST_LIMIT_PER_MAILBOX", "10"))
+PORTAL_OTP_REQUEST_MAILBOX_WINDOW_SEC = int(
+    os.getenv("PORTAL_OTP_REQUEST_MAILBOX_WINDOW_SEC", "900")
+)
+PORTAL_OTP_CONFIRM_LIMIT_PER_IP = int(os.getenv("PORTAL_OTP_CONFIRM_LIMIT_PER_IP", "80"))
+PORTAL_OTP_CONFIRM_IP_WINDOW_SEC = int(os.getenv("PORTAL_OTP_CONFIRM_IP_WINDOW_SEC", "900"))
+PORTAL_OTP_CONFIRM_LIMIT_PER_MAILBOX = int(os.getenv("PORTAL_OTP_CONFIRM_LIMIT_PER_MAILBOX", "30"))
+PORTAL_OTP_CONFIRM_MAILBOX_WINDOW_SEC = int(
+    os.getenv("PORTAL_OTP_CONFIRM_MAILBOX_WINDOW_SEC", "900")
 )
 # Dev/staging: allow POST .../complete-deposit/ with {"simulated": true}
 PORTAL_ALLOW_SIMULATED_PAYMENT = os.getenv("PORTAL_ALLOW_SIMULATED_PAYMENT", "").lower() in (

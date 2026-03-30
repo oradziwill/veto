@@ -24,11 +24,13 @@ where `<access>` is the string returned by `POST /api/portal/auth/confirm-code/`
 
 1. **`POST /api/portal/auth/request-code/`**
    Body: `clinic_slug` (string), `email` (string).
-   If a membership exists, a **6-digit** code is created and **should be delivered by email** (not implemented in MVP: no message is sent).
+   If a membership exists, a **6-digit** code is created. With **`PORTAL_OTP_EMAIL_ENABLED`** and SendGrid configured (**`REMINDER_SENDGRID_API_KEY`**, **`REMINDER_SENDGRID_FROM_EMAIL`**), the code is emailed to the client’s address; otherwise only logs apply (see Configuration).
    Response is always a generic success message to avoid email enumeration when membership is missing.
+   **429** if per-IP or per-mailbox rate limits are exceeded (see `PORTAL_OTP_*` limit env vars).
 2. **`POST /api/portal/auth/confirm-code/`**
    Body: `clinic_slug`, `email`, `code`.
    Response: `{ "access": "<portal_jwt>" }`.
+   **429** if confirm rate limits are exceeded.
 
 **Development / tests only:** if `PORTAL_RETURN_OTP_IN_RESPONSE` is enabled (see Configuration), `request-code` may include `_dev_otp` in the JSON. **Never enable in production.**
 
@@ -103,6 +105,12 @@ Returns **404** unless the patient belongs to the portal user for the token’s 
 | `PORTAL_OTP_EXPIRE_MINUTES` | OTP validity (default 15). Env: `PORTAL_OTP_EXPIRE_MINUTES` |
 | `PORTAL_ACCESS_TOKEN_LIFETIME` | Portal JWT lifetime (default 24h). Env: `PORTAL_ACCESS_TOKEN_HOURS` |
 | `PORTAL_RETURN_OTP_IN_RESPONSE` | If true, OTP may appear as `_dev_otp` on request-code. Env: `PORTAL_RETURN_OTP_IN_RESPONSE` (`1`/`true`/`yes`) |
+| `PORTAL_OTP_EMAIL_ENABLED` | If true, send login OTP via SendGrid using `REMINDER_SENDGRID_*`. Env: `PORTAL_OTP_EMAIL_ENABLED` |
+| `PORTAL_OTP_REQUEST_LIMIT_PER_IP` / `PORTAL_OTP_REQUEST_IP_WINDOW_SEC` | Max `request-code` calls per client IP per window (default 60/hour). |
+| `PORTAL_OTP_REQUEST_LIMIT_PER_MAILBOX` / `PORTAL_OTP_REQUEST_MAILBOX_WINDOW_SEC` | Max `request-code` per clinic slug + email (default 10/15 min). |
+| `PORTAL_OTP_CONFIRM_LIMIT_PER_IP` / `PORTAL_OTP_CONFIRM_IP_WINDOW_SEC` | Max `confirm-code` attempts per IP (default 80/15 min). |
+| `PORTAL_OTP_CONFIRM_LIMIT_PER_MAILBOX` / `PORTAL_OTP_CONFIRM_MAILBOX_WINDOW_SEC` | Max `confirm-code` per slug + email (default 30/15 min). |
+| `REMINDER_SENDGRID_API_KEY`, `REMINDER_SENDGRID_FROM_EMAIL`, `REMINDER_SENDGRID_FROM_NAME` | Shared with reminder email delivery; required for portal OTP email. |
 | `PORTAL_ALLOW_SIMULATED_PAYMENT` | If true (or `DEBUG` true), `POST …/complete-deposit/` may use `{ "simulated": true }`. Env: `PORTAL_ALLOW_SIMULATED_PAYMENT` (`1`/`true`/`yes`) |
 | `STRIPE_SECRET_KEY` | Stripe secret API key; enables Checkout + session retrieve. Env: `STRIPE_SECRET_KEY` |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `POST …/stripe/webhook/`. Env: `STRIPE_WEBHOOK_SECRET` |
@@ -114,8 +122,8 @@ Events: **`portal_appointment_booked`** (after payload may include `needs_deposi
 
 ## Security notes (MVP gaps)
 
-- **Email delivery** of OTP is not implemented; integrate a provider before production.
-- **Rate limiting** on `request-code` / `confirm-code` is recommended.
+- **Email delivery** uses SendGrid when `PORTAL_OTP_EMAIL_ENABLED` and `REMINDER_SENDGRID_*` are set; monitor send failures in logs.
+- **Rate limiting** on `request-code` / `confirm-code` is enforced via Django cache (use Redis for cache backend in multi-instance deployments).
 - **Refresh tokens** for portal are not implemented; users repeat OTP when access expires.
 - Generic messaging on `request-code` reduces email enumeration but also hides typos until confirm step fails.
 

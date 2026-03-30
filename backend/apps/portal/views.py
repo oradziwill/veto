@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import secrets
 import string
 from datetime import datetime, timedelta
@@ -32,6 +33,15 @@ from .authentication import PortalPrincipal
 from .models import PortalLoginChallenge
 from .permissions import IsPortalClient
 from .services.booking import portal_slot_matches_availability
+from .services.otp_email import send_portal_otp_email, sendgrid_configured
+from .services.rate_limit import (
+    client_ip_from_request,
+    portal_confirm_ip_key,
+    portal_confirm_mailbox_key,
+    portal_request_code_ip_key,
+    portal_request_code_mailbox_key,
+    rate_limit_exceeded,
+)
 from .services.stripe_deposit import (
     create_deposit_checkout_session,
     fulfill_from_checkout_session_payload,
@@ -40,6 +50,8 @@ from .services.stripe_deposit import (
     validate_portal_redirect_url,
 )
 from .tokens import create_portal_access_token
+
+logger = logging.getLogger(__name__)
 
 
 def _generate_portal_code() -> str:
@@ -242,6 +254,26 @@ class PortalAuthRequestCodeView(APIView):
                 {"detail": "clinic_slug and email are required."},
                 status=400,
             )
+        ip = client_ip_from_request(request)
+        if rate_limit_exceeded(
+            portal_request_code_ip_key(ip),
+            int(getattr(settings, "PORTAL_OTP_REQUEST_LIMIT_PER_IP", 60)),
+            int(getattr(settings, "PORTAL_OTP_REQUEST_IP_WINDOW_SEC", 3600)),
+        ):
+            return Response(
+                {"detail": "Too many requests. Please try again later."},
+                status=429,
+            )
+        if rate_limit_exceeded(
+            portal_request_code_mailbox_key(slug, email),
+            int(getattr(settings, "PORTAL_OTP_REQUEST_LIMIT_PER_MAILBOX", 10)),
+            int(getattr(settings, "PORTAL_OTP_REQUEST_MAILBOX_WINDOW_SEC", 900)),
+        ):
+            return Response(
+                {"detail": "Too many requests. Please try again later."},
+                status=429,
+            )
+
         err, clinic = _public_clinic_or_404(slug)
         if err:
             return err
@@ -269,6 +301,26 @@ class PortalAuthRequestCodeView(APIView):
             + timedelta(minutes=int(getattr(settings, "PORTAL_OTP_EXPIRE_MINUTES", 15))),
         )
 
+        if getattr(settings, "PORTAL_OTP_EMAIL_ENABLED", False):
+            if sendgrid_configured():
+                try:
+                    send_portal_otp_email(
+                        to_email=membership.client.email,
+                        code=code,
+                        clinic_name=clinic.name,
+                    )
+                except Exception:
+                    logger.exception(
+                        "portal_otp_email_send_failed clinic_id=%s client_id=%s",
+                        clinic.id,
+                        membership.client_id,
+                    )
+            else:
+                logger.warning(
+                    "PORTAL_OTP_EMAIL_ENABLED but SendGrid is not configured "
+                    "(set REMINDER_SENDGRID_API_KEY and REMINDER_SENDGRID_FROM_EMAIL)."
+                )
+
         payload = dict(generic)
         if getattr(settings, "PORTAL_RETURN_OTP_IN_RESPONSE", False):
             payload["_dev_otp"] = code
@@ -287,6 +339,26 @@ class PortalAuthConfirmCodeView(APIView):
                 {"detail": "clinic_slug, email, and code are required."},
                 status=400,
             )
+        ip = client_ip_from_request(request)
+        if rate_limit_exceeded(
+            portal_confirm_ip_key(ip),
+            int(getattr(settings, "PORTAL_OTP_CONFIRM_LIMIT_PER_IP", 80)),
+            int(getattr(settings, "PORTAL_OTP_CONFIRM_IP_WINDOW_SEC", 900)),
+        ):
+            return Response(
+                {"detail": "Too many requests. Please try again later."},
+                status=429,
+            )
+        if rate_limit_exceeded(
+            portal_confirm_mailbox_key(slug, email),
+            int(getattr(settings, "PORTAL_OTP_CONFIRM_LIMIT_PER_MAILBOX", 30)),
+            int(getattr(settings, "PORTAL_OTP_CONFIRM_MAILBOX_WINDOW_SEC", 900)),
+        ):
+            return Response(
+                {"detail": "Too many requests. Please try again later."},
+                status=429,
+            )
+
         err, clinic = _public_clinic_or_404(slug)
         if err:
             return err
