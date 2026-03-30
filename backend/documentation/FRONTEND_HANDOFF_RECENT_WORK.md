@@ -73,13 +73,15 @@ Dev/staging only: `_dev_otp` on request-code when backend flag is enabled — do
 | GET | `/api/portal/appointments/` |
 | POST | `/api/portal/appointments/` |
 | POST | `/api/portal/invoices/<invoice_id>/complete-deposit/` |
+| POST | `/api/portal/invoices/<invoice_id>/stripe-checkout/` |
+| POST | `/api/portal/stripe/webhook/` | Stripe Dashboard → backend (not called by SPA) |
 | POST | `/api/portal/appointments/<id>/cancel/` |
 
 **Clinic public payload** (`GET …/clinics/<slug>/`) also includes **`portal_booking_deposit_pln`** (string, may be `"0.00"`) and **`portal_booking_deposit_label`** so the UI can show prepayment before login.
 
 **Book:** `patient_id`, `vet_id`, `starts_at`, `ends_at` must **exactly** match a `free[]` slot from availability for that date/vet; optional `reason`, `room_id`. **409** if slot gone — refresh grid.
 
-When the clinic’s configured deposit is **> 0**, the new visit is **`scheduled`** (not `confirmed`) until deposit is settled; **`POST …/complete-deposit/`** with `{ "simulated": true }` records payment (MVP: no real PSP). **`501`** if `simulated` is omitted; **`403`** if the server disallows simulation (see env below). List/detail rows expose **`deposit_invoice_id`** and **`payment_required`**. Cancelling cancels a linked **draft** deposit invoice.
+When the clinic’s configured deposit is **> 0**, the new visit is **`scheduled`** (not `confirmed`) until deposit is settled. Production path: **`POST …/stripe-checkout/`** with **`success_url`** / **`cancel_url`** → open **`checkout_url`**; after payment, Stripe redirects to **`success_url`** (use Stripe’s `{CHECKOUT_SESSION_ID}` placeholder) and the app calls **`POST …/complete-deposit/`** with **`stripe_session_id`**, or relies on **`POST …/stripe/webhook/`** (configure `STRIPE_WEBHOOK_SECRET` in Stripe). Dev: **`complete-deposit`** with **`simulated: true`** when allowed. With **`STRIPE_SECRET_KEY`** set, calling **`complete-deposit`** with an empty body returns **400** (expects `stripe_session_id` or `simulated`). With no Stripe key and no `simulated`, **501**. List/detail rows expose **`deposit_invoice_id`** and **`payment_required`**. Cancelling cancels a linked **draft** deposit invoice.
 
 **403** on clinic when `online_booking_enabled` is false.
 

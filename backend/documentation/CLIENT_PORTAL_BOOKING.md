@@ -58,7 +58,9 @@ Base path: **`/api/portal/`**
 | GET | `availability/` | Same query/response as public clinic availability, scoped to token’s clinic |
 | GET | `appointments/` | Upcoming sidebar: appointments from **start of local calendar day** onward for this owner’s patients (excludes cancelled); includes **`deposit_invoice_id`**, **`payment_required`** when a portal deposit invoice exists and is not paid |
 | POST | `appointments/` | Create visit (see below) |
-| POST | `invoices/<invoice_id>/complete-deposit/` | MVP: record simulated payment on the **draft** portal deposit invoice and **confirm** the visit (see below) |
+| POST | `invoices/<invoice_id>/stripe-checkout/` | Start Stripe Checkout (PLN deposit **gross** = invoice `total_gross`); body `success_url`, `cancel_url` |
+| POST | `invoices/<invoice_id>/complete-deposit/` | After Checkout: `{ "stripe_session_id" }`, or dev `{ "simulated": true }` |
+| POST | `stripe/webhook/` | Stripe `checkout.session.completed` (sign with `STRIPE_WEBHOOK_SECRET`); CSRF-exempt |
 | POST | `appointments/<id>/cancel/` | Client cancellation (body optional `cancellation_reason`); cancels linked **draft** deposit invoice in the same transaction |
 
 ### `POST /api/portal/appointments/`
@@ -75,7 +77,11 @@ JSON body:
 
 - Visit is created with `status=scheduled` (not `confirmed` until deposit is paid).
 - A **DRAFT** `Invoice` is created in PLN with one line: label from `portal_booking_deposit_line_label` (default “Online booking deposit”), `unit_price` = deposit amount, **8% VAT** (`InvoiceLine.VatRate.RATE_8`). The appointment stores **`portal_deposit_invoice`**.
-- **`POST …/complete-deposit/`** with `{ "simulated": true }` is allowed only when `PORTAL_ALLOW_SIMULATED_PAYMENT` is true **or** `DEBUG` is true. It creates a completed **card** payment for the invoice total, marks the invoice **PAID** when `amount_paid >= total`, sets the appointment **`confirmed`**, and writes audit **`portal_booking_deposit_paid`**. Without `simulated: true` the API returns **501** (live PSP not integrated). **409** if the appointment was already cancelled.
+- **`POST …/stripe-checkout/`** (requires `STRIPE_SECRET_KEY`) creates a Stripe Checkout Session; charge amount is **gross** PLN (`invoice.total_gross`, one line item). Redirect URLs must be valid `http`/`https`; non-`DEBUG` requires **https**.
+- **`POST …/complete-deposit/`** with **`stripe_session_id`**: server retrieves the session from Stripe, verifies **`payment_status=paid`**, metadata matches invoice/appointment/clinic, and **`amount_total`** (within 1 minor unit) matches expected gross; idempotent per session id (`Payment.reference` `stripe:<session_id>`). Confirms visit and audits **`portal_booking_deposit_paid`** when a new payment row is created.
+- **Webhook** `POST …/stripe/webhook/` runs the same fulfillment (idempotent). Configure the signing secret in **`STRIPE_WEBHOOK_SECRET`**; returns **503** if unset.
+- **Simulated:** `{ "simulated": true }` when `PORTAL_ALLOW_SIMULATED_PAYMENT` **or** `DEBUG`; records net amount `invoice.total` like the original MVP. If **`STRIPE_SECRET_KEY`** is set, an empty **`complete-deposit`** body returns **400** instead of **501**.
+- **409** if the appointment was already cancelled (cannot pay).
 
 If deposit amount is zero, behaviour is unchanged: **`status=confirmed`**, no deposit invoice, **`payment_required`** false in API payloads.
 
@@ -98,11 +104,13 @@ Returns **404** unless the patient belongs to the portal user for the token’s 
 | `PORTAL_ACCESS_TOKEN_LIFETIME` | Portal JWT lifetime (default 24h). Env: `PORTAL_ACCESS_TOKEN_HOURS` |
 | `PORTAL_RETURN_OTP_IN_RESPONSE` | If true, OTP may appear as `_dev_otp` on request-code. Env: `PORTAL_RETURN_OTP_IN_RESPONSE` (`1`/`true`/`yes`) |
 | `PORTAL_ALLOW_SIMULATED_PAYMENT` | If true (or `DEBUG` true), `POST …/complete-deposit/` may use `{ "simulated": true }`. Env: `PORTAL_ALLOW_SIMULATED_PAYMENT` (`1`/`true`/`yes`) |
+| `STRIPE_SECRET_KEY` | Stripe secret API key; enables Checkout + session retrieve. Env: `STRIPE_SECRET_KEY` |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret for `POST …/stripe/webhook/`. Env: `STRIPE_WEBHOOK_SECRET` |
 | `DEFAULT_SLOT_MINUTES` | Slot length for availability (default 30) |
 
 ## Audit log
 
-Events: **`portal_appointment_booked`** (after payload may include `needs_deposit`, `deposit_invoice_id`), **`portal_appointment_cancelled`**, **`portal_booking_deposit_paid`** (`entity_type=appointment`, `actor` null, `metadata.source=portal`, `metadata.simulated=true` for MVP). See [AUDIT_LOG.md](AUDIT_LOG.md).
+Events: **`portal_appointment_booked`** (after payload may include `needs_deposit`, `deposit_invoice_id`), **`portal_appointment_cancelled`**, **`portal_booking_deposit_paid`** (`entity_type=appointment`, `actor` null, `metadata.source=portal`; `simulated=true` for dev flow; Stripe includes `stripe_session_id`, optional `via=stripe_webhook`). See [AUDIT_LOG.md](AUDIT_LOG.md).
 
 ## Security notes (MVP gaps)
 
