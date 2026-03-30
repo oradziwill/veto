@@ -167,6 +167,7 @@ Typical fields:
 | 403 | `online_booking_disabled` for clinic |
 | 404 | Unknown `slug`, vet id, patient, or appointment |
 | 409 | Slot taken / no longer matches `free` (booking) |
+| 429 | Too many OTP `request-code` or `confirm-code` attempts (rate limits); ask user to wait |
 
 Portal JWT **expired or invalid** behaves like other JWT endpoints (**401**) once you wire global API error handling for `Authorization`.
 
@@ -179,7 +180,7 @@ Backend allows configured dev origins (see `CORS_ALLOWED_ORIGINS` in [settings](
 1. **Race on book:** between selecting a slot and submitting, another user (or staff) may take it — handle **409** with a friendly retry + refresh slots.
 2. **Timezone:** display `start`/`end` in the user’s or clinic timezone; send back the same ISO strings the API returned to avoid mismatch.
 3. **No refresh token:** after `PORTAL_ACCESS_TOKEN_LIFETIME` the user repeats OTP — show a calm “session expired, log in again” state.
-4. **Production:** email with OTP is not wired in MVP — coordinate with backend before go-live; until then, staging may use `_dev_otp` for QA only.
+4. **Production:** enable **`PORTAL_OTP_EMAIL_ENABLED`** and SendGrid (`REMINDER_SENDGRID_*`) so codes are emailed; handle **429** on auth with a calm “try again later” message. Dev may use `_dev_otp` when enabled server-side.
 
 ## Related docs
 

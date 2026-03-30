@@ -157,6 +157,16 @@ def lab_test(lab):
     )
 
 
+@pytest.fixture(autouse=True)
+def _clear_django_cache():
+    """Isolate tests that use django.core.cache (e.g. portal OTP rate limits)."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def api_client():
     """REST framework API client."""
