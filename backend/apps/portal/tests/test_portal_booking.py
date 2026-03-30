@@ -5,6 +5,7 @@ from django.test import override_settings
 from django.utils import timezone
 
 from apps.audit.models import AuditLog
+from apps.notifications.models import Notification
 from apps.scheduling.models import Appointment
 from apps.scheduling.models_working_hours import VetWorkingHours
 
@@ -99,6 +100,12 @@ def test_portal_otp_and_booking_happy_path(
         entity_id=str(appt_id),
     ).first()
     assert ev is not None
+
+    assert Notification.objects.filter(
+        clinic_id=clinic.id,
+        kind=Notification.Kind.PORTAL_APPOINTMENT_BOOKED,
+        recipient_id=doctor_with_all_weekdays_hours.id,
+    ).exists()
 
     listed = api_client.get("/api/portal/appointments/")
     assert listed.status_code == 200

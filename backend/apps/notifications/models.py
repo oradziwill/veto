@@ -13,6 +13,7 @@ class Notification(models.Model):
         ESCALATION_TRIGGERED = "escalation_triggered", "Escalation triggered"
         INVOICE_OVERDUE = "invoice_overdue", "Invoice overdue"
         LOW_STOCK = "low_stock", "Low stock"
+        PORTAL_APPOINTMENT_BOOKED = "portal_appointment_booked", "Online booking (portal)"
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,

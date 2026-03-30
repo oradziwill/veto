@@ -33,6 +33,11 @@ from .authentication import PortalPrincipal
 from .models import PortalLoginChallenge
 from .permissions import IsPortalClient
 from .services.booking import portal_slot_matches_availability
+from .services.confirm_lockout import (
+    clear_portal_confirm_failures,
+    is_portal_confirm_blocked,
+    record_portal_confirm_failure,
+)
 from .services.magic_link_tokens import digest_magic_token, generate_magic_link_plaintext
 from .services.otp_email import send_portal_otp_email, sendgrid_configured
 from .services.rate_limit import (
@@ -44,6 +49,7 @@ from .services.rate_limit import (
     portal_request_code_mailbox_key,
     rate_limit_exceeded,
 )
+from .services.staff_notify_booking import notify_staff_new_portal_booking
 from .services.stripe_deposit import (
     create_deposit_checkout_session,
     fulfill_from_checkout_session_payload,
@@ -406,6 +412,11 @@ class PortalAuthMagicLinkView(APIView):
         if err_resp is not None:
             return err_resp
         assert consumed_challenge is not None
+        clear_portal_confirm_failures(
+            consumed_challenge.clinic.slug,
+            (consumed_challenge.client.email or "").strip().lower(),
+            ip,
+        )
         access = create_portal_access_token(
             client_id=consumed_challenge.client_id,
             clinic_id=consumed_challenge.clinic_id,
@@ -426,6 +437,11 @@ class PortalAuthConfirmCodeView(APIView):
                 status=400,
             )
         ip = client_ip_from_request(request)
+        if is_portal_confirm_blocked(slug, email, ip):
+            return Response(
+                {"detail": "Too many invalid code attempts. Please try again later."},
+                status=429,
+            )
         if rate_limit_exceeded(
             portal_confirm_ip_key(ip),
             int(getattr(settings, "PORTAL_OTP_CONFIRM_LIMIT_PER_IP", 80)),
@@ -473,10 +489,12 @@ class PortalAuthConfirmCodeView(APIView):
             .first()
         )
         if not challenge or not check_password(code, challenge.code_hash):
+            record_portal_confirm_failure(slug, email, ip)
             return Response({"detail": "Invalid or expired code."}, status=400)
 
         challenge.consumed_at = now
         challenge.save(update_fields=["consumed_at"])
+        clear_portal_confirm_failures(slug, email, ip)
 
         access = create_portal_access_token(
             client_id=membership.client_id,
@@ -831,6 +849,14 @@ class PortalAppointmentListCreateView(APIView):
                 "deposit_invoice_id": deposit_invoice.id if deposit_invoice else None,
             },
             metadata={"source": "portal"},
+        )
+
+        notify_staff_new_portal_booking(
+            clinic_id=clinic.id,
+            patient_name=patient.name,
+            appointment_id=appt.id,
+            vet_id=vet_id,
+            starts_at=starts_at,
         )
 
         if deposit_invoice:

@@ -110,6 +110,8 @@ Success **200**:
 
 Invalid / expired **400**: `{ "detail": "Invalid or expired code." }`
 
+After too many wrong codes for a known mailbox/IP, **429**: `{ "detail": "Too many invalid code attempts. Please try again later." }` (separate from generic OTP rate limits). A successful **magic-link** login also clears this lockout counter for that mailbox.
+
 Use **either** magic-link **or** 6-digit code for a given challenge — not both.
 
 ### `POST .../appointments/`
@@ -181,7 +183,7 @@ Typical fields:
 | 403 | `online_booking_disabled` for clinic |
 | 404 | Unknown `slug`, vet id, patient, or appointment |
 | 409 | Slot taken / no longer matches `free` (booking) |
-| 429 | Too many OTP `request-code` or `confirm-code` attempts (rate limits); ask user to wait |
+| 429 | Too many OTP `request-code` or `confirm-code` attempts (rate limits), or **confirm-code lockout** after repeated wrong codes; ask user to wait |
 
 Portal JWT **expired or invalid** behaves like other JWT endpoints (**401**) once you wire global API error handling for `Authorization`.
 

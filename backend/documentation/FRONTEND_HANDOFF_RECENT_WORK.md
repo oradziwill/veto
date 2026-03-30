@@ -90,6 +90,12 @@ When the clinic’s configured deposit is **> 0**, the new visit is **`scheduled
 
 **Staff calendar (staff JWT, `/api/appointments/`):** query **`booked_via_portal=true`** (or **`false`**, **`1`**, **`0`**) to show only visits booked via the owner portal vs only those created in the clinic app. List/retrieve payloads include read-only **`booked_via_portal`**.
 
+**Staff — portal booking KPI (staff JWT):** `GET /api/reports/portal-booking-metrics/?from=YYYY-MM-DD&to=YYYY-MM-DD` (optional `date_from` / `date_to`). Defaults to last 30 days if dates omitted. Response: `appointments_total`, `appointments_booked_via_portal`, `share_portal`. Any clinic staff role (`IsStaffOrVet`).
+
+**Staff — in-app notifications:** when an owner books online, doctors/receptionists/admins in that clinic receive a notification with kind **`portal_appointment_booked`** (toggle server-side: `PORTAL_NOTIFY_STAFF_ON_BOOKING`).
+
+**Clinic admin — owner data export (RODO bundle):** `GET /api/clients/<id>/gdpr-export/` — JSON for that client scoped to the admin’s clinic; **403** for non-admins. Emits audit `client_gdpr_export_downloaded`.
+
 **Full detail:** [FRONTEND_HANDOFF_CLIENT_PORTAL.md](FRONTEND_HANDOFF_CLIENT_PORTAL.md) · [CLIENT_PORTAL_BOOKING.md](CLIENT_PORTAL_BOOKING.md)
 
 ---
@@ -111,6 +117,7 @@ If you build or extend an **admin audit** screen:
 | `portal_appointment_booked` | `entity_type=appointment`; `actor` may be null; `metadata.source=portal` |
 | `portal_appointment_cancelled` | |
 | `portal_booking_deposit_paid` | `entity_type=appointment`; simulated checkout; `metadata.simulated=true` |
+| `client_gdpr_export_downloaded` | `entity_type=client`; clinic admin downloaded GDPR JSON |
 
 **Full detail:** [AUDIT_LOG.md](AUDIT_LOG.md)
 

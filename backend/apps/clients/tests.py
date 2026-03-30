@@ -1,6 +1,7 @@
 import pytest
 
 from apps.accounts.models import User
+from apps.audit.models import AuditLog
 from apps.clients.models import Client, ClientClinic
 from apps.tenancy.models import Clinic
 
@@ -101,3 +102,20 @@ def test_client_membership_create_ignores_foreign_clinic_input(api_client, recep
     )
     assert r.status_code == 201
     assert r.data["clinic"] == receptionist.clinic_id
+
+
+@pytest.mark.django_db
+def test_gdpr_export_admin_only(api_client, clinic_admin, receptionist, client_with_membership):
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.get(f"/api/clients/{client_with_membership.id}/gdpr-export/")
+    assert r.status_code == 403
+
+    api_client.force_authenticate(user=clinic_admin)
+    r2 = api_client.get(f"/api/clients/{client_with_membership.id}/gdpr-export/")
+    assert r2.status_code == 200
+    assert r2.data["client"]["email"] == client_with_membership.email
+    assert r2.data["clinic_id"] == clinic_admin.clinic_id
+    assert AuditLog.objects.filter(
+        action="client_gdpr_export_downloaded",
+        entity_id=str(client_with_membership.id),
+    ).exists()

@@ -115,6 +115,9 @@ Returns **404** unless the patient belongs to the portal user for the token’s 
 | `PORTAL_MAGIC_LINK_URL_TEMPLATE` | Optional email link, e.g. `https://app.example/booking?portal_token={token}` — `{token}` replaced with the secret (must appear once if set). |
 | `PORTAL_MAGIC_LINK_LIMIT_PER_IP`, `PORTAL_MAGIC_LINK_IP_WINDOW_SEC` | Throttle `POST …/auth/magic-link/`. |
 | `PORTAL_ALLOW_SIMULATED_PAYMENT` | If true (or `DEBUG` true), `POST …/complete-deposit/` may use `{ "simulated": true }`. Env: `PORTAL_ALLOW_SIMULATED_PAYMENT` (`1`/`true`/`yes`) |
+| `PORTAL_NOTIFY_STAFF_ON_BOOKING` | If true, staff get in-app notification on portal booking (default on). Env: `PORTAL_NOTIFY_STAFF_ON_BOOKING` |
+| `PORTAL_CONFIRM_FAIL_LIMIT_MAILBOX` / `PORTAL_CONFIRM_FAIL_WINDOW_SEC` / `PORTAL_CONFIRM_LOCKOUT_SEC` | Wrong `confirm-code` attempts per slug+email before short lockout (defaults 10 / 900s / 900s). |
+| `PORTAL_CONFIRM_FAIL_LIMIT_IP` / `PORTAL_CONFIRM_FAIL_IP_WINDOW_SEC` / `PORTAL_CONFIRM_LOCKOUT_IP_SEC` | Same for per-IP counter (defaults 40 / 900s / 1800s). |
 | `STRIPE_SECRET_KEY` | Stripe secret API key; enables Checkout + session retrieve. Env: `STRIPE_SECRET_KEY` |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret for `POST …/stripe/webhook/`. Env: `STRIPE_WEBHOOK_SECRET` |
 | `DEFAULT_SLOT_MINUTES` | Slot length for availability (default 30) |
@@ -127,6 +130,7 @@ Events: **`portal_appointment_booked`** (after payload may include `needs_deposi
 
 - **Email delivery** uses SendGrid when `PORTAL_OTP_EMAIL_ENABLED` and `REMINDER_SENDGRID_*` are set; monitor send failures in logs.
 - **Rate limiting** on `request-code` / `confirm-code` is enforced via Django cache (use Redis for cache backend in multi-instance deployments).
+- **Confirm-code lockout** (separate counters) returns **429** with `Too many invalid code attempts…` after repeated wrong codes for a registered mailbox; successful login or magic-link clears failure counters.
 - **Refresh tokens** for portal are not implemented; users repeat OTP when access expires.
 - Generic messaging on `request-code` reduces email enumeration but also hides typos until confirm step fails.
 

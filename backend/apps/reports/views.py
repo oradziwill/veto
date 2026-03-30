@@ -1,16 +1,77 @@
+from datetime import datetime, timedelta
+from datetime import time as dt_time
+
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from apps.accounts.permissions import HasClinic, IsClinicAdmin
+from apps.accounts.permissions import HasClinic, IsClinicAdmin, IsStaffOrVet
 from apps.audit.services import log_audit_event
+from apps.scheduling.models import Appointment
 
 from .models import ReportExportJob
 from .serializers import ReportExportJobCreateSerializer, ReportExportJobReadSerializer
 from .services import build_report_csv
+
+
+class PortalBookingMetricsView(APIView):
+    """
+    GET /api/reports/portal-booking-metrics/?from=YYYY-MM-DD&to=YYYY-MM-DD
+    Count appointments by starts_at in range: total vs booked_via_portal.
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+
+    def get(self, request):
+        clinic_id = request.user.clinic_id
+        from_str = (
+            request.query_params.get("from") or request.query_params.get("date_from") or ""
+        ).strip()
+        to_str = (
+            request.query_params.get("to") or request.query_params.get("date_to") or ""
+        ).strip()
+        today = timezone.localdate()
+        if not from_str:
+            d_from = today - timedelta(days=30)
+        else:
+            try:
+                d_from = datetime.strptime(from_str, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "Invalid from date (use YYYY-MM-DD)."}, status=400)
+        if not to_str:
+            d_to = today
+        else:
+            try:
+                d_to = datetime.strptime(to_str, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "Invalid to date (use YYYY-MM-DD)."}, status=400)
+        if d_from > d_to:
+            return Response({"detail": "from must be on or before to."}, status=400)
+
+        tz = timezone.get_current_timezone()
+        start = timezone.make_aware(datetime.combine(d_from, dt_time.min), tz)
+        end_excl = timezone.make_aware(datetime.combine(d_to + timedelta(days=1), dt_time.min), tz)
+        qs = Appointment.objects.filter(
+            clinic_id=clinic_id,
+            starts_at__gte=start,
+            starts_at__lt=end_excl,
+        )
+        total = qs.count()
+        portal_n = qs.filter(booked_via_portal=True).count()
+        share = (portal_n / total) if total else 0.0
+        return Response(
+            {
+                "from": d_from.isoformat(),
+                "to": d_to.isoformat(),
+                "appointments_total": total,
+                "appointments_booked_via_portal": portal_n,
+                "share_portal": round(share, 4),
+            }
+        )
 
 
 class ReportExportJobViewSet(viewsets.ModelViewSet):

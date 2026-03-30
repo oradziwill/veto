@@ -60,6 +60,7 @@ Optional filters:
 - `portal_appointment_booked` (`entity_type=appointment`; `actor` is null; `metadata.source=portal`)
 - `portal_booking_deposit_paid` (`entity_type=appointment`; `metadata.simulated=true` for dev simulation; Stripe Checkout when `metadata.simulated=false`, with `stripe_session_id` and optional `via=stripe_webhook`)
 - `portal_appointment_cancelled` (`entity_type=appointment`; `actor` is null; `metadata.source=portal`)
+- `client_gdpr_export_downloaded` (`entity_type=client`; clinic admin; `metadata.format=json` — owner data bundle for the current clinic)
 
 ## Request correlation
 
