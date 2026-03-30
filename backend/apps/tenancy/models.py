@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.db import models
 from django.utils.text import slugify
 
@@ -21,6 +23,17 @@ class Clinic(models.Model):
     online_booking_enabled = models.BooleanField(
         default=True,
         help_text="Allow pet owners to request appointments via the public booking portal.",
+    )
+    portal_booking_deposit_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="If > 0, portal bookings create a draft deposit invoice; visit stays scheduled until paid.",
+    )
+    portal_booking_deposit_line_label = models.CharField(
+        max_length=255,
+        default="Online booking deposit",
+        blank=True,
     )
 
     def save(self, *args, **kwargs):

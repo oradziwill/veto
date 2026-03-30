@@ -20,7 +20,7 @@ Only these paths below need the portal Bearer header.
 ## Suggested UX flow
 
 1. **Landing (no login)**
-   - `GET /api/portal/clinics/<slug>/` — show name; handle 404 (bad slug) and 403 (`online_booking_enabled=false`).
+   - `GET /api/portal/clinics/<slug>/` — show name plus **`portal_booking_deposit_pln`** / **`portal_booking_deposit_label`** when you want to disclose prepayment; handle 404 (bad slug) and 403 (`online_booking_enabled=false`).
 2. **Choose vet + date**
    - `GET /api/portal/clinics/<slug>/vets/`
    - `GET /api/portal/clinics/<slug>/availability/?date=YYYY-MM-DD&vet=<id>`
@@ -36,10 +36,13 @@ Only these paths below need the portal Bearer header.
    - Optionally re-fetch `GET /api/portal/availability/?date=&vet=` (same shape as public) to refresh slots before submit.
 5. **Book**
    - `POST /api/portal/appointments/` with exact `starts_at` / `ends_at` from a **fresh** `free` slot (see contract below).
-6. **My visits**
-   - `GET /api/portal/appointments/` — list from start of **today (server local calendar day)** onward, excludes cancelled.
-7. **Cancel**
-   - `POST /api/portal/appointments/<id>/cancel/` with optional `{ "cancellation_reason": "..." }` — **204** on success.
+   - If the clinic’s configured deposit is non-zero (see **`portal_booking_deposit_pln`** on the public clinic payload), response **`status`** is **`scheduled`** and **`payment_required`** is true until deposit is paid; use **`deposit_invoice_id`** with **`POST …/invoices/<id>/complete-deposit/`** (see below).
+6. **Deposit (MVP)**
+   - After a deposit booking, call **`POST /api/portal/invoices/<deposit_invoice_id>/complete-deposit/`** with **`{ "simulated": true }`** when your environment allows it (`PORTAL_ALLOW_SIMULATED_PAYMENT` or server `DEBUG`). **501** without `simulated`; live PSP not wired yet. Success **200** returns the same appointment summary shape as create (now **`confirmed`**, **`payment_required`** false if paid).
+7. **My visits**
+   - `GET /api/portal/appointments/` — list from start of **today (server local calendar day)** onward, excludes cancelled; each row may include **`deposit_invoice_id`** and **`payment_required`**.
+8. **Cancel**
+   - `POST /api/portal/appointments/<id>/cancel/` with optional `{ "cancellation_reason": "..." }` — **204** on success; a linked **draft** deposit invoice is cancelled in the same transaction.
 
 ## Endpoints (concise)
 
@@ -55,6 +58,7 @@ Only these paths below need the portal Bearer header.
 | Slots (auth, optional) | GET | `/api/portal/availability/?date=...&vet=...` |
 | List visits | GET | `/api/portal/appointments/` |
 | Book | POST | `/api/portal/appointments/` |
+| Complete deposit (MVP) | POST | `/api/portal/invoices/<invoice_id>/complete-deposit/` |
 | Cancel | POST | `/api/portal/appointments/<id>/cancel/` |
 
 ## Request / response contracts
@@ -105,9 +109,24 @@ Use **`starts_at` and `ends_at` exactly** as returned in `free[].start` / `free[
 }
 ```
 
-Success **201**: appointment summary (`id`, `starts_at`, `ends_at`, `status`, `reason`, `vet_id`, `patient_id`).
+Success **201**: appointment summary: `id`, `starts_at`, `ends_at`, `status`, `reason`, `vet_id`, `patient_id`, plus **`payment_required`**, **`deposit_invoice_id`**, **`deposit_net_pln`**, **`deposit_gross_pln`** (latter two are string decimals; net is invoice total, gross uses line `line_gross` with 8% VAT on the deposit line). If clinic deposit is zero, **`status`** is **`confirmed`** and payment fields reflect no deposit.
 
 **409** — `"Selected time is no longer available."` — refresh availability and ask user to pick another slot.
+
+### `POST .../invoices/<invoice_id>/complete-deposit/`
+
+Body (MVP):
+
+```json
+{ "simulated": true }
+```
+
+- **200** — deposit recorded; visit **`confirmed`** when invoice fully paid; response body matches the booking summary shape from create.
+- **400** — invoice not draft, already paid, etc.
+- **403** — simulated payments disabled (`PORTAL_ALLOW_SIMULATED_PAYMENT` false and `DEBUG` false).
+- **404** — invoice not found or not this client’s portal deposit invoice.
+- **409** — appointment already cancelled.
+- **501** — request without `"simulated": true` (live provider not integrated).
 
 ## Availability payload (for UI)
 
