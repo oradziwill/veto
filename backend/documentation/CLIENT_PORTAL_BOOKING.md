@@ -54,6 +54,7 @@ Base path: **`/api/portal/`**
 | Method | Path | Purpose |
 |--------|------|--------|
 | GET | `me/patients/` | Pets linked to this owner in this clinic |
+| GET | `me/patients/<id>/` | Pet card: demographics, upcoming visits for this pet, recent vaccinations, last weight from last **completed** visit with `weight_kg` |
 | GET | `availability/` | Same query/response as public clinic availability, scoped to token’s clinic |
 | GET | `appointments/` | Upcoming sidebar: appointments from **start of local calendar day** onward for this owner’s patients (excludes cancelled) |
 | POST | `appointments/` | Create visit (see below) |
@@ -70,6 +71,15 @@ JSON body:
 - **`room_id`** (optional int) — must belong to clinic if provided
 
 Created appointments use `visit_type=outpatient` and `status=confirmed`.
+
+### `GET /api/portal/me/patients/<id>/`
+
+Returns **404** unless the patient belongs to the portal user for the token’s clinic. Response:
+
+- **`patient`**: `id`, `name`, `species`, `breed`, `sex`, `birth_date`, `microchip_no`, `allergies`, `primary_vet_id`, `primary_vet_name` (clinic internal `notes` and AI fields are omitted).
+- **`upcoming_appointments`**: same idea as the global portal appointments list, but only for this pet (from start of local day, not cancelled).
+- **`recent_vaccinations`**: last 15 records (`vaccine_name`, `batch_number`, `administered_at`, `next_due_at`, `notes`).
+- **`last_weight_kg`**, **`last_weight_recorded_at`**: from the most recent **completed** appointment whose clinical exam has `weight_kg`; both `null` if none.
 
 ## Configuration (`config/settings.py` / environment)
 
