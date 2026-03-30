@@ -222,6 +222,12 @@ PORTAL_RETURN_OTP_IN_RESPONSE = os.getenv("PORTAL_RETURN_OTP_IN_RESPONSE", "").l
     "true",
     "yes",
 )
+# Dev/staging: allow POST .../complete-deposit/ with {"simulated": true}
+PORTAL_ALLOW_SIMULATED_PAYMENT = os.getenv("PORTAL_ALLOW_SIMULATED_PAYMENT", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Hospitalization workflow feature flags
 # If True: block /discharge/ when safety checks have blocking reasons.

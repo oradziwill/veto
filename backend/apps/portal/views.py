@@ -4,9 +4,11 @@ import secrets
 import string
 from datetime import datetime, timedelta
 from datetime import time as dt_time
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -16,6 +18,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import User
 from apps.audit.services import log_audit_event
+from apps.billing.models import Invoice, InvoiceLine, Payment
 from apps.clients.models import ClientClinic
 from apps.medical.models import ClinicalExam, Vaccination
 from apps.patients.models import Patient
@@ -38,9 +41,39 @@ def _generate_portal_code() -> str:
 def _get_clinic_by_slug(slug: str) -> Clinic | None:
     return (
         Clinic.objects.filter(slug=slug)
-        .only("id", "slug", "name", "online_booking_enabled")
+        .only(
+            "id",
+            "slug",
+            "name",
+            "online_booking_enabled",
+            "portal_booking_deposit_amount",
+            "portal_booking_deposit_line_label",
+        )
         .first()
     )
+
+
+def _portal_appointment_booking_payload(appt: Appointment, invoice: Invoice | None) -> dict:
+    payload = {
+        "id": appt.id,
+        "starts_at": appt.starts_at.isoformat(),
+        "ends_at": appt.ends_at.isoformat(),
+        "status": appt.status,
+        "reason": appt.reason,
+        "vet_id": appt.vet_id,
+        "patient_id": appt.patient_id,
+        "payment_required": False,
+        "deposit_invoice_id": None,
+        "deposit_net_pln": None,
+        "deposit_gross_pln": None,
+    }
+    if invoice:
+        line = invoice.lines.first()
+        payload["payment_required"] = invoice.status != Invoice.Status.PAID
+        payload["deposit_invoice_id"] = invoice.id
+        payload["deposit_net_pln"] = str(invoice.total)
+        payload["deposit_gross_pln"] = str(line.line_gross) if line else str(invoice.total)
+    return payload
 
 
 def _public_clinic_or_404(slug: str) -> tuple[Response | None, Clinic | None]:
@@ -102,6 +135,8 @@ class PortalClinicPublicView(APIView):
                 "slug": clinic.slug,
                 "name": clinic.name,
                 "online_booking_enabled": clinic.online_booking_enabled,
+                "portal_booking_deposit_pln": str(clinic.portal_booking_deposit_amount),
+                "portal_booking_deposit_label": clinic.portal_booking_deposit_line_label,
             }
         )
 
@@ -436,11 +471,13 @@ class PortalAppointmentListCreateView(APIView):
                 starts_at__gte=start_of_today,
             )
             .exclude(status=Appointment.Status.CANCELLED)
-            .select_related("patient", "vet")
+            .select_related("patient", "vet", "portal_deposit_invoice")
             .order_by("starts_at")
         )
-        data = [
-            {
+        data = []
+        for a in appts:
+            inv = a.portal_deposit_invoice
+            row = {
                 "id": a.id,
                 "starts_at": a.starts_at.isoformat(),
                 "ends_at": a.ends_at.isoformat(),
@@ -450,9 +487,10 @@ class PortalAppointmentListCreateView(APIView):
                 "vet_name": (a.vet.get_full_name() or a.vet.username) if a.vet_id else "",
                 "patient_id": a.patient_id,
                 "patient_name": a.patient.name,
+                "deposit_invoice_id": inv.id if inv else None,
+                "payment_required": bool(inv and inv.status != Invoice.Status.PAID),
             }
-            for a in appts
-        ]
+            data.append(row)
         return Response(data)
 
     def post(self, request):
@@ -533,21 +571,52 @@ class PortalAppointmentListCreateView(APIView):
                 status=409,
             )
 
-        appt = Appointment(
-            clinic=clinic,
-            patient=patient,
-            vet_id=vet_id,
-            room_id=room_id,
-            starts_at=starts_at,
-            ends_at=ends_at,
-            visit_type=Appointment.VisitType.OUTPATIENT,
-            status=Appointment.Status.CONFIRMED,
-            reason=reason,
+        deposit_amt = clinic.portal_booking_deposit_amount or Decimal("0")
+        needs_deposit = deposit_amt > 0
+        initial_status = (
+            Appointment.Status.SCHEDULED if needs_deposit else Appointment.Status.CONFIRMED
         )
-        appt.save()
-        patient.ai_summary = ""
-        patient.ai_summary_updated_at = None
-        patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
+
+        with transaction.atomic():
+            appt = Appointment(
+                clinic=clinic,
+                patient=patient,
+                vet_id=vet_id,
+                room_id=room_id,
+                starts_at=starts_at,
+                ends_at=ends_at,
+                visit_type=Appointment.VisitType.OUTPATIENT,
+                status=initial_status,
+                reason=reason,
+            )
+            appt.save()
+            patient.ai_summary = ""
+            patient.ai_summary_updated_at = None
+            patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
+
+            deposit_invoice = None
+            if needs_deposit:
+                deposit_invoice = Invoice.objects.create(
+                    clinic=clinic,
+                    client=patient.owner,
+                    patient=patient,
+                    appointment=appt,
+                    status=Invoice.Status.DRAFT,
+                    currency="PLN",
+                    created_by=None,
+                )
+                line_label = (
+                    clinic.portal_booking_deposit_line_label or "Online booking deposit"
+                ).strip() or "Online booking deposit"
+                InvoiceLine.objects.create(
+                    invoice=deposit_invoice,
+                    description=line_label[:255],
+                    quantity=Decimal("1"),
+                    unit_price=deposit_amt,
+                    vat_rate=InvoiceLine.VatRate.RATE_8,
+                )
+                appt.portal_deposit_invoice = deposit_invoice
+                appt.save(update_fields=["portal_deposit_invoice", "updated_at"])
 
         log_audit_event(
             clinic_id=clinic.id,
@@ -561,21 +630,118 @@ class PortalAppointmentListCreateView(APIView):
                 "starts_at": starts_at.isoformat(),
                 "ends_at": ends_at.isoformat(),
                 "client_id": p.client_id,
+                "needs_deposit": needs_deposit,
+                "deposit_invoice_id": deposit_invoice.id if deposit_invoice else None,
             },
             metadata={"source": "portal"},
         )
 
+        if deposit_invoice:
+            deposit_invoice = (
+                Invoice.objects.filter(pk=deposit_invoice.pk).prefetch_related("lines").get()
+            )
         return Response(
-            {
-                "id": appt.id,
-                "starts_at": appt.starts_at.isoformat(),
-                "ends_at": appt.ends_at.isoformat(),
-                "status": appt.status,
-                "reason": appt.reason,
-                "vet_id": appt.vet_id,
-                "patient_id": appt.patient_id,
-            },
+            _portal_appointment_booking_payload(appt, deposit_invoice),
             status=201,
+        )
+
+
+class PortalInvoiceCompleteDepositView(APIView):
+    """
+    POST /api/portal/invoices/<invoice_id>/complete-deposit/
+    Simulated checkout: record payment on the deposit invoice and confirm the visit.
+    """
+
+    permission_classes = [IsPortalClient]
+
+    def post(self, request, invoice_id: int):
+        assert isinstance(request.user, PortalPrincipal)
+        p = request.user
+
+        use_simulated = bool(request.data.get("simulated"))
+        if not use_simulated:
+            return Response(
+                {
+                    "detail": "Live payment provider is not integrated yet; use simulated: true where the server allows it."
+                },
+                status=501,
+            )
+        if not (getattr(settings, "PORTAL_ALLOW_SIMULATED_PAYMENT", False) or settings.DEBUG):
+            return Response(
+                {"detail": "Simulated payments are disabled on this server."},
+                status=403,
+            )
+
+        appt = Appointment.objects.filter(
+            portal_deposit_invoice_id=invoice_id,
+            clinic_id=p.portal_clinic_id,
+            patient__owner_id=p.client_id,
+        ).first()
+        if not appt:
+            return Response({"detail": "Invoice not found."}, status=404)
+
+        inv = Invoice.objects.filter(
+            pk=invoice_id,
+            clinic_id=p.portal_clinic_id,
+            client_id=p.client_id,
+        ).first()
+        if not inv:
+            return Response({"detail": "Invoice not found."}, status=404)
+        if appt.portal_deposit_invoice_id != inv.id:
+            return Response({"detail": "Invoice not found."}, status=404)
+        if appt.status == Appointment.Status.CANCELLED:
+            return Response(
+                {"detail": "Appointment was cancelled; cannot complete payment."},
+                status=409,
+            )
+        if inv.status == Invoice.Status.PAID:
+            return Response({"detail": "Invoice is already paid."}, status=400)
+        if inv.status != Invoice.Status.DRAFT:
+            return Response(
+                {"detail": "Only draft deposit invoices can be completed here."},
+                status=400,
+            )
+
+        with transaction.atomic():
+            inv_locked = Invoice.objects.select_for_update().get(pk=inv.pk)
+            appt_locked = Appointment.objects.select_for_update().get(pk=appt.pk)
+            Payment.objects.create(
+                invoice=inv_locked,
+                amount=inv_locked.total,
+                method=Payment.Method.CARD,
+                status=Payment.Status.COMPLETED,
+                reference="portal-simulated",
+                note="Portal simulated deposit",
+                created_by=None,
+            )
+            inv_reload = (
+                Invoice.objects.filter(pk=inv_locked.pk).prefetch_related("lines", "payments").get()
+            )
+            if inv_reload.amount_paid >= inv_reload.total:
+                inv_reload.status = Invoice.Status.PAID
+                inv_reload.save(update_fields=["status", "updated_at"])
+            if appt_locked.status != Appointment.Status.CONFIRMED:
+                appt_locked.status = Appointment.Status.CONFIRMED
+                appt_locked.save(update_fields=["status", "updated_at"])
+
+        appt_done = Appointment.objects.get(pk=appt.pk)
+        inv_done = Invoice.objects.filter(pk=invoice_id).prefetch_related("lines", "payments").get()
+        log_audit_event(
+            clinic_id=appt_done.clinic_id,
+            actor=None,
+            action="portal_booking_deposit_paid",
+            entity_type="appointment",
+            entity_id=appt_done.id,
+            after={
+                "invoice_id": inv_done.id,
+                "appointment_status": appt_done.status,
+            },
+            metadata={"source": "portal", "simulated": True},
+        )
+
+        return Response(
+            _portal_appointment_booking_payload(appt_done, inv_done),
+            status=200,
         )
 
 
@@ -602,11 +768,21 @@ class PortalAppointmentCancelView(APIView):
             return Response({"detail": "Appointment not found."}, status=404)
 
         old_status = appt.status
-        appt.status = Appointment.Status.CANCELLED
-        appt.cancelled_by = Appointment.CancelledBy.CLIENT
-        appt.cancellation_reason = reason
-        appt.cancelled_at = timezone.now()
-        appt.save()
+        with transaction.atomic():
+            if appt.portal_deposit_invoice_id:
+                inv = (
+                    Invoice.objects.select_for_update()
+                    .filter(pk=appt.portal_deposit_invoice_id)
+                    .first()
+                )
+                if inv and inv.status == Invoice.Status.DRAFT:
+                    inv.status = Invoice.Status.CANCELLED
+                    inv.save(update_fields=["status", "updated_at"])
+            appt.status = Appointment.Status.CANCELLED
+            appt.cancelled_by = Appointment.CancelledBy.CLIENT
+            appt.cancellation_reason = reason
+            appt.cancelled_at = timezone.now()
+            appt.save()
 
         log_audit_event(
             clinic_id=appt.clinic_id,

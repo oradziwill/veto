@@ -38,7 +38,7 @@ Base path: **`/api/portal/`**
 
 | Method | Path | Query | Notes |
 |--------|------|-------|--------|
-| GET | `clinics/<slug>/` | — | `{ slug, name, online_booking_enabled }` |
+| GET | `clinics/<slug>/` | — | `{ slug, name, online_booking_enabled, portal_booking_deposit_pln, portal_booking_deposit_label }` — deposit strings for UI copy (amount may be `"0.00"`) |
 | GET | `clinics/<slug>/vets/` | — | List vets (`id`, `first_name`, `last_name`, `username`) |
 | GET | `clinics/<slug>/availability/` | `date=YYYY-MM-DD`, optional `vet`, `room` | Same shape as authenticated availability below |
 
@@ -56,9 +56,10 @@ Base path: **`/api/portal/`**
 | GET | `me/patients/` | Pets linked to this owner in this clinic |
 | GET | `me/patients/<id>/` | Pet card: demographics, upcoming visits for this pet, recent vaccinations, last weight from last **completed** visit with `weight_kg` |
 | GET | `availability/` | Same query/response as public clinic availability, scoped to token’s clinic |
-| GET | `appointments/` | Upcoming sidebar: appointments from **start of local calendar day** onward for this owner’s patients (excludes cancelled) |
+| GET | `appointments/` | Upcoming sidebar: appointments from **start of local calendar day** onward for this owner’s patients (excludes cancelled); includes **`deposit_invoice_id`**, **`payment_required`** when a portal deposit invoice exists and is not paid |
 | POST | `appointments/` | Create visit (see below) |
-| POST | `appointments/<id>/cancel/` | Client cancellation (body optional `cancellation_reason`) |
+| POST | `invoices/<invoice_id>/complete-deposit/` | MVP: record simulated payment on the **draft** portal deposit invoice and **confirm** the visit (see below) |
+| POST | `appointments/<id>/cancel/` | Client cancellation (body optional `cancellation_reason`); cancels linked **draft** deposit invoice in the same transaction |
 
 ### `POST /api/portal/appointments/`
 
@@ -70,7 +71,15 @@ JSON body:
 - **`reason`** (optional string, max 255)
 - **`room_id`** (optional int) — must belong to clinic if provided
 
-Created appointments use `visit_type=outpatient` and `status=confirmed`.
+**Deposit (clinic setting):** `Clinic.portal_booking_deposit_amount` (default `0`). If **> 0**:
+
+- Visit is created with `status=scheduled` (not `confirmed` until deposit is paid).
+- A **DRAFT** `Invoice` is created in PLN with one line: label from `portal_booking_deposit_line_label` (default “Online booking deposit”), `unit_price` = deposit amount, **8% VAT** (`InvoiceLine.VatRate.RATE_8`). The appointment stores **`portal_deposit_invoice`**.
+- **`POST …/complete-deposit/`** with `{ "simulated": true }` is allowed only when `PORTAL_ALLOW_SIMULATED_PAYMENT` is true **or** `DEBUG` is true. It creates a completed **card** payment for the invoice total, marks the invoice **PAID** when `amount_paid >= total`, sets the appointment **`confirmed`**, and writes audit **`portal_booking_deposit_paid`**. Without `simulated: true` the API returns **501** (live PSP not integrated). **409** if the appointment was already cancelled.
+
+If deposit amount is zero, behaviour is unchanged: **`status=confirmed`**, no deposit invoice, **`payment_required`** false in API payloads.
+
+Created appointments always use `visit_type=outpatient`.
 
 ### `GET /api/portal/me/patients/<id>/`
 
@@ -88,11 +97,12 @@ Returns **404** unless the patient belongs to the portal user for the token’s 
 | `PORTAL_OTP_EXPIRE_MINUTES` | OTP validity (default 15). Env: `PORTAL_OTP_EXPIRE_MINUTES` |
 | `PORTAL_ACCESS_TOKEN_LIFETIME` | Portal JWT lifetime (default 24h). Env: `PORTAL_ACCESS_TOKEN_HOURS` |
 | `PORTAL_RETURN_OTP_IN_RESPONSE` | If true, OTP may appear as `_dev_otp` on request-code. Env: `PORTAL_RETURN_OTP_IN_RESPONSE` (`1`/`true`/`yes`) |
+| `PORTAL_ALLOW_SIMULATED_PAYMENT` | If true (or `DEBUG` true), `POST …/complete-deposit/` may use `{ "simulated": true }`. Env: `PORTAL_ALLOW_SIMULATED_PAYMENT` (`1`/`true`/`yes`) |
 | `DEFAULT_SLOT_MINUTES` | Slot length for availability (default 30) |
 
 ## Audit log
 
-Events: **`portal_appointment_booked`**, **`portal_appointment_cancelled`** (`entity_type=appointment`, `actor` null, `metadata.source=portal`). See [AUDIT_LOG.md](AUDIT_LOG.md).
+Events: **`portal_appointment_booked`** (after payload may include `needs_deposit`, `deposit_invoice_id`), **`portal_appointment_cancelled`**, **`portal_booking_deposit_paid`** (`entity_type=appointment`, `actor` null, `metadata.source=portal`, `metadata.simulated=true` for MVP). See [AUDIT_LOG.md](AUDIT_LOG.md).
 
 ## Security notes (MVP gaps)
 

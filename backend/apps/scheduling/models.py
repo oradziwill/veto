@@ -90,6 +90,14 @@ class Appointment(models.Model):
     )
     cancelled_at = models.DateTimeField(null=True, blank=True)
 
+    portal_deposit_invoice = models.ForeignKey(
+        "billing.Invoice",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="portal_deposit_appointments",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

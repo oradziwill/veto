@@ -72,9 +72,14 @@ Dev/staging only: `_dev_otp` on request-code when backend flag is enabled — do
 | GET | `/api/portal/availability/?date=&vet=` |
 | GET | `/api/portal/appointments/` |
 | POST | `/api/portal/appointments/` |
+| POST | `/api/portal/invoices/<invoice_id>/complete-deposit/` |
 | POST | `/api/portal/appointments/<id>/cancel/` |
 
+**Clinic public payload** (`GET …/clinics/<slug>/`) also includes **`portal_booking_deposit_pln`** (string, may be `"0.00"`) and **`portal_booking_deposit_label`** so the UI can show prepayment before login.
+
 **Book:** `patient_id`, `vet_id`, `starts_at`, `ends_at` must **exactly** match a `free[]` slot from availability for that date/vet; optional `reason`, `room_id`. **409** if slot gone — refresh grid.
+
+When the clinic’s configured deposit is **> 0**, the new visit is **`scheduled`** (not `confirmed`) until deposit is settled; **`POST …/complete-deposit/`** with `{ "simulated": true }` records payment (MVP: no real PSP). **`501`** if `simulated` is omitted; **`403`** if the server disallows simulation (see env below). List/detail rows expose **`deposit_invoice_id`** and **`payment_required`**. Cancelling cancels a linked **draft** deposit invoice.
 
 **403** on clinic when `online_booking_enabled` is false.
 
@@ -100,6 +105,7 @@ If you build or extend an **admin audit** screen:
 | `clinical_exam_template_applied` | `entity_type=appointment`; metadata has template + applied_fields |
 | `portal_appointment_booked` | `entity_type=appointment`; `actor` may be null; `metadata.source=portal` |
 | `portal_appointment_cancelled` | |
+| `portal_booking_deposit_paid` | `entity_type=appointment`; simulated checkout; `metadata.simulated=true` |
 
 **Full detail:** [AUDIT_LOG.md](AUDIT_LOG.md)
 

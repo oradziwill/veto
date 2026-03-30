@@ -90,6 +90,8 @@ def test_portal_otp_and_booking_happy_path(
     )
     assert book.status_code == 201
     appt_id = book.data["id"]
+    assert book.data["status"] == Appointment.Status.CONFIRMED
+    assert book.data["payment_required"] is False
 
     ev = AuditLog.objects.filter(
         action="portal_appointment_booked",

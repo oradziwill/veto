@@ -58,6 +58,7 @@ Optional filters:
 - `clinical_exam_template_deleted` (`entity_type=clinical_exam_template`)
 - `clinical_exam_template_applied` (`entity_type=appointment`; `metadata` includes `template_id`, `template_name`, `clinical_exam_id`, `applied_fields`, `force`)
 - `portal_appointment_booked` (`entity_type=appointment`; `actor` is null; `metadata.source=portal`)
+- `portal_booking_deposit_paid` (`entity_type=appointment`; simulated checkout in MVP when `metadata.simulated=true`)
 - `portal_appointment_cancelled` (`entity_type=appointment`; `actor` is null; `metadata.source=portal`)
 
 ## Request correlation

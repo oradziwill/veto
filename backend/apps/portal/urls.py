@@ -13,4 +13,8 @@ urlpatterns = [
     path("availability/", views.PortalAvailabilityView.as_view()),
     path("appointments/", views.PortalAppointmentListCreateView.as_view()),
     path("appointments/<int:pk>/cancel/", views.PortalAppointmentCancelView.as_view()),
+    path(
+        "invoices/<int:invoice_id>/complete-deposit/",
+        views.PortalInvoiceCompleteDepositView.as_view(),
+    ),
 ]
