@@ -87,6 +87,8 @@ When the clinic’s configured deposit is **> 0**, the new visit is **`scheduled
 
 **Pet card (`GET …/me/patients/<id>/`):** JSON with `patient` (no internal `notes` / AI fields), `upcoming_appointments`, `recent_vaccinations`, `last_weight_kg` (number or null), `last_weight_recorded_at`. **404** if the pet is not owned by this client in this clinic.
 
+**Staff calendar (staff JWT, `/api/appointments/`):** query **`booked_via_portal=true`** (or **`false`**, **`1`**, **`0`**) to show only visits booked via the owner portal vs only those created in the clinic app. List/retrieve payloads include read-only **`booked_via_portal`**.
+
 **Full detail:** [FRONTEND_HANDOFF_CLIENT_PORTAL.md](FRONTEND_HANDOFF_CLIENT_PORTAL.md) · [CLIENT_PORTAL_BOOKING.md](CLIENT_PORTAL_BOOKING.md)
 
 ---

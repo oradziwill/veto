@@ -97,6 +97,10 @@ class Appointment(models.Model):
         blank=True,
         related_name="portal_deposit_appointments",
     )
+    booked_via_portal = models.BooleanField(
+        default=False,
+        help_text="True when the visit was created through the owner booking portal.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -107,6 +111,10 @@ class Appointment(models.Model):
             models.Index(fields=["clinic", "starts_at"]),
             models.Index(fields=["vet", "starts_at"]),
             models.Index(fields=["patient", "starts_at"]),
+            models.Index(
+                fields=["clinic", "booked_via_portal", "starts_at"],
+                name="sch_appt_clinic_bvp_start",
+            ),
         ]
 
     def clean(self):

@@ -698,6 +698,7 @@ class PortalAppointmentListCreateView(APIView):
                 visit_type=Appointment.VisitType.OUTPATIENT,
                 status=initial_status,
                 reason=reason,
+                booked_via_portal=True,
             )
             appt.save()
             patient.ai_summary = ""

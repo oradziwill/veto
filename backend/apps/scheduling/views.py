@@ -120,7 +120,7 @@ def _trigger_visit_recording_uploaded(recording_id: int) -> None:
 class AppointmentViewSet(viewsets.ModelViewSet):
     """
     CRUD for appointments within the user's clinic.
-    Supports filtering by date, vet, patient, and status.
+    Supports filtering by date, vet, patient, status, visit_type, and booked_via_portal.
     """
 
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
@@ -177,6 +177,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         visit_type = self.request.query_params.get("visit_type")
         if visit_type:
             qs = qs.filter(visit_type=visit_type)
+
+        bvp = (self.request.query_params.get("booked_via_portal") or "").strip().lower()
+        if bvp in ("1", "true", "yes"):
+            qs = qs.filter(booked_via_portal=True)
+        elif bvp in ("0", "false", "no"):
+            qs = qs.filter(booked_via_portal=False)
 
         return qs
 
