@@ -169,3 +169,4 @@ Not part of the same delivery but available:
 - [FRONTEND_HANDOFF_HOSPITALIZATION.md](FRONTEND_HANDOFF_HOSPITALIZATION.md)
 - [FRONTEND_HANDOFF_inventory.md](FRONTEND_HANDOFF_inventory.md)
 - [SCHEDULING_ASSISTANT.md](SCHEDULING_ASSISTANT.md) — scheduling assistant / capacity (staff)
+- [CONSENT_DOCUMENTS.md](CONSENT_DOCUMENTS.md) — zgody na zabieg (PDF, podpis, S3, API)
