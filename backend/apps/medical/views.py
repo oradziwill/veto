@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.http import Http404
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
@@ -10,6 +11,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.audit.services import log_audit_event
+from apps.scheduling.models import Appointment
 
 from .models import (
     ClinicalExamTemplate,
@@ -149,11 +151,48 @@ class ProcedureSupplyTemplateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
 
     def get_queryset(self):
-        return (
+        qs = (
             ProcedureSupplyTemplate.objects.filter(clinic_id=self.request.user.clinic_id)
             .prefetch_related("lines__inventory_item")
             .order_by("name", "id")
         )
+        visit_type = self.request.query_params.get("visit_type")
+        if visit_type:
+            qs = qs.filter(visit_type=visit_type)
+        visit_icontains = self.request.query_params.get("visit_type_icontains")
+        if visit_icontains:
+            qs = qs.filter(visit_type__icontains=visit_icontains)
+        return qs
+
+    def list(self, request, *args, **kwargs):
+        appointment_context = None
+        raw_appt = request.query_params.get("for_appointment")
+        if raw_appt not in (None, ""):
+            try:
+                appt_id = int(raw_appt)
+            except (TypeError, ValueError):
+                raise Http404() from None
+            appt = (
+                Appointment.objects.filter(id=appt_id, clinic_id=request.user.clinic_id)
+                .only("id", "patient_id", "visit_type", "reason")
+                .first()
+            )
+            if not appt:
+                raise Http404()
+            appointment_context = {
+                "appointment_id": appt.id,
+                "patient_id": appt.patient_id,
+                "appointment_visit_type": appt.visit_type,
+                "reason": appt.reason,
+            }
+
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        if appointment_context is not None:
+            return Response(
+                {"appointment_context": appointment_context, "templates": serializer.data}
+            )
+        return Response(serializer.data)
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
