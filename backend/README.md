@@ -401,7 +401,7 @@ pytest
 - Overdue invoice status updates are scheduled via EventBridge/ECS (`terraform/ops.tf`).
 - Reminder queue can be hydrated/processed with management commands: `enqueue_reminders`, `process_reminders`, and `run_reminder_escalations`.
 - Reminder delivery config: `REMINDER_EMAIL_PROVIDER`, `REMINDER_SMS_PROVIDER`, `REMINDER_WEBHOOK_TOKEN`.
-- Deploy workflow runs post-deploy smoke checks on `/health/` and a protected API route.
+- Health: `GET /health/` (liveness, no DB), `GET /health/ready/` (readiness, DB `SELECT 1`). Post-deploy CLI: `python manage.py deploy_smoke` (optional `DEPLOY_SMOKE_BASE_URL`, `DEPLOY_SMOKE_JWT` for `GET /api/me/`).
 - After rotating `OPENAI_API_KEY` in Secrets Manager, force a new backend ECS deployment.
 
 ## Code Quality

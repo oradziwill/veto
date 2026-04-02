@@ -16,17 +16,14 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.http import JsonResponse
 from django.urls import include, path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-
-def health(_request):
-    return JsonResponse({"ok": True})
-
+from config.health import health, health_ready
 
 urlpatterns = [
     path("health/", health),
+    path("health/ready/", health_ready),
     path("admin/", admin.site.urls),
     # JWT auth
     path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),

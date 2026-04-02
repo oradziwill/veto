@@ -42,6 +42,7 @@ ALLOWED_HOSTS = [x.strip() for x in _allowed.split(",") if x.strip()] if _allowe
 
 # Application definition
 INSTALLED_APPS = [
+    "config.apps.ConfigConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
