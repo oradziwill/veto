@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.billing.models import Invoice
@@ -9,6 +11,8 @@ from apps.medical.models import (
     MedicalRecord,
     PatientHistoryEntry,
     Prescription,
+    ProcedureSupplyTemplate,
+    ProcedureSupplyTemplateLine,
     Vaccination,
 )
 from apps.scheduling.models import Appointment
@@ -122,6 +126,150 @@ class ClinicalExamTemplateWriteSerializer(serializers.ModelSerializer):
         if invalid:
             raise serializers.ValidationError(f"Unsupported default field(s): {', '.join(invalid)}")
         return value
+
+
+# -------------------------
+# Procedure supply templates (consumables / procedure kits)
+# -------------------------
+
+
+class ProcedureSupplyTemplateLineReadSerializer(serializers.ModelSerializer):
+    inventory_item_name = serializers.CharField(source="inventory_item.name", read_only=True)
+    inventory_item_sku = serializers.CharField(source="inventory_item.sku", read_only=True)
+
+    class Meta:
+        model = ProcedureSupplyTemplateLine
+        fields = [
+            "id",
+            "inventory_item",
+            "inventory_item_name",
+            "inventory_item_sku",
+            "suggested_quantity",
+            "sort_order",
+            "is_optional",
+            "default_unit_price",
+            "vat_rate",
+            "notes",
+        ]
+        read_only_fields = fields
+
+
+class ProcedureSupplyTemplateLineWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProcedureSupplyTemplateLine
+        fields = [
+            "inventory_item",
+            "suggested_quantity",
+            "sort_order",
+            "is_optional",
+            "default_unit_price",
+            "vat_rate",
+            "notes",
+        ]
+
+    def validate_inventory_item(self, value):
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+        if clinic_id and value.clinic_id != clinic_id:
+            raise serializers.ValidationError("Inventory item must belong to your clinic.")
+        return value
+
+    def validate_suggested_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("suggested_quantity must be positive.")
+        if Decimal(str(value)) != Decimal(str(value)).to_integral_value():
+            raise serializers.ValidationError(
+                "suggested_quantity must be a whole number for inventory items."
+            )
+        return value
+
+
+class ProcedureSupplyTemplateReadSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.SerializerMethodField()
+    lines = ProcedureSupplyTemplateLineReadSerializer(many=True, read_only=True)
+
+    def get_created_by_name(self, obj):
+        if not obj.created_by:
+            return None
+        return obj.created_by.get_full_name() or obj.created_by.username
+
+    class Meta:
+        model = ProcedureSupplyTemplate
+        fields = [
+            "id",
+            "clinic",
+            "name",
+            "visit_type",
+            "is_active",
+            "created_by",
+            "created_by_name",
+            "lines",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ProcedureSupplyTemplateWriteSerializer(serializers.ModelSerializer):
+    lines = ProcedureSupplyTemplateLineWriteSerializer(many=True, required=False)
+
+    class Meta:
+        model = ProcedureSupplyTemplate
+        fields = [
+            "name",
+            "visit_type",
+            "is_active",
+            "lines",
+        ]
+
+    def validate_name(self, value):
+        name = (value or "").strip()
+        if not name:
+            raise serializers.ValidationError("This field may not be blank.")
+        request = self.context.get("request")
+        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+        if not clinic_id:
+            return name
+        qs = ProcedureSupplyTemplate.objects.filter(clinic_id=clinic_id, name=name)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                "A template with this name already exists in your clinic."
+            )
+        return name
+
+    def validate(self, attrs):
+        if self.instance is None:
+            lines = attrs.get("lines")
+            if not lines:
+                raise serializers.ValidationError({"lines": "At least one line is required."})
+        return attrs
+
+    def create(self, validated_data):
+        lines_data = validated_data.pop("lines")
+        request = self.context["request"]
+        template = ProcedureSupplyTemplate.objects.create(
+            clinic_id=request.user.clinic_id,
+            created_by=request.user,
+            **validated_data,
+        )
+        for line_data in lines_data:
+            ProcedureSupplyTemplateLine.objects.create(template=template, **line_data)
+        return template
+
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop("lines", None)
+        for attr, val in validated_data.items():
+            setattr(instance, attr, val)
+        instance.save()
+        if lines_data is not None:
+            if not lines_data:
+                raise serializers.ValidationError({"lines": ["At least one line is required."]})
+            instance.lines.all().delete()
+            for line_data in lines_data:
+                ProcedureSupplyTemplateLine.objects.create(template=instance, **line_data)
+        return instance
 
 
 # -------------------------
