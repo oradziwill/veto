@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.billing.models import Invoice
 from apps.billing.serializers import InvoiceReadSerializer
+from apps.billing.services.recent_supply_lines import recent_supply_line_suggestions
 from apps.clients.models import ClientClinic
 from apps.medical.models import MedicalRecord, PatientHistoryEntry, Prescription, Vaccination
 from apps.medical.serializers import (
@@ -68,6 +69,27 @@ class PatientViewSet(viewsets.ModelViewSet):
             "recorded_at": clinical_exam.created_at.isoformat(),
         }
         return Response(payload, status=200)
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="recent-supply-lines",
+        permission_classes=[IsStaffOrVet],
+    )
+    def recent_supply_lines(self, request, pk=None):
+        patient = self.get_object()
+        raw_limit = request.query_params.get("limit", "20")
+        try:
+            limit_n = int(raw_limit)
+        except (TypeError, ValueError):
+            raise ValidationError({"limit": "Must be a positive integer."}) from None
+        limit_n = max(1, min(limit_n, 50))
+        data = recent_supply_line_suggestions(
+            clinic_id=request.user.clinic_id,
+            patient_id=patient.id,
+            limit=limit_n,
+        )
+        return Response(data, status=200)
 
     @action(
         detail=True,

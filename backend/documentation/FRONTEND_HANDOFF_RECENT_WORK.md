@@ -50,6 +50,15 @@ Response: full **ClinicalExam** payload plus **`template_meta`**: `template_id`,
 | POST | `/api/medical/procedure-supply-templates/` |
 | GET / PATCH / DELETE | `/api/medical/procedure-supply-templates/<id>/` |
 | POST | `/api/appointments/<id>/procedure-supply-template-preview/` |
+| GET | `/api/patients/<id>/recent-supply-lines/` |
+
+**List query (`GET …/procedure-supply-templates/`):**
+
+- `visit_type` — exact match on template tag (free text, e.g. `usg` / `imaging`; **not** the appointment enum `outpatient` / `hospitalization`).
+- `visit_type_icontains` — optional partial match on the same field (can be combined with `visit_type`).
+- `for_appointment=<appointment_id>` — optional. Verifies the appointment belongs to the user’s clinic; otherwise **404**. When present, the response is an object: **`appointment_context`** (`appointment_id`, `patient_id`, `appointment_visit_type`, `reason`) and **`templates`** (array). When omitted, the response stays a **plain JSON array** (backward compatible).
+
+**Recent consumables (`GET …/patients/<id>/recent-supply-lines/`):** staff / vet (same idea as `last-vitals`). Suggestions from past **invoice lines** linked to **inventory** for this patient in this clinic (deduped by item, newest invoice first). Query: `limit` (default 20, max 50). Each element: `inventory_item_id`, `name`, `sku`, `unit`, `last_quantity`, `last_used_at`, `invoice_id`. Read-only — does not create invoices or move stock.
 
 **Body (create / full update):** `name`, optional `visit_type`, `is_active`, **`lines`**: array of `{ inventory_item, suggested_quantity, sort_order?, is_optional?, default_unit_price?, vat_rate?, notes? }`. At least one line on create. `suggested_quantity` must be a **positive whole number** (inventory dispense rules). Items must belong to the same clinic.
 
