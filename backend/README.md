@@ -400,6 +400,7 @@ pytest
 - Production logging includes `request_id`, `user_id`, and `clinic_id` context.
 - Overdue invoice status updates are scheduled via EventBridge/ECS (`terraform/ops.tf`).
 - Reminder queue can be hydrated/processed with management commands: `enqueue_reminders`, `process_reminders`, and `run_reminder_escalations`.
+- Per clinic, `Clinic.reminder_sms_enabled` (default `True`): when `False`, `process_reminders` cancels queued **SMS** reminders with a clear error (email reminders still send). Toggle via Django admin on the clinic record.
 - Reminder delivery config: `REMINDER_EMAIL_PROVIDER`, `REMINDER_SMS_PROVIDER`, `REMINDER_WEBHOOK_TOKEN`.
 - Health: `GET /health/` (liveness, no DB), `GET /health/ready/` (readiness, DB `SELECT 1`). Post-deploy CLI: `python manage.py deploy_smoke` with a real **origin** in `DEPLOY_SMOKE_BASE_URL` (e.g. `https://api.twojadomena.pl` or `http://127.0.0.1:8000`, no path suffix). Optional `DEPLOY_SMOKE_JWT`: value of **`access`** from `POST /api/auth/token/` (staff user must exist in that DB — pytest fixtures do not create dev users). Omit JWT to smoke only `/health/` + `/health/ready/`.
 - After rotating `OPENAI_API_KEY` in Secrets Manager, force a new backend ECS deployment.
