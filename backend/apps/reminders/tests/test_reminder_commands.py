@@ -15,6 +15,7 @@ from apps.reminders.models import (
     Reminder,
     ReminderEscalationExecution,
     ReminderEscalationRule,
+    ReminderEvent,
     ReminderInboundReply,
     ReminderPortalActionToken,
     ReminderPreference,
@@ -210,6 +211,71 @@ def test_process_reminders_retries_and_fails(clinic, patient, client_with_member
     reminder.refresh_from_db()
     assert reminder.status == Reminder.Status.FAILED
     assert reminder.attempts == 2
+
+
+@pytest.mark.django_db
+def test_process_reminders_cancels_sms_when_reminder_sms_disabled(
+    clinic, patient, client_with_membership
+):
+    clinic.reminder_sms_enabled = False
+    clinic.save(update_fields=["reminder_sms_enabled"])
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.SMS,
+        recipient="+48123456789",
+        subject="Pay",
+        body="Please pay",
+        scheduled_for=timezone.now() - timedelta(minutes=1),
+    )
+
+    call_command("process_reminders")
+    reminder.refresh_from_db()
+    assert reminder.status == Reminder.Status.CANCELLED
+    assert "disabled for this clinic" in reminder.last_error
+    ev = ReminderEvent.objects.filter(reminder=reminder).last()
+    assert ev is not None
+    assert ev.event_type == ReminderEvent.EventType.CANCELLED
+    assert ev.payload.get("reason") == "reminder_sms_disabled"
+
+
+@pytest.mark.django_db
+def test_process_reminders_email_still_sent_when_sms_disabled(
+    clinic, patient, client_with_membership
+):
+    clinic.reminder_sms_enabled = False
+    clinic.save(update_fields=["reminder_sms_enabled"])
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        due_date=timezone.localdate() + timedelta(days=1),
+    )
+    email_reminder = Reminder.objects.create(
+        clinic=clinic,
+        patient=patient,
+        invoice=invoice,
+        reminder_type=Reminder.ReminderType.INVOICE,
+        channel=Reminder.Channel.EMAIL,
+        recipient="owner@example.com",
+        subject="Invoice reminder",
+        body="Please pay",
+        scheduled_for=timezone.now() - timedelta(minutes=1),
+    )
+
+    call_command("process_reminders")
+    email_reminder.refresh_from_db()
+    assert email_reminder.status == Reminder.Status.SENT
 
 
 @pytest.mark.django_db

@@ -36,6 +36,11 @@ class Clinic(models.Model):
         blank=True,
     )
 
+    reminder_sms_enabled = models.BooleanField(
+        default=True,
+        help_text="If disabled, queued SMS reminders are cancelled during processing (email is unaffected).",
+    )
+
     def save(self, *args, **kwargs):
         if not self.slug:
             base = slugify(self.name)[:200] or "clinic"

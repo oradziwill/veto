@@ -26,7 +26,7 @@ class Command(BaseCommand):
                 status__in=[Reminder.Status.QUEUED, Reminder.Status.DEFERRED],
                 scheduled_for__lte=now,
             )
-            .select_related("patient", "patient__owner")
+            .select_related("patient", "patient__owner", "clinic")
             .order_by("scheduled_for", "id")[:limit]
         )
 
@@ -64,6 +64,21 @@ class Command(BaseCommand):
                     payload={"defer_until": defer_until.isoformat()},
                 )
                 deferred_count += 1
+                continue
+
+            if (
+                reminder.channel == Reminder.Channel.SMS
+                and not reminder.clinic.reminder_sms_enabled
+            ):
+                reminder.status = Reminder.Status.CANCELLED
+                reminder.last_error = "SMS reminders are disabled for this clinic."
+                reminder.save(update_fields=["status", "last_error", "updated_at"])
+                ReminderEvent.objects.create(
+                    reminder=reminder,
+                    event_type=ReminderEvent.EventType.CANCELLED,
+                    payload={"reason": "reminder_sms_disabled"},
+                )
+                cancelled_count += 1
                 continue
 
             reminder.attempts += 1
