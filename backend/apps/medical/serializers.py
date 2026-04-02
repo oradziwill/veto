@@ -5,6 +5,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from apps.billing.models import Invoice
+from apps.drug_catalog.models import ReferenceProduct
 from apps.medical.models import (
     ClinicalExam,
     ClinicalExamTemplate,
@@ -405,11 +406,18 @@ class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
 
 class PrescriptionReadSerializer(serializers.ModelSerializer):
     prescribed_by_name = serializers.SerializerMethodField()
+    reference_product = serializers.SerializerMethodField()
 
     def get_prescribed_by_name(self, obj):
         if not obj.prescribed_by:
             return None
         return obj.prescribed_by.get_full_name() or obj.prescribed_by.username
+
+    def get_reference_product(self, obj):
+        ref = getattr(obj, "reference_product", None)
+        if ref is None:
+            return None
+        return {"id": ref.id, "name": ref.name}
 
     class Meta:
         model = Prescription
@@ -425,12 +433,19 @@ class PrescriptionReadSerializer(serializers.ModelSerializer):
             "dosage",
             "duration_days",
             "notes",
+            "reference_product",
             "created_at",
         ]
         read_only_fields = fields
 
 
 class PrescriptionWriteSerializer(serializers.ModelSerializer):
+    reference_product = serializers.PrimaryKeyRelatedField(
+        queryset=ReferenceProduct.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = Prescription
         fields = [
@@ -439,6 +454,7 @@ class PrescriptionWriteSerializer(serializers.ModelSerializer):
             "dosage",
             "duration_days",
             "notes",
+            "reference_product",
         ]
 
     def validate_drug_name(self, value):

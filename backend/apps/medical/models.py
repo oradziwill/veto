@@ -296,12 +296,20 @@ class Prescription(models.Model):
     dosage = models.CharField(max_length=200, blank=True)
     duration_days = models.PositiveIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True)
+    reference_product = models.ForeignKey(
+        "drug_catalog.ReferenceProduct",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prescriptions",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["clinic", "patient"], name="medical_pre_clinic__9a8b7c_idx")
+            models.Index(fields=["clinic", "patient"], name="medical_pre_clinic__9a8b7c_idx"),
+            models.Index(fields=["reference_product"], name="med_prescription_refprod_idx"),
         ]
 
     def __str__(self) -> str:
