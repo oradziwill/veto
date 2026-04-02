@@ -44,24 +44,36 @@ class Command(BaseCommand):
 
         for path in ("/health/", "/health/ready/"):
             url = f"{base}{path}"
-            code, ok = self._get_json(url, timeout=timeout)
+            code, ok, err = self._get_json(url, timeout=timeout)
             results.append((path, code, ok))
             if not ok:
-                raise CommandError(f"check failed: {path} -> HTTP {code}")
+                raise CommandError(self._format_failure("GET", url, code, err))
 
         if token:
             url = f"{base}/api/me/"
-            code, ok = self._get_json(
+            code, ok, err = self._get_json(
                 url,
                 timeout=timeout,
                 headers={"Authorization": f"Bearer {token}"},
             )
             results.append(("/api/me/", code, ok))
             if not ok:
-                raise CommandError(f"check failed: /api/me/ -> HTTP {code}")
+                raise CommandError(self._format_failure("GET", url, code, err))
 
         payload = {"ok": True, "checks": [{"path": p, "status": c} for p, c, _ in results]}
         self.stdout.write(json.dumps(payload, ensure_ascii=False))
+
+    @staticmethod
+    def _format_failure(method: str, url: str, code: int, err: str | None) -> str:
+        parts = [f"check failed: {method} {url}", f"HTTP {code}"]
+        if err:
+            parts.append(err)
+        if code == 0:
+            parts.append(
+                "(no HTTP response — wrong DEPLOY_SMOKE_BASE_URL, DNS unreachable host, "
+                "TLS error, or use http:// for local dev)"
+            )
+        return " — ".join(parts)
 
     @staticmethod
     def _get_json(
@@ -69,18 +81,31 @@ class Command(BaseCommand):
         *,
         timeout: int,
         headers: dict[str, str] | None = None,
-    ) -> tuple[int, bool]:
+    ) -> tuple[int, bool, str | None]:
         req = urllib.request.Request(url, method="GET", headers=dict(headers or {}))
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                code = getattr(resp, "status", 200) or 200
+                code = resp.getcode()
                 body = resp.read()
         except urllib.error.HTTPError as e:
-            return e.code, False
-        except urllib.error.URLError:
-            return 0, False
+            hint: str | None = None
+            try:
+                raw = e.read().decode("utf-8", errors="replace")
+                if raw:
+                    hint = raw[:500]
+            except Exception:
+                pass
+            return e.code, False, hint or getattr(e, "reason", None) or str(e)
+        except urllib.error.URLError as e:
+            reason = e.reason
+            msg = str(reason) if reason is not None else str(e)
+            return 0, False, msg
+        except TimeoutError:
+            return 0, False, "request timed out"
         try:
             data = json.loads(body.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return code, False
-        return code, bool(data.get("ok") is True)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return code, False, f"response is not JSON: {e}"
+        if data.get("ok") is not True:
+            return code, False, f'expected {{"ok": true}}, got {data!r}'
+        return code, True, None
