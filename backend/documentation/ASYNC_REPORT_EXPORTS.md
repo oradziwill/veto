@@ -14,8 +14,19 @@ Avoid long synchronous API responses for large report exports by introducing:
 Model: `ReportExportJob` (`apps/reports/models.py`)
 
 Key fields:
-- `report_type`: `revenue_summary`, `reminder_analytics`, `cancellation_analytics`
+- `report_type`: `revenue_summary`, `reminder_analytics`, `cancellation_analytics`, `accounting_invoice_lines`
 - `params` (JSON input for date filters, etc.)
+
+### `accounting_invoice_lines`
+
+Flat CSV for accountants: **one row per invoice line** with invoice header columns repeated.
+
+`params`:
+- `from`, `to` — invoice `created_at` date (ISO), default last 30 days through today.
+- `include_drafts` — optional boolean (default `false`); if `true`, include `draft` invoices.
+- `include_cancelled` — optional boolean (default `false`); if `true`, include `cancelled` invoices.
+
+By default only **`sent`**, **`paid`**, **`overdue`** invoices are included.
 - `status`: `pending`, `processing`, `completed`, `failed`
 - `file_name`, `file_content`, `content_type`
 - `error`, `completed_at`
