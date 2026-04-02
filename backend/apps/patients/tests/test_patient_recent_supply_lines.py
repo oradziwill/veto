@@ -132,6 +132,99 @@ def test_recent_supply_lines_respects_limit_param(
 
 
 @pytest.mark.django_db
+def test_recent_supply_lines_ignores_cancelled_invoice(api_client, receptionist, doctor):
+    clinic = receptionist.clinic
+    owner = Client.objects.create(first_name="A", last_name="B")
+    ClientClinic.objects.create(client=owner, clinic=clinic)
+    patient = Patient.objects.create(clinic=clinic, owner=owner, name="Pet", species="dog")
+
+    item = InventoryItem.objects.create(
+        clinic=clinic,
+        name="OnlyCancelled",
+        sku="CAN-1",
+        unit="szt",
+        stock_on_hand=10,
+        created_by=doctor,
+    )
+    cancelled = Invoice.objects.create(
+        clinic=clinic,
+        client=owner,
+        patient=patient,
+        status=Invoice.Status.CANCELLED,
+    )
+    InvoiceLine.objects.create(
+        invoice=cancelled,
+        description=item.name,
+        quantity=Decimal("5"),
+        unit_price=Decimal("1"),
+        inventory_item=item,
+        unit="szt",
+    )
+
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.get(f"/api/patients/{patient.id}/recent-supply-lines/")
+    assert r.status_code == 200
+    assert r.data == []
+
+
+@pytest.mark.django_db
+def test_recent_supply_lines_skips_cancelled_uses_older_non_cancelled(
+    api_client, receptionist, doctor
+):
+    clinic = receptionist.clinic
+    owner = Client.objects.create(first_name="A", last_name="B")
+    ClientClinic.objects.create(client=owner, clinic=clinic)
+    patient = Patient.objects.create(clinic=clinic, owner=owner, name="Pet", species="dog")
+
+    item = InventoryItem.objects.create(
+        clinic=clinic,
+        name="Supply",
+        sku="SUP-1",
+        unit="szt",
+        stock_on_hand=10,
+        created_by=doctor,
+    )
+    paid = Invoice.objects.create(
+        clinic=clinic,
+        client=owner,
+        patient=patient,
+        status=Invoice.Status.PAID,
+        created_at=timezone.now() - timedelta(days=5),
+    )
+    InvoiceLine.objects.create(
+        invoice=paid,
+        description=item.name,
+        quantity=Decimal("2"),
+        unit_price=Decimal("10"),
+        inventory_item=item,
+        unit="szt",
+    )
+    cancelled = Invoice.objects.create(
+        clinic=clinic,
+        client=owner,
+        patient=patient,
+        status=Invoice.Status.CANCELLED,
+    )
+    InvoiceLine.objects.create(
+        invoice=cancelled,
+        description=item.name,
+        quantity=Decimal("9"),
+        unit_price=Decimal("10"),
+        inventory_item=item,
+        unit="szt",
+    )
+
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.get(f"/api/patients/{patient.id}/recent-supply-lines/")
+    assert r.status_code == 200
+    assert len(r.data) == 1
+    row = r.data[0]
+    assert row["inventory_item_id"] == item.id
+    assert row["last_quantity"] in ("2", "2.000")
+    assert row["invoice_id"] == paid.id
+
+
+@pytest.mark.django_db
 def test_recent_supply_lines_other_clinic_patient_404(api_client, receptionist):
     other = Clinic.objects.create(name="O", address="a", phone="p", email="e@e.com")
     owner = Client.objects.create(first_name="X", last_name="Y")
