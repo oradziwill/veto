@@ -50,7 +50,7 @@ class Command(BaseCommand):
 
         for path in ("/health/", "/health/ready/"):
             url = f"{base}{path}"
-            code, ok, err = self._get_json(url, timeout=timeout)
+            code, ok, err = self._get_json(url, timeout=timeout, expect_ok_envelope=True)
             results.append((path, code, ok))
             if not ok:
                 raise CommandError(self._format_failure("GET", url, code, err))
@@ -61,6 +61,7 @@ class Command(BaseCommand):
                 url,
                 timeout=timeout,
                 headers={"Authorization": f"Bearer {token}"},
+                expect_ok_envelope=False,
             )
             results.append(("/api/me/", code, ok))
             if not ok:
@@ -87,6 +88,7 @@ class Command(BaseCommand):
         *,
         timeout: int,
         headers: dict[str, str] | None = None,
+        expect_ok_envelope: bool = True,
     ) -> tuple[int, bool, str | None]:
         req = urllib.request.Request(url, method="GET", headers=dict(headers or {}))
         try:
@@ -112,6 +114,11 @@ class Command(BaseCommand):
             data = json.loads(body.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             return code, False, f"response is not JSON: {e}"
-        if data.get("ok") is not True:
-            return code, False, f'expected {{"ok": true}}, got {data!r}'
+        if expect_ok_envelope:
+            if data.get("ok") is not True:
+                return code, False, f'expected {{"ok": true}}, got {data!r}'
+        else:
+            # GET /api/me/ returns a user object (no top-level "ok").
+            if not isinstance(data, dict) or "id" not in data or "username" not in data:
+                return code, False, f"expected user shape with id/username, got {data!r}"
         return code, True, None
