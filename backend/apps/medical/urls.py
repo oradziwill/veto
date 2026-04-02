@@ -8,6 +8,7 @@ from .views import (
     MedicalRecordViewSet,
     PatientHistoryEntryViewSet,
     PrescriptionViewSet,
+    ProcedureSupplyTemplateViewSet,
     VaccinationViewSet,
 )
 
@@ -16,6 +17,11 @@ router.register(
     r"medical/clinical-exam-templates",
     ClinicalExamTemplateViewSet,
     basename="clinical-exam-templates",
+)
+router.register(
+    r"medical/procedure-supply-templates",
+    ProcedureSupplyTemplateViewSet,
+    basename="procedure-supply-templates",
 )
 router.register(r"medical/records", MedicalRecordViewSet, basename="medical-records")
 router.register(r"medical/history", PatientHistoryEntryViewSet, basename="medical-history")

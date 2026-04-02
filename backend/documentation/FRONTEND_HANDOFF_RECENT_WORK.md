@@ -2,6 +2,8 @@
 
 Single entry point for frontend integration of features shipped together on the backend: **clinical exam templates**, **client portal (online booking)**, and **audit log extensions** (admin UI). Deeper detail lives in the linked focused handoffs.
 
+**Staff app — tylko portal add‑ony (KPI, RODO, powiadomienia):** [FRONTEND_HANDOFF_STAFF_PORTAL_ADDONS.md](FRONTEND_HANDOFF_STAFF_PORTAL_ADDONS.md)
+
 ---
 
 ## 1. Clinical exam templates (staff app)
@@ -37,6 +39,25 @@ Response: full **ClinicalExam** payload plus **`template_meta`**: `template_id`,
 **UI ideas:** template dropdown on the exam panel; highlight fields listed in `applied_fields`; toggle “Overwrite existing values” → `force: true`.
 
 **Full detail:** [FRONTEND_HANDOFF_CLINICAL_EXAM_TEMPLATES.md](FRONTEND_HANDOFF_CLINICAL_EXAM_TEMPLATES.md) · [CLINICAL_EXAM_DOCUMENTATION.md](CLINICAL_EXAM_DOCUMENTATION.md)
+
+### 1b. Procedure supply templates (suggested consumables per procedure)
+
+**Auth:** staff JWT. **CRUD** (create list of inventory lines with suggested quantities): **doctor or clinic admin** only — same as clinical exam templates.
+
+| Method | Path |
+|--------|------|
+| GET | `/api/medical/procedure-supply-templates/` |
+| POST | `/api/medical/procedure-supply-templates/` |
+| GET / PATCH / DELETE | `/api/medical/procedure-supply-templates/<id>/` |
+| POST | `/api/appointments/<id>/procedure-supply-template-preview/` |
+
+**Body (create / full update):** `name`, optional `visit_type`, `is_active`, **`lines`**: array of `{ inventory_item, suggested_quantity, sort_order?, is_optional?, default_unit_price?, vat_rate?, notes? }`. At least one line on create. `suggested_quantity` must be a **positive whole number** (inventory dispense rules). Items must belong to the same clinic.
+
+**PATCH** without `lines` updates only header fields; with `lines` **replaces** all lines.
+
+**Preview (any staff / vet):** `POST …/procedure-supply-template-preview/` with `{ "template_id": <id> }`. Returns `template_id`, `template_name`, `suggested_lines[]` (fields aligned with pre-filling invoice lines: `inventory_item_id`, `description`, quantities, `vat_rate`, `stock_on_hand`, `inventory_item_is_active`, etc.). **Does not** create an invoice or move stock — FE merges into the draft invoice UI; user edits before save.
+
+Inactive templates or wrong-clinic `template_id` → **404**. Inactive inventory items may still appear in `suggested_lines` with `inventory_item_is_active: false`.
 
 ---
 
@@ -114,6 +135,7 @@ If you build or extend an **admin audit** screen:
 | `clinical_exam_template_updated` | before / after payload |
 | `clinical_exam_template_deleted` | |
 | `clinical_exam_template_applied` | `entity_type=appointment`; metadata has template + applied_fields |
+| `procedure_supply_template_created` / `updated` / `deleted` | `entity_type=procedure_supply_template` |
 | `portal_appointment_booked` | `entity_type=appointment`; `actor` may be null; `metadata.source=portal` |
 | `portal_appointment_cancelled` | |
 | `portal_booking_deposit_paid` | `entity_type=appointment`; simulated checkout; `metadata.simulated=true` |

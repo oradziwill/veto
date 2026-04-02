@@ -24,7 +24,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.audit.services import log_audit_event
-from apps.medical.models import ClinicalExam, ClinicalExamTemplate
+from apps.medical.models import ClinicalExam, ClinicalExamTemplate, ProcedureSupplyTemplate
 from apps.medical.serializers import (
     ClinicalExamReadSerializer,
     ClinicalExamWriteSerializer,
@@ -549,6 +549,62 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             "force": force,
         }
         return Response(data, status=200)
+
+    @action(detail=True, methods=["post"], url_path="procedure-supply-template-preview")
+    def procedure_supply_template_preview(self, request, pk=None):
+        """
+        POST /api/appointments/<id>/procedure-supply-template-preview/
+        Body: {"template_id": <int>} — suggested invoice line payloads only; no invoice or stock movement.
+        """
+        template_id = request.data.get("template_id")
+        if not template_id:
+            return Response({"detail": "template_id is required."}, status=400)
+
+        self.get_object()
+        template = (
+            ProcedureSupplyTemplate.objects.filter(
+                id=template_id,
+                clinic_id=request.user.clinic_id,
+                is_active=True,
+            )
+            .prefetch_related("lines__inventory_item")
+            .first()
+        )
+        if not template:
+            return Response({"detail": "Template not found."}, status=404)
+
+        suggested_lines = []
+        for line in template.lines.all():
+            item = line.inventory_item
+            suggested_lines.append(
+                {
+                    "inventory_item_id": item.id,
+                    "inventory_item_name": item.name,
+                    "sku": item.sku,
+                    "unit": item.unit,
+                    "suggested_quantity": str(line.suggested_quantity),
+                    "default_unit_price": (
+                        str(line.default_unit_price)
+                        if line.default_unit_price is not None
+                        else None
+                    ),
+                    "vat_rate": line.vat_rate,
+                    "description": item.name,
+                    "is_optional": line.is_optional,
+                    "stock_on_hand": item.stock_on_hand,
+                    "inventory_item_is_active": item.is_active,
+                    "notes": line.notes,
+                }
+            )
+
+        return Response(
+            {
+                "template_id": template.id,
+                "template_name": template.name,
+                "suggested_lines": suggested_lines,
+            },
+            status=200,
+        )
 
     @action(detail=True, methods=["get"], url_path="visit-readiness")
     def visit_readiness(self, request, pk=None):

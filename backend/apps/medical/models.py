@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 
+from apps.billing.models import InvoiceLine
+from apps.inventory.models import InventoryItem
 from apps.tenancy.models import Clinic
 
 
@@ -170,6 +175,87 @@ class ClinicalExamTemplate(models.Model):
 
     def __str__(self) -> str:
         return f"ClinicalExamTemplate({self.name})"
+
+
+class ProcedureSupplyTemplate(models.Model):
+    """
+    Suggested consumables for a procedure (e.g. USG kit). Lines reference inventory items;
+    preview API returns data for FE to pre-fill invoice lines without dispensing stock.
+    """
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.PROTECT,
+        related_name="procedure_supply_templates",
+    )
+    name = models.CharField(max_length=120)
+    visit_type = models.CharField(max_length=40, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_procedure_supply_templates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clinic", "name"],
+                name="medical_proc_supply_tpl_name_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["clinic", "is_active"],
+                name="medical_ps_tpl_active_idx",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"PSupplyTpl({self.name})"
+
+
+class ProcedureSupplyTemplateLine(models.Model):
+    template = models.ForeignKey(
+        ProcedureSupplyTemplate,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    inventory_item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.PROTECT,
+        related_name="procedure_supply_template_lines",
+    )
+    suggested_quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    is_optional = models.BooleanField(default=False)
+    default_unit_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    vat_rate = models.CharField(
+        max_length=4,
+        choices=InvoiceLine.VatRate.choices,
+        default=InvoiceLine.VatRate.RATE_8,
+    )
+    notes = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def __str__(self) -> str:
+        return f"PSupplyTplLine({self.template_id}, item={self.inventory_item_id})"
 
 
 class Prescription(models.Model):
