@@ -9,6 +9,7 @@ class ReportExportJob(models.Model):
         REVENUE_SUMMARY = "revenue_summary", "Revenue Summary"
         REMINDER_ANALYTICS = "reminder_analytics", "Reminder Analytics"
         CANCELLATION_ANALYTICS = "cancellation_analytics", "Cancellation Analytics"
+        ACCOUNTING_INVOICE_LINES = "accounting_invoice_lines", "Accounting invoice lines (CSV)"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"

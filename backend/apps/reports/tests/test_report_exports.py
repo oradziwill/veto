@@ -110,3 +110,50 @@ def test_report_exports_are_clinic_scoped(api_client):
     response = api_client.get(reverse("report-exports-list"))
     assert response.status_code == 200
     assert len(response.data) == 1
+
+
+@pytest.mark.django_db
+def test_accounting_invoice_lines_export_csv(
+    api_client, clinic_admin, clinic, patient, client_with_membership
+):
+    invoice = Invoice.objects.create(
+        clinic=clinic,
+        client=client_with_membership,
+        patient=patient,
+        status=Invoice.Status.SENT,
+        invoice_number="FV/2026/001",
+        currency="PLN",
+    )
+    InvoiceLine.objects.create(
+        invoice=invoice,
+        description="Consultation",
+        quantity=1,
+        unit_price=100,
+        vat_rate="8",
+        unit="usł",
+    )
+    job = ReportExportJob.objects.create(
+        clinic=clinic,
+        requested_by=clinic_admin,
+        report_type=ReportExportJob.ReportType.ACCOUNTING_INVOICE_LINES,
+        params={},
+        status=ReportExportJob.Status.PENDING,
+    )
+
+    api_client.force_authenticate(user=clinic_admin)
+    processed = api_client.post(
+        reverse("report-exports-process-pending"),
+        {"limit": 10},
+        format="json",
+    )
+    assert processed.status_code == 200
+    assert processed.data["processed"] == 1
+
+    job.refresh_from_db()
+    assert job.status == ReportExportJob.Status.COMPLETED
+    body = job.file_content
+    assert "invoice_id,invoice_number" in body
+    assert "line_net,line_vat,line_gross" in body
+    assert "FV/2026/001" in body
+    assert "Consultation" in body
+    assert str(invoice.id) in body

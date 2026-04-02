@@ -416,6 +416,7 @@ Config in `pyproject.toml`.
 
 ## Documentation
 
+- `documentation/ASYNC_REPORT_EXPORTS.md` – Async CSV exports (incl. `accounting_invoice_lines` for accountants)
 - `documentation/CHANGELOG_cleanup-and-next-steps.md` – Changes in this branch
 - `documentation/FRONTEND_HANDOFF_backend-core-v1.md` – API integration guide
 - `documentation/AVAILABILITY_API.md` – Availability endpoint
