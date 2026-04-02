@@ -26,7 +26,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--jwt",
             default=os.environ.get("DEPLOY_SMOKE_JWT", ""),
-            help="Bearer access token for /api/me/ (default: env DEPLOY_SMOKE_JWT). If empty, auth check is skipped.",
+            help=(
+                "Bearer access token from POST /api/auth/token/ (field access). "
+                "If empty or missing login, auth check is skipped. "
+                "Do not pass the literal string 'null' from a failed jq."
+            ),
         )
         parser.add_argument(
             "--timeout",
@@ -38,6 +42,8 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         base = str(options["base_url"]).rstrip("/")
         token = str(options["jwt"] or "").strip()
+        if token.lower() in ("null", "none"):
+            token = ""
         timeout = max(1, int(options["timeout"]))
 
         results: list[tuple[str, int, bool]] = []
