@@ -6,7 +6,7 @@ from apps.billing.models import Invoice, InvoiceLine
 def recent_supply_line_suggestions(*, clinic_id: int, patient_id: int, limit: int) -> list[dict]:
     """
     One row per distinct inventory item, newest invoice first (read-only suggestions).
-    Cancelled invoices are ignored.
+    Draft and cancelled invoices are ignored (only finalized-like billing counts).
     """
     lines = (
         InvoiceLine.objects.filter(
@@ -14,7 +14,9 @@ def recent_supply_line_suggestions(*, clinic_id: int, patient_id: int, limit: in
             invoice__patient_id=patient_id,
             inventory_item_id__isnull=False,
         )
-        .exclude(invoice__status=Invoice.Status.CANCELLED)
+        .exclude(
+            invoice__status__in=(Invoice.Status.CANCELLED, Invoice.Status.DRAFT),
+        )
         .select_related("invoice", "inventory_item")
         .order_by("-invoice__created_at", "-invoice__id", "-id")
     )
