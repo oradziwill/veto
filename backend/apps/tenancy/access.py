@@ -87,3 +87,18 @@ def clinic_id_for_mutation(
     if cid not in allowed:
         raise PermissionDenied("You do not have access to this clinic.")
     return cid
+
+
+def user_can_access_clinic(user, clinic_id: int | None) -> bool:
+    """True if ``clinic_id`` is in :func:`accessible_clinic_ids`."""
+    if clinic_id is None:
+        return False
+    return clinic_id in accessible_clinic_ids(user)
+
+
+def clinic_instance_for_mutation(user, request, *, instance_clinic_id: int | None = None):
+    """Resolve :class:`~apps.tenancy.models.Clinic` for serializer.save(clinic=...)."""
+    from apps.tenancy.models import Clinic
+
+    pk = clinic_id_for_mutation(user, request=request, instance_clinic_id=instance_clinic_id)
+    return Clinic.objects.get(pk=pk)

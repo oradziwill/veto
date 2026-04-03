@@ -163,7 +163,7 @@ class ClinicalExamTemplate(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["clinic", "name"],
-                name="medical_clinical_exam_template_name_uniq",
+                name="medical_ce_tmpl_name_uniq",
             )
         ]
         indexes = [
@@ -206,7 +206,7 @@ class ProcedureSupplyTemplate(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["clinic", "name"],
-                name="medical_proc_supply_tpl_name_uniq",
+                name="medical_ps_tpl_name_uniq",
             )
         ]
         indexes = [

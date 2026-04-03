@@ -11,6 +11,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+)
 
 from .models import Notification
 from .serializers import NotificationReadSerializer
@@ -31,7 +34,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         now = timezone.now()
         read_recent_cutoff = now - timedelta(days=7)
         return Notification.objects.filter(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(self.request.user),
             recipient_id=self.request.user.id,
         ).filter(
             Q(is_read=False)
@@ -54,7 +57,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     def mark_read_all(self, request):
         now = timezone.now()
         updated = Notification.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             recipient_id=request.user.id,
             is_read=False,
         ).update(is_read=True, read_at=now)
@@ -63,7 +66,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
         count = Notification.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             recipient_id=request.user.id,
             is_read=False,
         ).count()

@@ -15,6 +15,7 @@ from apps.scheduling.services.scheduling_assistant import (
     generate_capacity_insights,
     generate_optimization_suggestions,
 )
+from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
 
 logger = logging.getLogger(__name__)
 DEFAULT_WINDOW_DAYS = 14
@@ -47,14 +48,17 @@ def _parse_window(request):
     return start_date, end_date, None
 
 
-def _parse_vet_id(request, clinic_id: int):
+def _parse_vet_id(request, user):
+    ids = accessible_clinic_ids(user)
+    if not ids:
+        return None, "No clinic access."
     vet_str = request.query_params.get("vet", "").strip()
     if not vet_str:
         return None, None
     if not vet_str.isdigit():
         return None, "vet must be a numeric user ID."
     vet_id = int(vet_str)
-    exists = User.objects.filter(clinic_id=clinic_id, id=vet_id, is_vet=True).exists()
+    exists = User.objects.filter(clinic_id__in=ids, id=vet_id, is_vet=True).exists()
     if not exists:
         return None, "vet must reference an active clinic vet."
     return vet_id, None
@@ -105,7 +109,7 @@ class SchedulingCapacityInsightsView(APIView):
                 status=400,
             )
 
-        vet_id, vet_error = _parse_vet_id(request, clinic_id=request.user.clinic_id)
+        vet_id, vet_error = _parse_vet_id(request, request.user)
         if vet_error:
             return Response({"detail": vet_error}, status=400)
         overload_threshold_pct, threshold_error = _parse_threshold(request)
@@ -115,9 +119,10 @@ class SchedulingCapacityInsightsView(APIView):
         if rows_limit_error:
             return Response({"detail": rows_limit_error}, status=400)
 
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         try:
             payload = generate_capacity_insights(
-                clinic_id=request.user.clinic_id,
+                clinic_id=cid,
                 start_date=start_date,
                 end_date=end_date,
                 granularity=granularity,
@@ -162,7 +167,7 @@ class SchedulingOptimizationSuggestionsView(APIView):
         if window_error:
             return Response({"detail": window_error}, status=400)
 
-        vet_id, vet_error = _parse_vet_id(request, clinic_id=request.user.clinic_id)
+        vet_id, vet_error = _parse_vet_id(request, request.user)
         if vet_error:
             return Response({"detail": vet_error}, status=400)
 
@@ -183,9 +188,10 @@ class SchedulingOptimizationSuggestionsView(APIView):
         if threshold_error:
             return Response({"detail": threshold_error}, status=400)
 
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         try:
             payload = generate_optimization_suggestions(
-                clinic_id=request.user.clinic_id,
+                clinic_id=cid,
                 start_date=start_date,
                 end_date=end_date,
                 limit=limit,
@@ -198,4 +204,5 @@ class SchedulingOptimizationSuggestionsView(APIView):
                 {"detail": "Failed to generate optimization suggestions."},
                 status=500,
             )
+
         return Response(payload, status=200)

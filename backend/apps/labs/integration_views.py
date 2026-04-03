@@ -7,6 +7,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsAdminOrReadOnly, IsDoctorOrAdmin, IsStaffOrVet
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+    user_can_access_clinic,
+)
 
 from .models import (
     LabIngestionEnvelope,
@@ -39,9 +44,9 @@ class LabIntegrationDeviceViewSet(viewsets.ModelViewSet):
     serializer_class = LabIntegrationDeviceSerializer
 
     def get_queryset(self):
-        return LabIntegrationDevice.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
-            "name"
-        )
+        return LabIntegrationDevice.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).order_by("name")
 
     def perform_update(self, serializer):
         if (
@@ -62,16 +67,25 @@ class LabTestCodeMapViewSet(viewsets.ModelViewSet):
     serializer_class = LabTestCodeMapSerializer
 
     def get_queryset(self):
-        return LabTestCodeMap.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
+        return LabTestCodeMap.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).select_related(
             "lab_test",
             "device",
         )
 
     def perform_create(self, serializer):
         device = serializer.validated_data.get("device")
-        if device and device.clinic_id != self.request.user.clinic_id:
+        if device and not user_can_access_clinic(self.request.user, device.clinic_id):
             raise PermissionDenied("Device must belong to your clinic.")
-        serializer.save(clinic_id=self.request.user.clinic_id)
+        cid = (
+            device.clinic_id
+            if device
+            else clinic_id_for_mutation(
+                self.request.user, request=self.request, instance_clinic_id=None
+            )
+        )
+        serializer.save(clinic_id=cid)
 
 
 class LabSampleViewSet(viewsets.ModelViewSet):
@@ -79,7 +93,7 @@ class LabSampleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return (
-            LabSample.objects.filter(clinic_id=self.request.user.clinic_id)
+            LabSample.objects.filter(clinic_id__in=accessible_clinic_ids(self.request.user))
             .select_related("lab_order")
             .prefetch_related("external_ids")
             .order_by("-created_at")
@@ -96,9 +110,9 @@ class LabIngestionEnvelopeViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LabIngestionEnvelopeSerializer
 
     def get_queryset(self):
-        qs = LabIngestionEnvelope.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
-            "-received_at"
-        )
+        qs = LabIngestionEnvelope.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).order_by("-received_at")
         st = self.request.query_params.get("status")
         if st:
             qs = qs.filter(processing_status=st)
@@ -122,7 +136,9 @@ class LabObservationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = LabObservationSerializer
 
     def get_queryset(self):
-        qs = LabObservation.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
+        qs = LabObservation.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).select_related(
             "envelope",
             "device",
             "lab_order",
@@ -148,7 +164,7 @@ class LabObservationViewSet(viewsets.ReadOnlyModelViewSet):
         line = get_object_or_404(
             LabOrderLine,
             pk=line_id,
-            order__clinic_id=request.user.clinic_id,
+            order__clinic_id__in=accessible_clinic_ids(request.user),
         )
         obs.lab_order_line = line
         obs.lab_order = line.order

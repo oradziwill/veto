@@ -6,6 +6,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsAdminOrReadOnly, IsDoctorOrAdmin, IsStaffOrVet
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+)
 
 from .models import Lab, LabOrder, LabOrderLine, LabResult, LabTest
 from .serializers import (
@@ -26,8 +30,9 @@ class LabViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        ids = accessible_clinic_ids(user)
         qs = Lab.objects.filter(
-            Q(clinic_id=user.clinic_id) | Q(clinic__isnull=True, lab_type="external")
+            Q(clinic_id__in=ids) | Q(clinic__isnull=True, lab_type="external")
         ).order_by("name")
         lab_type = self.request.query_params.get("lab_type")
         if lab_type:
@@ -35,7 +40,10 @@ class LabViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id)
+        cid = clinic_id_for_mutation(
+            self.request.user, request=self.request, instance_clinic_id=None
+        )
+        serializer.save(clinic_id=cid)
 
 
 class LabTestViewSet(viewsets.ModelViewSet):
@@ -46,9 +54,10 @@ class LabTestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        ids = accessible_clinic_ids(user)
         qs = (
             LabTest.objects.filter(
-                Q(lab__clinic_id=user.clinic_id) | Q(lab__clinic__isnull=True) | Q(lab__isnull=True)
+                Q(lab__clinic_id__in=ids) | Q(lab__clinic__isnull=True) | Q(lab__isnull=True)
             )
             .select_related("lab")
             .order_by("name")
@@ -72,7 +81,7 @@ class LabOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = (
-            LabOrder.objects.filter(clinic_id=user.clinic_id)
+            LabOrder.objects.filter(clinic_id__in=accessible_clinic_ids(user))
             .select_related("patient", "lab", "ordered_by", "appointment", "hospital_stay")
             .prefetch_related(
                 "lines__test",

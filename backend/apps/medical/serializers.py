@@ -17,6 +17,11 @@ from apps.medical.models import (
     Vaccination,
 )
 from apps.scheduling.models import Appointment
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+    user_can_access_clinic,
+)
 
 # -------------------------
 # Clinical Exam
@@ -170,8 +175,8 @@ class ProcedureSupplyTemplateLineWriteSerializer(serializers.ModelSerializer):
 
     def validate_inventory_item(self, value):
         request = self.context.get("request")
-        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
-        if clinic_id and value.clinic_id != clinic_id:
+        user = getattr(request, "user", None)
+        if user and value.clinic_id not in accessible_clinic_ids(user):
             raise serializers.ValidationError("Inventory item must belong to your clinic.")
         return value
 
@@ -228,10 +233,11 @@ class ProcedureSupplyTemplateWriteSerializer(serializers.ModelSerializer):
         if not name:
             raise serializers.ValidationError("This field may not be blank.")
         request = self.context.get("request")
-        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
-        if not clinic_id:
+        user = getattr(request, "user", None)
+        ids = accessible_clinic_ids(user) if user else []
+        if not ids:
             return name
-        qs = ProcedureSupplyTemplate.objects.filter(clinic_id=clinic_id, name=name)
+        qs = ProcedureSupplyTemplate.objects.filter(clinic_id__in=ids, name=name)
         if self.instance is not None:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
@@ -250,8 +256,9 @@ class ProcedureSupplyTemplateWriteSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         lines_data = validated_data.pop("lines")
         request = self.context["request"]
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         template = ProcedureSupplyTemplate.objects.create(
-            clinic_id=request.user.clinic_id,
+            clinic_id=cid,
             created_by=request.user,
             **validated_data,
         )
@@ -295,7 +302,7 @@ class MedicalRecordReadSerializer(serializers.ModelSerializer):
 class MedicalRecordWriteSerializer(serializers.ModelSerializer):
     def validate_patient(self, value):
         request = self.context.get("request")
-        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+        if request and not user_can_access_clinic(request.user, value.clinic_id):
             raise serializers.ValidationError("Patient must belong to your clinic.")
         return value
 
@@ -361,7 +368,7 @@ class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
 
     def validate_record(self, value):
         request = self.context.get("request")
-        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+        if request and not user_can_access_clinic(request.user, value.clinic_id):
             raise serializers.ValidationError("Medical record must belong to your clinic.")
         return value
 
@@ -369,8 +376,7 @@ class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
         if value is None:
             return value
         request = self.context.get("request")
-        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
-        if clinic_id and value.clinic_id != clinic_id:
+        if request and not user_can_access_clinic(request.user, value.clinic_id):
             raise serializers.ValidationError("Invoice must belong to your clinic.")
         patient = self.context.get("patient")
         if patient and value.patient_id and value.patient_id != patient.id:
@@ -381,8 +387,7 @@ class PatientHistoryEntryWriteSerializer(serializers.ModelSerializer):
         if value is None:
             return value
         request = self.context.get("request")
-        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
-        if clinic_id and value.clinic_id != clinic_id:
+        if request and not user_can_access_clinic(request.user, value.clinic_id):
             raise serializers.ValidationError("Appointment must belong to your clinic.")
         patient = self.context.get("patient")
         if patient and value.patient_id and value.patient_id != patient.id:
@@ -471,7 +476,7 @@ class PrescriptionWriteSerializer(serializers.ModelSerializer):
         if value is None:
             return value
         request = self.context.get("request")
-        if request and value.clinic_id != getattr(request.user, "clinic_id", None):
+        if request and not user_can_access_clinic(request.user, value.clinic_id):
             raise serializers.ValidationError("Medical record must belong to your clinic.")
         patient = self.context.get("patient")
         if patient and value.patient_id != patient.id:

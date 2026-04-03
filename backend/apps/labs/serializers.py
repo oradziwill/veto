@@ -1,5 +1,10 @@
 from rest_framework import serializers
 
+from apps.tenancy.access import (
+    clinic_id_for_mutation,
+    user_can_access_clinic,
+)
+
 from .models import (
     Lab,
     LabExternalIdentifier,
@@ -149,13 +154,13 @@ class LabOrderWriteSerializer(serializers.ModelSerializer):
 
     def validate_patient(self, value):
         user = self.context["request"].user
-        if value.clinic_id != getattr(user, "clinic_id", None):
+        if not user_can_access_clinic(user, value.clinic_id):
             raise serializers.ValidationError("Patient must belong to your clinic.")
         return value
 
     def validate_lab(self, value):
         user = self.context["request"].user
-        if value.clinic_id and value.clinic_id != getattr(user, "clinic_id", None):
+        if value.clinic_id and not user_can_access_clinic(user, value.clinic_id):
             raise serializers.ValidationError("Lab must belong to your clinic.")
         if not value.clinic_id and value.lab_type != "external":
             raise serializers.ValidationError("External lab must have lab_type=external.")
@@ -164,8 +169,9 @@ class LabOrderWriteSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         lines_data = validated_data.pop("lines", [])
         request = self.context["request"]
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         order = LabOrder.objects.create(
-            clinic_id=request.user.clinic_id,
+            clinic_id=cid,
             ordered_by=request.user,
             status="draft",
             **validated_data,
@@ -210,8 +216,10 @@ class LabIntegrationDeviceSerializer(serializers.ModelSerializer):
         extra_kwargs = {"ingest_token": {"write_only": True, "required": False}}
 
     def create(self, validated_data):
+        request = self.context["request"]
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         return LabIntegrationDevice.objects.create(
-            clinic_id=self.context["request"].user.clinic_id,
+            clinic_id=cid,
             **validated_data,
         )
 
@@ -246,20 +254,23 @@ class LabSampleWriteSerializer(serializers.ModelSerializer):
 
     def validate_lab_order(self, order):
         user = self.context["request"].user
-        if order.clinic_id != getattr(user, "clinic_id", None):
+        if not user_can_access_clinic(user, order.clinic_id):
             raise serializers.ValidationError("Order must belong to your clinic.")
         return order
 
     def create(self, validated_data):
         idents = validated_data.pop("identifiers", [])
         request = self.context["request"]
+        order = validated_data.get("lab_order")
+        ic = order.clinic_id if order else None
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=ic)
         sample = LabSample.objects.create(
-            clinic_id=request.user.clinic_id,
+            clinic_id=cid,
             **validated_data,
         )
         for row in idents:
             LabExternalIdentifier.objects.create(
-                clinic_id=request.user.clinic_id,
+                clinic_id=cid,
                 sample=sample,
                 scheme=row["scheme"],
                 value=row["value"],

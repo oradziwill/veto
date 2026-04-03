@@ -8,6 +8,9 @@ from apps.accounts.permissions import HasClinic, IsStaffOrVet
 from apps.medical.models import Prescription
 from apps.medical.serializers import PrescriptionReadSerializer
 from apps.patients.models import Patient
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+)
 
 
 class PatientPrescriptionHistoryView(APIView):
@@ -22,13 +25,15 @@ class PatientPrescriptionHistoryView(APIView):
     def get(self, request, patient_id: int):
         user = request.user
 
-        patient = Patient.objects.filter(id=patient_id, clinic_id=user.clinic_id).first()
+        patient = Patient.objects.filter(
+            id=patient_id, clinic_id__in=accessible_clinic_ids(user)
+        ).first()
         if not patient:
             return Response({"detail": "Not found."}, status=404)
 
         qs = (
             Prescription.objects.filter(
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
                 patient_id=patient.id,
             )
             .select_related("appointment", "patient")

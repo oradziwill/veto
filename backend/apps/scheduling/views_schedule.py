@@ -19,6 +19,9 @@ from apps.scheduling.serializers_schedule import (
     VetWorkingHoursSerializer,
 )
 from apps.scheduling.services.schedule_generator import generate_schedule
+from apps.tenancy.access import (
+    user_can_access_clinic,
+)
 from apps.tenancy.models import ClinicHoliday
 
 
@@ -48,7 +51,7 @@ class VetWorkingHoursViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         vet = serializer.validated_data["vet"]
-        if vet.clinic_id != request.user.clinic_id:
+        if not user_can_access_clinic(request.user, vet.clinic_id):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("Vet does not belong to your clinic.")
@@ -66,7 +69,7 @@ class VetWorkingHoursViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         vet = serializer.validated_data["vet"]
-        if vet.clinic_id != self.request.user.clinic_id:
+        if not user_can_access_clinic(self.request.user, vet.clinic_id):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("Vet does not belong to your clinic.")
@@ -104,7 +107,7 @@ class VetAvailabilityExceptionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         vet = serializer.validated_data["vet"]
-        if vet.clinic_id != self.request.user.clinic_id:
+        if not user_can_access_clinic(self.request.user, vet.clinic_id):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("Vet does not belong to your clinic.")
@@ -181,7 +184,7 @@ class DutyAssignmentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         vet = serializer.validated_data["vet"]
-        if vet.clinic_id != self.request.user.clinic_id:
+        if not user_can_access_clinic(self.request.user, vet.clinic_id):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("Vet does not belong to your clinic.")

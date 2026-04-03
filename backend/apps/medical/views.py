@@ -12,6 +12,9 @@ from rest_framework.response import Response
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
 from apps.audit.services import log_audit_event
 from apps.scheduling.models import Appointment
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+)
 
 from .models import (
     ClinicalExamTemplate,
@@ -58,7 +61,7 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
 
     def get_queryset(self):
-        return MedicalRecord.objects.filter(clinic_id=self.request.user.clinic_id)
+        return MedicalRecord.objects.filter(clinic_id__in=accessible_clinic_ids(self.request.user))
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
@@ -66,8 +69,9 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         return MedicalRecordWriteSerializer
 
     def perform_create(self, serializer):
+        patient = serializer.validated_data["patient"]
         serializer.save(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=patient.clinic_id,
             created_by=self.request.user,
         )
 
@@ -76,9 +80,9 @@ class ClinicalExamTemplateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
 
     def get_queryset(self):
-        return ClinicalExamTemplate.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
-            "name", "id"
-        )
+        return ClinicalExamTemplate.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).order_by("name", "id")
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
@@ -108,7 +112,7 @@ class ClinicalExamTemplateViewSet(viewsets.ModelViewSet):
         before = _clinical_exam_template_audit_payload(instance)
         template = serializer.save()
         log_audit_event(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=template.clinic_id,
             actor=self.request.user,
             action="clinical_exam_template_updated",
             entity_type="clinical_exam_template",
@@ -119,7 +123,7 @@ class ClinicalExamTemplateViewSet(viewsets.ModelViewSet):
         return template
 
     def perform_destroy(self, instance):
-        clinic_id = self.request.user.clinic_id
+        clinic_id = instance.clinic_id
         entity_id = instance.id
         before = _clinical_exam_template_audit_payload(instance)
         super().perform_destroy(instance)
@@ -152,7 +156,9 @@ class ProcedureSupplyTemplateViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = (
-            ProcedureSupplyTemplate.objects.filter(clinic_id=self.request.user.clinic_id)
+            ProcedureSupplyTemplate.objects.filter(
+                clinic_id__in=accessible_clinic_ids(self.request.user)
+            )
             .prefetch_related("lines__inventory_item")
             .order_by("name", "id")
         )
@@ -173,7 +179,9 @@ class ProcedureSupplyTemplateViewSet(viewsets.ModelViewSet):
             except (TypeError, ValueError):
                 raise Http404() from None
             appt = (
-                Appointment.objects.filter(id=appt_id, clinic_id=request.user.clinic_id)
+                Appointment.objects.filter(
+                    id=appt_id, clinic_id__in=accessible_clinic_ids(request.user)
+                )
                 .only("id", "patient_id", "visit_type", "reason")
                 .first()
             )
@@ -219,7 +227,7 @@ class ProcedureSupplyTemplateViewSet(viewsets.ModelViewSet):
         before = _procedure_supply_template_audit_payload(instance)
         template = serializer.save()
         log_audit_event(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=template.clinic_id,
             actor=self.request.user,
             action="procedure_supply_template_updated",
             entity_type="procedure_supply_template",
@@ -230,7 +238,7 @@ class ProcedureSupplyTemplateViewSet(viewsets.ModelViewSet):
         return template
 
     def perform_destroy(self, instance):
-        clinic_id = self.request.user.clinic_id
+        clinic_id = instance.clinic_id
         entity_id = instance.id
         before = _procedure_supply_template_audit_payload(instance)
         super().perform_destroy(instance)
@@ -263,7 +271,9 @@ class PatientHistoryEntryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return (
-            PatientHistoryEntry.objects.filter(clinic_id=self.request.user.clinic_id)
+            PatientHistoryEntry.objects.filter(
+                clinic_id__in=accessible_clinic_ids(self.request.user)
+            )
             .select_related("record", "appointment", "invoice")
             .prefetch_related("invoice__lines")
         )
@@ -274,8 +284,9 @@ class PatientHistoryEntryViewSet(viewsets.ModelViewSet):
         return PatientHistoryEntryWriteSerializer
 
     def perform_create(self, serializer):
+        record = serializer.validated_data["record"]
         serializer.save(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=record.clinic_id,
             created_by=self.request.user,
         )
 
@@ -298,9 +309,9 @@ class VaccinationViewSet(viewsets.ModelViewSet):
         return days
 
     def get_queryset(self):
-        qs = Vaccination.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
-            "patient", "clinic", "administered_by"
-        )
+        qs = Vaccination.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).select_related("patient", "clinic", "administered_by")
         due_within_days = self._parse_due_within_days()
         if due_within_days is not None:
             today = timezone.localdate()
@@ -349,9 +360,9 @@ class PrescriptionViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get_queryset(self):
-        qs = Prescription.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
-            "patient", "clinic", "prescribed_by", "medical_record"
-        )
+        qs = Prescription.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).select_related("patient", "clinic", "prescribed_by", "medical_record")
         patient_id = self.request.query_params.get("patient")
         medical_record_id = self.request.query_params.get("medical_record")
         if patient_id:

@@ -17,6 +17,9 @@ from apps.consents.models import ConsentDocument
 from apps.consents.serializers import ConsentDocumentSerializer
 from apps.consents.services.pdf import build_payload, compute_content_hash, render_consent_pdf_bytes
 from apps.scheduling.models import Appointment
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+)
 
 
 def _get_s3_client():
@@ -42,7 +45,7 @@ class ConsentDocumentViewSet(
 
     def get_queryset(self):
         qs = (
-            ConsentDocument.objects.filter(clinic_id=self.request.user.clinic_id)
+            ConsentDocument.objects.filter(clinic_id__in=accessible_clinic_ids(self.request.user))
             .select_related("patient", "appointment", "created_by", "signed_by", "clinic")
             .order_by("-created_at")
         )
@@ -56,7 +59,9 @@ class ConsentDocumentViewSet(
         if not appointment_id:
             raise ValidationError({"appointment": "This field is required."})
         ap = (
-            Appointment.objects.filter(id=appointment_id, clinic_id=request.user.clinic_id)
+            Appointment.objects.filter(
+                id=appointment_id, clinic_id__in=accessible_clinic_ids(request.user)
+            )
             .select_related("patient__owner", "vet", "clinic")
             .first()
         )
@@ -67,7 +72,7 @@ class ConsentDocumentViewSet(
         content_hash = compute_content_hash(payload)
         with transaction.atomic():
             doc = ConsentDocument.objects.create(
-                clinic_id=request.user.clinic_id,
+                clinic_id=ap.clinic_id,
                 appointment=ap,
                 patient_id=ap.patient_id,
                 document_type=ConsentDocument.DocumentType.PROCEDURE,

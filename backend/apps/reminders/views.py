@@ -24,6 +24,10 @@ from apps.audit.services import log_audit_event
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_clinic_staff
 from apps.scheduling.models import Appointment
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+)
 
 from .models import (
     Reminder,
@@ -55,9 +59,9 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ReminderReadSerializer
 
     def get_queryset(self):
-        qs = Reminder.objects.filter(clinic_id=self.request.user.clinic_id).select_related(
-            "patient", "patient__owner"
-        )
+        qs = Reminder.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).select_related("patient", "patient__owner")
         status_value = self.request.query_params.get("status")
         reminder_type = self.request.query_params.get("type")
         channel = self.request.query_params.get("channel")
@@ -98,7 +102,7 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
             ]
         )
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=reminder.clinic_id,
             actor=request.user,
             action="reminder_resend_queued",
             entity_type="reminder",
@@ -122,7 +126,8 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def metrics(self, request):
         now = timezone.now()
-        clinic_qs = Reminder.objects.filter(clinic_id=request.user.clinic_id)
+        ids = accessible_clinic_ids(request.user)
+        clinic_qs = Reminder.objects.filter(clinic_id__in=ids)
 
         status_counts = dict(
             clinic_qs.values("status").annotate(total=Count("id")).values_list("status", "total")
@@ -142,7 +147,8 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
 
         payload = {
             "kind": "reminder_metrics_snapshot",
-            "clinic_id": request.user.clinic_id,
+            "clinic_id": ids[0] if len(ids) == 1 else None,
+            "clinic_ids": ids,
             "status_counts": {
                 "queued": status_counts.get(Reminder.Status.QUEUED, 0),
                 "deferred": status_counts.get(Reminder.Status.DEFERRED, 0),
@@ -184,7 +190,7 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         clinic_qs = Reminder.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             created_at__date__gte=from_date,
             created_at__date__lte=to_date,
         )
@@ -248,9 +254,11 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
                 }
             )
 
+        ids = accessible_clinic_ids(request.user)
         payload = {
             "kind": "reminder_analytics",
-            "clinic_id": request.user.clinic_id,
+            "clinic_id": ids[0] if len(ids) == 1 else None,
+            "clinic_ids": ids,
             "period": period,
             "from": from_date.isoformat(),
             "to": to_date.isoformat(),
@@ -316,7 +324,7 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
         minimum_sample_size = max(1, minimum_sample_size)
 
         reminders_qs = Reminder.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             reminder_type=Reminder.ReminderType.APPOINTMENT,
             appointment_id__isnull=False,
             created_at__date__gte=from_date,
@@ -388,9 +396,11 @@ class ReminderViewSet(viewsets.ReadOnlyModelViewSet):
         total_delivered = sum(row["delivered_total"] for row in variant_rows)
         total_appointments = sum(row["appointments_total"] for row in variant_rows)
         total_no_show = sum(row["appointments_no_show"] for row in variant_rows)
+        ids = accessible_clinic_ids(request.user)
         payload = {
             "kind": "reminder_experiment_attribution",
-            "clinic_id": request.user.clinic_id,
+            "clinic_id": ids[0] if len(ids) == 1 else None,
+            "clinic_ids": ids,
             "from": from_date.isoformat(),
             "to": to_date.isoformat(),
             "minimum_sample_size": minimum_sample_size,
@@ -438,7 +448,7 @@ class ReminderPreferenceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return ReminderPreference.objects.filter(
-            clinic_id=self.request.user.clinic_id
+            clinic_id__in=accessible_clinic_ids(self.request.user)
         ).select_related("client")
 
     def get_permissions(self):
@@ -449,10 +459,10 @@ class ReminderPreferenceViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id)
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
     def perform_update(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id)
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
 
 class ReminderTemplateViewSet(viewsets.ModelViewSet):
@@ -461,7 +471,7 @@ class ReminderTemplateViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return (
-            ReminderTemplate.objects.filter(clinic_id=self.request.user.clinic_id)
+            ReminderTemplate.objects.filter(clinic_id__in=accessible_clinic_ids(self.request.user))
             .select_related("updated_by")
             .prefetch_related("versions", "versions__changed_by")
         )
@@ -474,17 +484,13 @@ class ReminderTemplateViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        template = serializer.save(
-            clinic_id=self.request.user.clinic_id,
-            updated_by=self.request.user,
-        )
+        cid = clinic_id_for_mutation(self.request.user, request=self.request)
+        template = serializer.save(clinic_id=cid, updated_by=self.request.user)
         self._create_version_snapshot(template, self.request.user)
 
     def perform_update(self, serializer):
-        template = serializer.save(
-            clinic_id=self.request.user.clinic_id,
-            updated_by=self.request.user,
-        )
+        cid = clinic_id_for_mutation(self.request.user, request=self.request)
+        template = serializer.save(clinic_id=cid, updated_by=self.request.user)
         self._create_version_snapshot(template, self.request.user)
 
     @action(
@@ -502,7 +508,7 @@ class ReminderTemplateViewSet(viewsets.ModelViewSet):
         if template_id:
             template = ReminderTemplate.objects.filter(
                 id=template_id,
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
             ).first()
             if not template:
                 return Response({"detail": "Template not found."}, status=404)
@@ -544,7 +550,9 @@ class ReminderProviderConfigViewSet(viewsets.ModelViewSet):
     serializer_class = ReminderProviderConfigSerializer
 
     def get_queryset(self):
-        return ReminderProviderConfig.objects.filter(clinic_id=self.request.user.clinic_id)
+        return ReminderProviderConfig.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        )
 
     def get_permissions(self):
         if self.action in ("create", "update", "partial_update", "destroy"):
@@ -554,10 +562,16 @@ class ReminderProviderConfigViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id, updated_by=self.request.user)
+        serializer.save(
+            clinic_id=clinic_id_for_mutation(self.request.user, request=self.request),
+            updated_by=self.request.user,
+        )
 
     def perform_update(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id, updated_by=self.request.user)
+        serializer.save(
+            clinic_id=clinic_id_for_mutation(self.request.user, request=self.request),
+            updated_by=self.request.user,
+        )
 
 
 class ReminderInboundReplyViewSet(viewsets.ReadOnlyModelViewSet):
@@ -566,7 +580,9 @@ class ReminderInboundReplyViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = (
-            ReminderInboundReply.objects.filter(clinic_id=self.request.user.clinic_id)
+            ReminderInboundReply.objects.filter(
+                clinic_id__in=accessible_clinic_ids(self.request.user)
+            )
             .select_related("reminder", "reminder__appointment", "reminder__patient")
             .order_by("-created_at", "-id")
         )
@@ -584,7 +600,7 @@ class ReminderEscalationRuleViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return ReminderEscalationRule.objects.filter(
-            clinic_id=self.request.user.clinic_id
+            clinic_id__in=accessible_clinic_ids(self.request.user)
         ).order_by("name", "id")
 
     def get_permissions(self):
@@ -595,10 +611,10 @@ class ReminderEscalationRuleViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id)
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
     def perform_update(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id)
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
 
 class ReminderEscalationExecutionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -607,7 +623,7 @@ class ReminderEscalationExecutionViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = ReminderEscalationExecution.objects.filter(
-            clinic_id=self.request.user.clinic_id
+            clinic_id__in=accessible_clinic_ids(self.request.user)
         ).select_related("rule", "reminder")
         status_value = self.request.query_params.get("status")
         if status_value:
@@ -621,12 +637,14 @@ class ReminderEscalationMetricsView(APIView):
     def get(self, request):
         now = timezone.now()
         since = now - timedelta(hours=24)
+        ids = accessible_clinic_ids(request.user)
         base_qs = ReminderEscalationExecution.objects.filter(
-            clinic_id=request.user.clinic_id, created_at__gte=since
+            clinic_id__in=ids, created_at__gte=since
         )
         payload = {
             "kind": "reminder_escalation_metrics",
-            "clinic_id": request.user.clinic_id,
+            "clinic_id": ids[0] if len(ids) == 1 else None,
+            "clinic_ids": ids,
             "window_hours": 24,
             "triggered_total": base_qs.count(),
             "applied_total": base_qs.filter(

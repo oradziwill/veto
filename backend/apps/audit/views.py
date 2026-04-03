@@ -3,6 +3,9 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.permissions import HasClinic, IsClinicAdmin
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+)
 
 from .models import AuditLog
 from .serializers import AuditLogSerializer
@@ -13,7 +16,9 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AuditLogSerializer
 
     def get_queryset(self):
-        qs = AuditLog.objects.filter(clinic_id=self.request.user.clinic_id).select_related("actor")
+        qs = AuditLog.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).select_related("actor")
 
         action_value = self.request.query_params.get("action")
         entity_type = self.request.query_params.get("entity_type")
