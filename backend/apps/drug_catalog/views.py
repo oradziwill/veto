@@ -11,6 +11,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+)
 
 from .models import ClinicProductMapping, ReferenceProduct
 from .serializers import (
@@ -90,7 +94,9 @@ class ClinicProductMappingViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return (
-            ClinicProductMapping.objects.filter(clinic_id=self.request.user.clinic_id)
+            ClinicProductMapping.objects.filter(
+                clinic_id__in=accessible_clinic_ids(self.request.user)
+            )
             .select_related("reference_product", "inventory_item", "clinic")
             .order_by("-updated_at")
         )
@@ -102,7 +108,10 @@ class ClinicProductMappingViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         try:
-            serializer.save(clinic_id=self.request.user.clinic_id)
+            cid = clinic_id_for_mutation(
+                self.request.user, request=self.request, instance_clinic_id=None
+            )
+            serializer.save(clinic_id=cid)
         except IntegrityError as exc:
             raise ValidationError(
                 {

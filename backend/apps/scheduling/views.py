@@ -77,6 +77,11 @@ from apps.scheduling.services.visit_transcription import (
     structure_transcript_with_claude,
     transcribe_audio_with_whisper,
 )
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+    clinic_instance_for_mutation,
+)
 
 
 def _safe_s3_filename(original: str) -> str:
@@ -129,7 +134,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         qs = (
-            Appointment.objects.filter(clinic_id=user.clinic_id)
+            Appointment.objects.filter(clinic_id__in=accessible_clinic_ids(user))
             .select_related("clinic", "patient", "vet", "room")
             .order_by("starts_at")
         )
@@ -222,7 +227,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         }
 
     def perform_create(self, serializer):
-        appointment = serializer.save(clinic=self.request.user.clinic)
+        clinic = clinic_instance_for_mutation(self.request.user, self.request)
+        appointment = serializer.save(clinic=clinic)
         if appointment.status == Appointment.Status.CANCELLED and appointment.cancelled_at is None:
             appointment.cancelled_at = timezone.now()
             appointment.save(update_fields=["cancelled_at", "updated_at"])
@@ -236,13 +242,18 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         old_status = serializer.instance.status if serializer.instance else None
-        appointment = serializer.save(clinic=self.request.user.clinic)
+        clinic = clinic_instance_for_mutation(
+            self.request.user,
+            self.request,
+            instance_clinic_id=serializer.instance.clinic_id,
+        )
+        appointment = serializer.save(clinic=clinic)
         if appointment.status == Appointment.Status.CANCELLED and appointment.cancelled_at is None:
             appointment.cancelled_at = timezone.now()
             appointment.save(update_fields=["cancelled_at", "updated_at"])
         if old_status and old_status != appointment.status:
             log_audit_event(
-                clinic_id=self.request.user.clinic_id,
+                clinic_id=appointment.clinic_id,
                 actor=self.request.user,
                 action="appointment_status_changed",
                 entity_type="appointment",
@@ -267,7 +278,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             return Response({"detail": "date_from cannot be after date_to."}, status=400)
 
         qs = Appointment.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             starts_at__date__gte=date_from,
             starts_at__date__lte=date_to,
             status__in=[Appointment.Status.CANCELLED, Appointment.Status.NO_SHOW],
@@ -427,7 +438,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         exam = (
             ClinicalExam.objects.filter(
                 appointment_id=appt.id,
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
             )
             .order_by("id")
             .first()
@@ -445,7 +456,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             serializer = ClinicalExamWriteSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             exam = serializer.save(
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
                 appointment=appt,
                 created_by=user,
             )
@@ -477,7 +488,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         template = ClinicalExamTemplate.objects.filter(
             id=template_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             is_active=True,
         ).first()
         if not template:
@@ -486,14 +497,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         exam = (
             ClinicalExam.objects.filter(
                 appointment_id=appt.id,
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
             )
             .order_by("id")
             .first()
         )
         if not exam:
             exam = ClinicalExam.objects.create(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 appointment=appt,
                 created_by=request.user,
             )
@@ -526,7 +537,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         exam = serializer.save()
         after_values = {field: getattr(exam, field) for field in applied_fields}
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=appt.clinic_id,
             actor=request.user,
             action="clinical_exam_template_applied",
             entity_type="appointment",
@@ -564,7 +575,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         template = (
             ProcedureSupplyTemplate.objects.filter(
                 id=template_id,
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 is_active=True,
             )
             .prefetch_related("lines__inventory_item")
@@ -617,7 +628,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         exam = (
             ClinicalExam.objects.filter(
                 appointment_id=appt.id,
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
             )
             .order_by("id")
             .first()
@@ -641,7 +652,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             exam = (
                 ClinicalExam.objects.filter(
                     appointment_id=appt.id,
-                    clinic_id=request.user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(request.user),
                 )
                 .order_by("id")
                 .first()
@@ -660,7 +671,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         appt.status = "completed"
         appt.save(update_fields=["status"])
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=appt.clinic_id,
             actor=request.user,
             action="visit_closed",
             entity_type="appointment",
@@ -685,7 +696,9 @@ class VisitTranscriptionView(APIView):
 
     def post(self, request, appointment_id: int):
         appointment = (
-            Appointment.objects.filter(id=appointment_id, clinic_id=request.user.clinic_id)
+            Appointment.objects.filter(
+                id=appointment_id, clinic_id__in=accessible_clinic_ids(request.user)
+            )
             .select_related("patient")
             .first()
         )
@@ -724,7 +737,7 @@ class VisitTranscriptionView(APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         exam, _created = ClinicalExam.objects.get_or_create(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             appointment=appointment,
             defaults={"created_by": request.user},
         )
@@ -779,7 +792,9 @@ class VisitRecordingUploadView(APIView):
 
     def post(self, request, appointment_id: int):
         appointment = (
-            Appointment.objects.filter(id=appointment_id, clinic_id=request.user.clinic_id)
+            Appointment.objects.filter(
+                id=appointment_id, clinic_id__in=accessible_clinic_ids(request.user)
+            )
             .select_related("patient")
             .first()
         )
@@ -828,7 +843,7 @@ class VisitRecordingUploadView(APIView):
 
         with transaction.atomic():
             recording = VisitRecording.objects.create(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 appointment=appointment,
                 uploaded_by=request.user,
                 original_filename=upload.name or "recording.webm",
@@ -874,13 +889,13 @@ class VisitRecordingListView(APIView):
     def get(self, request, appointment_id: int):
         appointment = Appointment.objects.filter(
             id=appointment_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
         ).first()
         if not appointment:
             return Response({"detail": "Appointment not found."}, status=404)
         items = VisitRecording.objects.filter(
             appointment_id=appointment.id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
         ).order_by("-created_at")
         return Response(VisitRecordingSerializer(items, many=True).data, status=200)
 
@@ -891,7 +906,7 @@ class VisitRecordingDetailView(APIView):
     def get(self, request, recording_id: int):
         item = VisitRecording.objects.filter(
             id=recording_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
         ).first()
         if not item:
             return Response({"detail": "Visit recording not found."}, status=404)
@@ -915,7 +930,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         return (
-            HospitalStay.objects.filter(clinic_id=user.clinic_id)
+            HospitalStay.objects.filter(clinic_id__in=accessible_clinic_ids(user))
             .select_related("patient", "attending_vet", "admission_appointment")
             .order_by("-admitted_at")
         )
@@ -935,7 +950,10 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id, status="admitted")
+        cid = clinic_id_for_mutation(
+            self.request.user, request=self.request, instance_clinic_id=None
+        )
+        serializer.save(clinic_id=cid, status="admitted")
 
     @action(detail=False, methods=["get"], url_path="nursing-dashboard")
     def nursing_dashboard(self, request):
@@ -962,13 +980,13 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         horizon = now + timedelta(minutes=window_minutes)
 
         latest_note_qs = HospitalStayNote.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay_id=OuterRef("pk"),
         ).order_by("-created_at", "-id")
 
         stays = (
             HospitalStay.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 status=HospitalStay.Status.ADMITTED,
             )
             .select_related("patient", "attending_vet")
@@ -992,7 +1010,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         if stay_ids:
             orders = (
                 HospitalMedicationOrder.objects.filter(
-                    clinic_id=request.user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(request.user),
                     hospital_stay_id__in=stay_ids,
                     is_active=True,
                 )
@@ -1083,7 +1101,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
         admissions_qs = (
             HospitalStay.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 admitted_at__gte=since,
                 admitted_at__lte=now,
             )
@@ -1092,7 +1110,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         )
         discharges_qs = (
             HospitalStay.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 discharged_at__gte=since,
                 discharged_at__lte=now,
             )
@@ -1101,7 +1119,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         )
         open_high_tasks_qs = (
             HospitalStayTask.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 priority=HospitalStayTask.Priority.HIGH,
             )
             .exclude(status=HospitalStayTask.Status.COMPLETED)
@@ -1110,7 +1128,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         )
         latest_notes_qs = (
             HospitalStayNote.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 created_at__gte=since,
                 created_at__lte=now,
             )
@@ -1119,7 +1137,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         )
 
         active_orders = HospitalMedicationOrder.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             is_active=True,
             hospital_stay__status=HospitalStay.Status.ADMITTED,
         )
@@ -1129,7 +1147,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 continue
             last_given = (
                 HospitalMedicationAdministration.objects.filter(
-                    clinic_id=request.user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(request.user),
                     medication_order=order,
                     status=HospitalMedicationAdministration.Status.GIVEN,
                     administered_at__isnull=False,
@@ -1239,7 +1257,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         since = now - timedelta(hours=hours_int)
 
         discharged_stays = HospitalStay.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             status=HospitalStay.Status.DISCHARGED,
             discharged_at__isnull=False,
             discharged_at__gte=since,
@@ -1255,7 +1273,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             for stay in discharged_stays:
                 total_seconds += max((stay.discharged_at - stay.admitted_at).total_seconds(), 0.0)
                 summary = HospitalDischargeSummary.objects.filter(
-                    clinic_id=request.user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(request.user),
                     hospital_stay=stay,
                 ).first()
                 if summary:
@@ -1270,12 +1288,12 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             finalized_summary_pct = 0.0
 
         active_stays_count = HospitalStay.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             status=HospitalStay.Status.ADMITTED,
         ).count()
 
         tasks_in_period = HospitalStayTask.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             created_at__gte=since,
             created_at__lte=now,
         )
@@ -1287,7 +1305,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
         overdue_medication_orders_count = 0
         active_orders = HospitalMedicationOrder.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             is_active=True,
             hospital_stay__status=HospitalStay.Status.ADMITTED,
         )
@@ -1296,7 +1314,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 continue
             last_given = (
                 HospitalMedicationAdministration.objects.filter(
-                    clinic_id=request.user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(request.user),
                     medication_order=order,
                     status=HospitalMedicationAdministration.Status.GIVEN,
                     administered_at__isnull=False,
@@ -1344,19 +1362,19 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
     def _build_discharge_summary_draft(self, stay: HospitalStay) -> dict:
         latest_note = (
             HospitalStayNote.objects.filter(
-                clinic_id=self.request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(self.request.user),
                 hospital_stay=stay,
             )
             .order_by("-created_at", "-id")
             .first()
         )
         completed_tasks = HospitalStayTask.objects.filter(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(self.request.user),
             hospital_stay=stay,
             status=HospitalStayTask.Status.COMPLETED,
         ).order_by("-updated_at", "-id")[:5]
         active_medications = HospitalMedicationOrder.objects.filter(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(self.request.user),
             hospital_stay=stay,
             is_active=True,
         ).order_by("-created_at", "-id")
@@ -1398,7 +1416,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
     def _compute_discharge_safety_checks(self, stay: HospitalStay) -> dict:
         summary = HospitalDischargeSummary.objects.filter(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(self.request.user),
             hospital_stay=stay,
         ).first()
         blocking_reasons = []
@@ -1435,7 +1453,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 )
 
         unresolved_high_priority_tasks = HospitalStayTask.objects.filter(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(self.request.user),
             hospital_stay=stay,
             priority=HospitalStayTask.Priority.HIGH,
         ).exclude(status=HospitalStayTask.Status.COMPLETED)
@@ -1451,7 +1469,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         overdue_count = 0
         now = timezone.now()
         active_orders = HospitalMedicationOrder.objects.filter(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(self.request.user),
             hospital_stay=stay,
             is_active=True,
         )
@@ -1460,7 +1478,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                 continue
             last_given = (
                 HospitalMedicationAdministration.objects.filter(
-                    clinic_id=self.request.user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(self.request.user),
                     medication_order=order,
                     status=HospitalMedicationAdministration.Status.GIVEN,
                     administered_at__isnull=False,
@@ -1524,7 +1542,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay.discharge_notes = request.data.get("discharge_notes", "")
         stay.save(update_fields=["status", "discharged_at", "discharge_notes", "updated_at"])
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=stay.clinic_id,
             actor=request.user,
             action="hospital_stay_discharged",
             entity_type="hospital_stay",
@@ -1554,7 +1572,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
     def discharge_summary(self, request, pk=None):
         stay = self.get_object()
         summary = HospitalDischargeSummary.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id=stay.clinic_id,
             hospital_stay=stay,
         ).first()
 
@@ -1575,15 +1593,18 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         if summary:
             summary = serializer.save()
         else:
+            cid = clinic_id_for_mutation(
+                request.user, request=request, instance_clinic_id=stay.clinic_id
+            )
             summary = serializer.save(
-                clinic_id=request.user.clinic_id,
+                clinic_id=cid,
                 hospital_stay=stay,
                 generated_by=request.user,
             )
         data = HospitalDischargeSummaryReadSerializer(summary).data
         data["source"] = "saved"
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=summary.clinic_id,
             actor=request.user,
             action="hospital_discharge_summary_saved",
             entity_type="hospital_discharge_summary",
@@ -1598,7 +1619,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
     def finalize_discharge_summary(self, request, pk=None):
         stay = self.get_object()
         summary = HospitalDischargeSummary.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not summary:
@@ -1620,7 +1641,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         data = HospitalDischargeSummaryReadSerializer(summary).data
         data["source"] = "saved"
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=summary.clinic_id,
             actor=request.user,
             action="hospital_discharge_summary_finalized",
             entity_type="hospital_discharge_summary",
@@ -1637,7 +1658,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
     def discharge_summary_pdf(self, request, pk=None):
         stay = self.get_object()
         summary = HospitalDischargeSummary.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not summary:
@@ -1664,7 +1685,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         """
         stay = self.get_object()
         summary = HospitalDischargeSummary.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not summary:
@@ -1697,7 +1718,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         if request.method == "GET":
             items = HospitalStayNote.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 hospital_stay=stay,
             ).order_by("-created_at", "-id")
             return Response(HospitalStayNoteReadSerializer(items, many=True).data, status=200)
@@ -1705,7 +1726,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalStayNoteWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         note = serializer.save(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
             created_by=request.user,
         )
@@ -1720,7 +1741,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         note = HospitalStayNote.objects.filter(
             id=note_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not note:
@@ -1740,7 +1761,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         if request.method == "GET":
             items = HospitalStayTask.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 hospital_stay=stay,
             ).order_by("status", "due_at", "id")
             return Response(HospitalStayTaskReadSerializer(items, many=True).data, status=200)
@@ -1748,7 +1769,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalStayTaskWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         task = serializer.save(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
             created_by=request.user,
         )
@@ -1757,7 +1778,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             task.completed_by = request.user
             task.save(update_fields=["completed_at", "completed_by", "updated_at"])
             log_audit_event(
-                clinic_id=request.user.clinic_id,
+                clinic_id=task.clinic_id,
                 actor=request.user,
                 action="hospital_task_completed",
                 entity_type="hospital_stay_task",
@@ -1780,7 +1801,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         task = HospitalStayTask.objects.filter(
             id=task_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not task:
@@ -1802,7 +1823,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             task.completed_by = request.user
             task.save(update_fields=["completed_at", "completed_by", "updated_at"])
             log_audit_event(
-                clinic_id=request.user.clinic_id,
+                clinic_id=task.clinic_id,
                 actor=request.user,
                 action="hospital_task_completed",
                 entity_type="hospital_stay_task",
@@ -1828,7 +1849,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         if request.method == "GET":
             items = HospitalMedicationOrder.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 hospital_stay=stay,
             ).order_by("-created_at", "-id")
             return Response(
@@ -1838,7 +1859,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalMedicationOrderWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         medication = serializer.save(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
             created_by=request.user,
         )
@@ -1868,7 +1889,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         window_end = now + timedelta(hours=horizon_hours_int)
 
         orders = HospitalMedicationOrder.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
             is_active=True,
         ).order_by("-created_at", "-id")
@@ -1897,7 +1918,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
                 existing_times = set(
                     HospitalMedicationAdministration.objects.filter(
-                        clinic_id=request.user.clinic_id,
+                        clinic_id__in=accessible_clinic_ids(request.user),
                         medication_order=order,
                         scheduled_for__gte=window_start,
                         scheduled_for__lte=window_end,
@@ -1913,7 +1934,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                     else:
                         to_create.append(
                             HospitalMedicationAdministration(
-                                clinic_id=request.user.clinic_id,
+                                clinic_id__in=accessible_clinic_ids(request.user),
                                 medication_order=order,
                                 scheduled_for=candidate,
                                 status=HospitalMedicationAdministration.Status.PENDING,
@@ -1946,7 +1967,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         medication = HospitalMedicationOrder.objects.filter(
             id=medication_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not medication:
@@ -1972,7 +1993,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         medication = HospitalMedicationOrder.objects.filter(
             id=medication_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not medication:
@@ -1980,7 +2001,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             items = HospitalMedicationAdministration.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 medication_order=medication,
             ).order_by("-scheduled_for", "-created_at", "-id")
             return Response(
@@ -1991,7 +2012,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalMedicationAdministrationWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         administration = serializer.save(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             medication_order=medication,
         )
         if administration.status == HospitalMedicationAdministration.Status.GIVEN:
@@ -2000,7 +2021,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             administration.administered_by = request.user
             administration.save(update_fields=["administered_at", "administered_by", "updated_at"])
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=administration.clinic_id,
             actor=request.user,
             action="hospital_medication_admin_created",
             entity_type="hospital_medication_administration",
@@ -2037,7 +2058,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         stay = self.get_object()
         medication = HospitalMedicationOrder.objects.filter(
             id=medication_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
         ).first()
         if not medication:
@@ -2045,7 +2066,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
         administration = HospitalMedicationAdministration.objects.filter(
             id=administration_id,
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             medication_order=medication,
         ).first()
         if not administration:
@@ -2072,7 +2093,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
             administration.save(update_fields=["administered_at", "administered_by", "updated_at"])
         if previous_status != administration.status:
             log_audit_event(
-                clinic_id=request.user.clinic_id,
+                clinic_id=administration.clinic_id,
                 actor=request.user,
                 action="hospital_medication_admin_status_changed",
                 entity_type="hospital_medication_administration",
@@ -2106,7 +2127,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         horizon = now + timedelta(minutes=window_minutes)
 
         orders = HospitalMedicationOrder.objects.filter(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             hospital_stay=stay,
             is_active=True,
         ).order_by("-created_at", "-id")
@@ -2120,7 +2141,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
 
             last_given = (
                 HospitalMedicationAdministration.objects.filter(
-                    clinic_id=request.user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(request.user),
                     medication_order=order,
                     status=HospitalMedicationAdministration.Status.GIVEN,
                     administered_at__isnull=False,
@@ -2178,7 +2199,7 @@ class RoomViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RoomSerializer
 
     def get_queryset(self):
-        return Room.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
+        return Room.objects.filter(clinic_id__in=accessible_clinic_ids(self.request.user)).order_by(
             "display_order", "name"
         )
 
@@ -2224,8 +2245,9 @@ class AvailabilityView(APIView):
         slot_minutes = int(slot) if slot else None
 
         # ---- compute availability ----
+        cid = clinic_id_for_mutation(user, request=request, instance_clinic_id=None)
         data = compute_availability(
-            clinic_id=user.clinic_id,
+            clinic_id=cid,
             date_str=date_str,
             vet_id=vet_id,
             room_id=room_id,
@@ -2244,7 +2266,7 @@ class AvailabilityView(APIView):
             {
                 "date": date_str,
                 "timezone": data["timezone"],
-                "clinic_id": user.clinic_id,
+                "clinic_id": cid,
                 "vet_id": vet_id,
                 "room_id": room_id,
                 "slot_minutes": data["slot_minutes"],
@@ -2281,7 +2303,9 @@ class AvailabilityRoomsView(APIView):
                 status=400,
             )
 
-        rooms = Room.objects.filter(clinic_id=user.clinic_id).order_by("display_order", "name")
+        rooms = Room.objects.filter(clinic_id__in=accessible_clinic_ids(user)).order_by(
+            "display_order", "name"
+        )
         slot_minutes = 30
         result = []
 
@@ -2293,7 +2317,7 @@ class AvailabilityRoomsView(APIView):
 
         for room in rooms:
             data = compute_availability(
-                clinic_id=user.clinic_id,
+                clinic_id=room.clinic_id,
                 date_str=date_str,
                 vet_id=None,
                 room_id=room.id,
@@ -2326,7 +2350,7 @@ class WaitingQueueViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return (
             WaitingQueueEntry.objects.filter(
-                clinic_id=self.request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(self.request.user),
                 status__in=[
                     WaitingQueueEntry.Status.WAITING,
                     WaitingQueueEntry.Status.IN_PROGRESS,
@@ -2342,7 +2366,9 @@ class WaitingQueueViewSet(viewsets.ModelViewSet):
         return WaitingQueueEntryWriteSerializer
 
     def perform_create(self, serializer):
-        clinic_id = self.request.user.clinic_id
+        clinic_id = clinic_id_for_mutation(
+            self.request.user, request=self.request, instance_clinic_id=None
+        )
         max_pos = (
             WaitingQueueEntry.objects.filter(
                 clinic_id=clinic_id,

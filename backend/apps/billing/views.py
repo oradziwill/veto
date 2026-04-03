@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsAdminOrReadOnly, IsClinicAdmin, IsStaffOrVet
+from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
 
 from .ksef_service import KSeFError
 from .ksef_service import submit_invoice as ksef_submit
@@ -40,7 +41,9 @@ class ServiceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsAdminOrReadOnly]
 
     def get_queryset(self):
-        return Service.objects.filter(clinic_id=self.request.user.clinic_id).order_by("name")
+        return Service.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).order_by("name")
 
     def get_serializer_class(self):
         if self.action in ("list", "retrieve"):
@@ -48,7 +51,10 @@ class ServiceViewSet(viewsets.ModelViewSet):
         return ServiceWriteSerializer
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=self.request.user.clinic_id)
+        cid = clinic_id_for_mutation(
+            self.request.user, request=self.request, instance_clinic_id=None
+        )
+        serializer.save(clinic_id=cid)
 
 
 class InvoiceViewSet(viewsets.ModelViewSet):
@@ -59,7 +65,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = (
-            Invoice.objects.filter(clinic_id=user.clinic_id)
+            Invoice.objects.filter(clinic_id__in=accessible_clinic_ids(user))
             .select_related("client", "patient", "appointment")
             .prefetch_related("lines", "payments")
             .order_by("-created_at")

@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.audit.services import log_audit_event
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_instance_for_mutation,
+)
 
 from .models import User
 from .permissions import HasClinic, IsClinicAdmin
@@ -34,10 +38,11 @@ class VetViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if not getattr(user, "clinic_id", None):
+        ids = accessible_clinic_ids(user)
+        if not ids:
             return User.objects.none()
 
-        return User.objects.filter(is_vet=True, clinic_id=user.clinic_id).order_by(
+        return User.objects.filter(is_vet=True, clinic_id__in=ids).order_by(
             "last_name", "first_name", "username"
         )
 
@@ -46,7 +51,7 @@ class ClinicUserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasClinic, IsClinicAdmin]
 
     def get_queryset(self):
-        return User.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
+        return User.objects.filter(clinic_id__in=accessible_clinic_ids(self.request.user)).order_by(
             "last_name", "first_name", "username"
         )
 
@@ -57,13 +62,18 @@ class ClinicUserViewSet(viewsets.ModelViewSet):
 
     def get_serializer_context(self):
         ctx = super().get_serializer_context()
-        ctx["clinic"] = self.request.user.clinic
+        if self.action in ("create", "update", "partial_update"):
+            ctx["clinic"] = clinic_instance_for_mutation(
+                self.request.user, self.request, instance_clinic_id=None
+            )
+        else:
+            ctx["clinic"] = self.request.user.clinic
         return ctx
 
     def perform_create(self, serializer):
         user = serializer.save()
         log_audit_event(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=user.clinic_id,
             actor=self.request.user,
             action="clinic_user_created",
             entity_type="user",
@@ -97,7 +107,7 @@ class ClinicUserViewSet(viewsets.ModelViewSet):
                 )
         user = serializer.save()
         log_audit_event(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=user.clinic_id,
             actor=self.request.user,
             action="clinic_user_updated",
             entity_type="user",
@@ -128,7 +138,7 @@ class ClinicUserViewSet(viewsets.ModelViewSet):
         entity_id = instance.id
         super().perform_destroy(instance)
         log_audit_event(
-            clinic_id=self.request.user.clinic_id,
+            clinic_id=instance.clinic_id,
             actor=self.request.user,
             action="clinic_user_deleted",
             entity_type="user",

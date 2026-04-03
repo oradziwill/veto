@@ -32,6 +32,11 @@ from apps.patients.serializers import (
 )
 from apps.scheduling.models import Appointment
 from apps.scheduling.serializers import AppointmentReadSerializer
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_instance_for_mutation,
+    user_can_access_clinic,
+)
 
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -85,7 +90,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             raise ValidationError({"limit": "Must be a positive integer."}) from None
         limit_n = max(1, min(limit_n, 50))
         data = recent_supply_line_suggestions(
-            clinic_id=request.user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
             patient_id=patient.id,
             limit=limit_n,
         )
@@ -107,7 +112,7 @@ class PatientViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             qs = Prescription.objects.filter(
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
                 patient_id=patient.id,
             ).order_by("-created_at")
             return Response(PrescriptionReadSerializer(qs, many=True).data, status=200)
@@ -123,7 +128,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         prescription = Prescription.objects.create(
-            clinic_id=user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(user),
             patient=patient,
             prescribed_by=user,
             **serializer.validated_data,
@@ -149,7 +154,7 @@ class PatientViewSet(viewsets.ModelViewSet):
 
         if request.method == "GET":
             qs = Vaccination.objects.filter(
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
                 patient_id=patient.id,
             ).order_by("-administered_at")
             if request.query_params.get("upcoming") == "1":
@@ -165,7 +170,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         serializer = VaccinationWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         vaccination = Vaccination.objects.create(
-            clinic_id=user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(user),
             patient=patient,
             administered_by=user,
             **serializer.validated_data,
@@ -202,7 +207,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         ]
 
         patient = (
-            Patient.objects.filter(pk=patient.pk, clinic_id=user.clinic_id)
+            Patient.objects.filter(pk=patient.pk, clinic_id__in=accessible_clinic_ids(user))
             .select_related("owner", "primary_vet", "clinic")
             .prefetch_related(
                 Prefetch(
@@ -265,7 +270,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         if not getattr(user, "clinic_id", None):
             return Patient.objects.none()
 
-        qs = Patient.objects.filter(clinic_id=user.clinic_id).select_related(
+        qs = Patient.objects.filter(clinic_id__in=accessible_clinic_ids(user)).select_related(
             "owner",
             "primary_vet",
             "clinic",
@@ -299,10 +304,11 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if not getattr(user, "clinic_id", None):
-            raise ValidationError("User must belong to a clinic to create patients.")
+        if not accessible_clinic_ids(user):
+            raise ValidationError("No clinic access to create patients.")
 
-        patient = serializer.save(clinic=user.clinic)
+        clinic = clinic_instance_for_mutation(user, self.request)
+        patient = serializer.save(clinic=clinic)
 
         # Ensure client membership exists (multi-clinic client model)
         if patient.owner_id and patient.clinic_id:
@@ -316,11 +322,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         user = self.request.user
         instance = self.get_object()
 
-        if (
-            instance.clinic_id
-            and getattr(user, "clinic_id", None) != instance.clinic_id
-            and not user.is_superuser
-        ):
+        if instance.clinic_id and not user_can_access_clinic(user, instance.clinic_id):
             raise ValidationError("You cannot modify patients outside your clinic.")
 
         patient = serializer.save()
@@ -344,7 +346,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         if request.method == "GET":
             qs = (
                 PatientHistoryEntry.objects.filter(
-                    clinic_id=user.clinic_id,
+                    clinic_id__in=accessible_clinic_ids(user),
                     record__patient_id=patient.id,
                 )
                 .select_related("record", "created_by", "appointment", "invoice")
@@ -359,7 +361,7 @@ class PatientViewSet(viewsets.ModelViewSet):
 
         # PatientHistoryEntry uses record (MedicalRecord), not patient_id. Get or create MedicalRecord.
         record, _ = MedicalRecord.objects.get_or_create(
-            clinic_id=user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(user),
             patient_id=patient.id,
             defaults={"created_by": user},
         )
@@ -378,7 +380,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             raise ValidationError({"note": "Note is required."})
 
         entry = serializer.save(
-            clinic_id=user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(user),
             created_by=user,
         )
 
@@ -425,7 +427,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         if patient.ai_summary and patient.ai_summary_updated_at:
             # Check if there are any history entries created after the summary was updated
             has_new_history = PatientHistoryEntry.objects.filter(
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
                 record__patient_id=patient.id,
                 created_at__gt=patient.ai_summary_updated_at,
             ).exists()
@@ -444,7 +446,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         # Collect visit history (focus on medical history, not basic patient info)
         history_entries = (
             PatientHistoryEntry.objects.filter(
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
                 record__patient_id=patient.id,
             )
             .select_related("record", "created_by")
@@ -462,7 +464,7 @@ class PatientViewSet(viewsets.ModelViewSet):
 
         # Collect appointments
         appointments = Appointment.objects.filter(
-            clinic_id=user.clinic_id,
+            clinic_id__in=accessible_clinic_ids(user),
             patient_id=patient.id,
         ).order_by("-starts_at")
 
@@ -480,7 +482,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         # Collect medical records (SOAP notes) - MedicalRecord has patient, not appointment
         medical_records = (
             MedicalRecord.objects.filter(
-                clinic_id=user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(user),
                 patient_id=patient.id,
             )
             .select_related("created_by")

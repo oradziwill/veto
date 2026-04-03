@@ -22,6 +22,10 @@ from apps.documents.serializers import (
     IngestionDocumentUploadResponseSerializer,
 )
 from apps.patients.models import Patient
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+)
 
 # Allowed content types for MVP: PDF and common images
 ALLOWED_CONTENT_TYPES = {
@@ -81,7 +85,7 @@ class DocumentUploadView(APIView):
         if not patient_id:
             raise ValidationError({"patient": "This field is required."})
 
-        clinic_id = request.user.clinic_id
+        clinic_id = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         patient = Patient.objects.filter(clinic_id=clinic_id, pk=patient_id).first()
         if not patient:
             raise ValidationError({"patient": "Patient not found or not in your clinic."})
@@ -146,7 +150,7 @@ class IngestionDocumentViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = (
-            IngestionDocument.objects.filter(clinic_id=self.request.user.clinic_id)
+            IngestionDocument.objects.filter(clinic_id__in=accessible_clinic_ids(self.request.user))
             .select_related("patient", "clinic", "uploaded_by", "appointment", "lab_order")
             .order_by("-created_at")
         )

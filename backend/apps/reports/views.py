@@ -12,6 +12,10 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import HasClinic, IsClinicAdmin, IsStaffOrVet
 from apps.audit.services import log_audit_event
 from apps.scheduling.models import Appointment
+from apps.tenancy.access import (
+    accessible_clinic_ids,
+    clinic_id_for_mutation,
+)
 
 from .models import ReportExportJob
 from .serializers import ReportExportJobCreateSerializer, ReportExportJobReadSerializer
@@ -78,9 +82,9 @@ class ReportExportJobViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsClinicAdmin]
 
     def get_queryset(self):
-        return ReportExportJob.objects.filter(clinic_id=self.request.user.clinic_id).order_by(
-            "-created_at", "-id"
-        )
+        return ReportExportJob.objects.filter(
+            clinic_id__in=accessible_clinic_ids(self.request.user)
+        ).order_by("-created_at", "-id")
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -90,15 +94,16 @@ class ReportExportJobViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         job = ReportExportJob.objects.create(
-            clinic_id=request.user.clinic_id,
+            clinic_id=cid,
             requested_by=request.user,
             report_type=serializer.validated_data["report_type"],
             params=serializer.validated_data.get("params") or {},
             status=ReportExportJob.Status.PENDING,
         )
         log_audit_event(
-            clinic_id=request.user.clinic_id,
+            clinic_id=job.clinic_id,
             actor=request.user,
             action="report_export_job_created",
             entity_type="report_export_job",
@@ -133,7 +138,7 @@ class ReportExportJobViewSet(viewsets.ModelViewSet):
         failed = 0
         jobs = list(
             ReportExportJob.objects.filter(
-                clinic_id=request.user.clinic_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
                 status=ReportExportJob.Status.PENDING,
             ).order_by("created_at", "id")[:limit]
         )
