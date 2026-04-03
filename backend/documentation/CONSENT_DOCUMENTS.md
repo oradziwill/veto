@@ -124,3 +124,18 @@ Szczegóły UI (modal wizyty, i18n) — u implementacji frontu w repozytorium kl
 ## Testy
 
 `pytest apps/consents/tests/test_consent_api.py` — mock S3 (`_get_s3_client`), bucket testowy przez `settings.DOCUMENTS_DATA_S3_BUCKET`.
+
+---
+
+## CI / `manage.py check` — typowa przyczyna błędu
+
+Jeśli w GitHub Actions pada krok **Django system check** (`import_module` w `apps.populate`):
+
+1. **W repozytorium musi być cały kod** aplikacji wymienionych w `INSTALLED_APPS`. Jeśli w `settings.py` jest `apps.consents` i/lub `apps.drug_catalog`, oba katalogi `backend/apps/consents/` i `backend/apps/drug_catalog/` muszą być **zacommitowane i wypushowane**. Commit samych zmian w `settings.py` bez tych folderów = `ModuleNotFoundError` na CI.
+2. Pakiety mają mieć `__init__.py` w katalogu aplikacji (w projekcie dodane m.in. pod Python 3.13 w CI).
+
+**Szybki test lokalnie (jak na CI):** z katalogu `backend`, z Pythonem 3.13:
+
+`python manage.py check`
+
+Migracja `medical.0013_prescription_reference_product` zależy od `drug_catalog` — jeśli ta migracja jest w repo, **nie usuwaj** `drug_catalog` z `INSTALLED_APPS` bez zmiany migracji; lepiej dodać cały moduł `drug_catalog` do repozytorium.

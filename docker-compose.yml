@@ -10,7 +10,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - .env # copy from .env.example in repo root
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend

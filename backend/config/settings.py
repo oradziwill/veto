@@ -14,6 +14,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -27,17 +28,44 @@ if not env_path.exists():
 load_dotenv(dotenv_path=env_path, override=True)
 
 
+def _env_bool(key: str, default: bool) -> bool:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _split_csv(name: str) -> list[str]:
+    raw = os.getenv(name, "").strip()
+    return [x.strip() for x in raw.split(",") if x.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-!xlvc@w2#_0bajgy^wd)56y6xj_l8@(kmknbc_t0qy03-6*z1&"
+# Dev: omit DJANGO_DEBUG or set 1/true. Prod: DJANGO_DEBUG=0 and DJANGO_SECRET_KEY set.
+DEBUG = _env_bool("DJANGO_DEBUG", True)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+_DEV_INSECURE_SECRET_KEY = "django-insecure-!xlvc@w2#_0bajgy^wd)56y6xj_l8@(kmknbc_t0qy03-6*z1&"
+SECRET_KEY = (os.getenv("DJANGO_SECRET_KEY") or os.getenv("SECRET_KEY") or "").strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = _DEV_INSECURE_SECRET_KEY
+    else:
+        raise ImproperlyConfigured(
+            "Set DJANGO_SECRET_KEY (or SECRET_KEY) when DJANGO_DEBUG is false."
+        )
 
-_allowed = os.getenv("ALLOWED_HOSTS")
-ALLOWED_HOSTS = [x.strip() for x in _allowed.split(",") if x.strip()] if _allowed else []
+_allowed = _split_csv("ALLOWED_HOSTS")
+if _allowed:
+    ALLOWED_HOSTS = _allowed
+elif DEBUG:
+    # runserver + docker service name used by compose healthchecks / internal calls
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]", "backend"]
+else:
+    raise ImproperlyConfigured(
+        "ALLOWED_HOSTS must be set when DJANGO_DEBUG is false (comma-separated hostnames)."
+    )
 
 
 # Application definition
@@ -70,6 +98,7 @@ INSTALLED_APPS = [
     "apps.audit.apps.AuditConfig",
     "apps.reports.apps.ReportsConfig",
     "apps.portal.apps.PortalConfig",
+    "behave_django",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -176,12 +205,27 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-CORS_ALLOWED_ORIGINS = [
+_default_cors_origins = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:5173",
     "http://localhost:5174",
 ]
+_cors_from_env = _split_csv("CORS_ALLOWED_ORIGINS")
+if _cors_from_env:
+    CORS_ALLOWED_ORIGINS = _cors_from_env
+elif DEBUG:
+    CORS_ALLOWED_ORIGINS = _default_cors_origins
+else:
+    CORS_ALLOWED_ORIGINS = []
+
+_csrf_from_env = _split_csv("CSRF_TRUSTED_ORIGINS")
+if _csrf_from_env:
+    CSRF_TRUSTED_ORIGINS = _csrf_from_env
+elif DEBUG:
+    CSRF_TRUSTED_ORIGINS = list(_default_cors_origins)
+else:
+    CSRF_TRUSTED_ORIGINS = []
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "apps.portal.authentication.PortalJWTAuthentication",
@@ -309,6 +353,20 @@ DEFAULT_SLOT_MINUTES = 30
 DOCUMENTS_DATA_S3_BUCKET = os.getenv("DOCUMENTS_DATA_S3_BUCKET", "")
 DOCUMENTS_S3_REGION = os.getenv("DOCUMENTS_S3_REGION", "us-east-1")
 DOCUMENTS_MAX_UPLOAD_MB = int(os.getenv("DOCUMENTS_MAX_UPLOAD_MB", "50"))
+
+# Lab instrument ingest — raw payloads on S3 (see documentation/LAB_INTEGRATION.md)
+# LAB_INGESTION_S3_ENABLED: set false if you share a prod-like .env locally but do not want lab blobs on S3.
+_LAB_INGEST_S3_EN = os.getenv("LAB_INGESTION_S3_ENABLED", "true").strip().lower()
+LAB_INGESTION_S3_ENABLED = _LAB_INGEST_S3_EN not in ("0", "false", "no", "off")
+# Bucket: LAB_INGESTION_S3_BUCKET, or when empty fallback to DOCUMENTS_DATA_S3_BUCKET.
+# Mode: auto (large payloads to S3), always, never.
+LAB_INGESTION_S3_PREFIX = os.getenv("LAB_INGESTION_S3_PREFIX", "lab-ingestion").strip().strip("/")
+LAB_INGESTION_S3_BUCKET = os.getenv("LAB_INGESTION_S3_BUCKET", "").strip()
+LAB_INGESTION_S3_REGION = os.getenv("LAB_INGESTION_S3_REGION", "").strip() or DOCUMENTS_S3_REGION
+LAB_INGESTION_RAW_INLINE_MAX_BYTES = int(
+    os.getenv("LAB_INGESTION_RAW_INLINE_MAX_BYTES", str(512 * 1024))
+)
+LAB_INGESTION_S3_MODE = os.getenv("LAB_INGESTION_S3_MODE", "auto").strip().lower()
 
 # Visit recording + AI summary pipeline
 VISIT_RECORDINGS_S3_BUCKET = os.getenv("VISIT_RECORDINGS_S3_BUCKET", "")
