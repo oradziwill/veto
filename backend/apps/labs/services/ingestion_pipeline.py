@@ -92,11 +92,10 @@ def create_envelope_and_process(
 
 @transaction.atomic
 def process_lab_ingestion_envelope(envelope_id: int) -> None:
+    # Lock only the envelope row. Do not combine select_related with select_for_update here:
+    # on PostgreSQL, FOR UPDATE with LEFT OUTER JOIN (nullable FK) raises FeatureNotSupported.
     env = (
-        LabIngestionEnvelope.objects.select_for_update()
-        .filter(pk=envelope_id)
-        .select_related("device", "clinic")
-        .first()
+        LabIngestionEnvelope.objects.select_for_update(of=("self",)).filter(pk=envelope_id).first()
     )
     if not env:
         return
