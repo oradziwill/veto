@@ -459,10 +459,10 @@ class ReminderPreferenceViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, self.request))
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
     def perform_update(self, serializer):
-        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, self.request))
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
 
 class ReminderTemplateViewSet(viewsets.ModelViewSet):
@@ -484,12 +484,12 @@ class ReminderTemplateViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        cid = clinic_id_for_mutation(self.request.user, self.request)
+        cid = clinic_id_for_mutation(self.request.user, request=self.request)
         template = serializer.save(clinic_id=cid, updated_by=self.request.user)
         self._create_version_snapshot(template, self.request.user)
 
     def perform_update(self, serializer):
-        cid = clinic_id_for_mutation(self.request.user, self.request)
+        cid = clinic_id_for_mutation(self.request.user, request=self.request)
         template = serializer.save(clinic_id=cid, updated_by=self.request.user)
         self._create_version_snapshot(template, self.request.user)
 
@@ -563,13 +563,13 @@ class ReminderProviderConfigViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(
-            clinic_id=clinic_id_for_mutation(self.request.user, self.request),
+            clinic_id=clinic_id_for_mutation(self.request.user, request=self.request),
             updated_by=self.request.user,
         )
 
     def perform_update(self, serializer):
         serializer.save(
-            clinic_id=clinic_id_for_mutation(self.request.user, self.request),
+            clinic_id=clinic_id_for_mutation(self.request.user, request=self.request),
             updated_by=self.request.user,
         )
 
@@ -611,10 +611,10 @@ class ReminderEscalationRuleViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
 
     def perform_create(self, serializer):
-        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, self.request))
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
     def perform_update(self, serializer):
-        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, self.request))
+        serializer.save(clinic_id=clinic_id_for_mutation(self.request.user, request=self.request))
 
 
 class ReminderEscalationExecutionViewSet(viewsets.ReadOnlyModelViewSet):

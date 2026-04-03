@@ -69,8 +69,9 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
         return MedicalRecordWriteSerializer
 
     def perform_create(self, serializer):
+        patient = serializer.validated_data["patient"]
         serializer.save(
-            clinic_id__in=accessible_clinic_ids(self.request.user),
+            clinic_id=patient.clinic_id,
             created_by=self.request.user,
         )
 
@@ -283,8 +284,9 @@ class PatientHistoryEntryViewSet(viewsets.ModelViewSet):
         return PatientHistoryEntryWriteSerializer
 
     def perform_create(self, serializer):
+        record = serializer.validated_data["record"]
         serializer.save(
-            clinic_id__in=accessible_clinic_ids(self.request.user),
+            clinic_id=record.clinic_id,
             created_by=self.request.user,
         )
 

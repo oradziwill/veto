@@ -456,7 +456,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             serializer = ClinicalExamWriteSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             exam = serializer.save(
-                clinic_id__in=accessible_clinic_ids(user),
+                clinic_id=appt.clinic_id,
                 appointment=appt,
                 created_by=user,
             )
@@ -504,7 +504,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
         if not exam:
             exam = ClinicalExam.objects.create(
-                clinic_id__in=accessible_clinic_ids(request.user),
+                clinic_id=appt.clinic_id,
                 appointment=appt,
                 created_by=request.user,
             )
@@ -737,7 +737,7 @@ class VisitTranscriptionView(APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         exam, _created = ClinicalExam.objects.get_or_create(
-            clinic_id__in=accessible_clinic_ids(request.user),
+            clinic_id=appointment.clinic_id,
             appointment=appointment,
             defaults={"created_by": request.user},
         )
@@ -843,7 +843,7 @@ class VisitRecordingUploadView(APIView):
 
         with transaction.atomic():
             recording = VisitRecording.objects.create(
-                clinic_id__in=accessible_clinic_ids(request.user),
+                clinic_id=appointment.clinic_id,
                 appointment=appointment,
                 uploaded_by=request.user,
                 original_filename=upload.name or "recording.webm",
@@ -1726,7 +1726,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalStayNoteWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         note = serializer.save(
-            clinic_id__in=accessible_clinic_ids(request.user),
+            clinic_id=stay.clinic_id,
             hospital_stay=stay,
             created_by=request.user,
         )
@@ -1769,7 +1769,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalStayTaskWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         task = serializer.save(
-            clinic_id__in=accessible_clinic_ids(request.user),
+            clinic_id=stay.clinic_id,
             hospital_stay=stay,
             created_by=request.user,
         )
@@ -1859,7 +1859,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalMedicationOrderWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         medication = serializer.save(
-            clinic_id__in=accessible_clinic_ids(request.user),
+            clinic_id=stay.clinic_id,
             hospital_stay=stay,
             created_by=request.user,
         )
@@ -1934,7 +1934,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
                     else:
                         to_create.append(
                             HospitalMedicationAdministration(
-                                clinic_id__in=accessible_clinic_ids(request.user),
+                                clinic_id=order.clinic_id,
                                 medication_order=order,
                                 scheduled_for=candidate,
                                 status=HospitalMedicationAdministration.Status.PENDING,
@@ -2012,7 +2012,7 @@ class HospitalStayViewSet(viewsets.ModelViewSet):
         serializer = HospitalMedicationAdministrationWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         administration = serializer.save(
-            clinic_id__in=accessible_clinic_ids(request.user),
+            clinic_id=medication.clinic_id,
             medication_order=medication,
         )
         if administration.status == HospitalMedicationAdministration.Status.GIVEN:

@@ -34,6 +34,7 @@ from apps.scheduling.models import Appointment
 from apps.scheduling.serializers import AppointmentReadSerializer
 from apps.tenancy.access import (
     accessible_clinic_ids,
+    clinic_id_for_mutation,
     clinic_instance_for_mutation,
     user_can_access_clinic,
 )
@@ -89,8 +90,11 @@ class PatientViewSet(viewsets.ModelViewSet):
         except (TypeError, ValueError):
             raise ValidationError({"limit": "Must be a positive integer."}) from None
         limit_n = max(1, min(limit_n, 50))
+        cid = clinic_id_for_mutation(
+            request.user, request=request, instance_clinic_id=patient.clinic_id
+        )
         data = recent_supply_line_suggestions(
-            clinic_id__in=accessible_clinic_ids(request.user),
+            clinic_id=cid,
             patient_id=patient.id,
             limit=limit_n,
         )
@@ -127,8 +131,9 @@ class PatientViewSet(viewsets.ModelViewSet):
             context={"request": request, "patient": patient},
         )
         serializer.is_valid(raise_exception=True)
+        cid = clinic_id_for_mutation(user, request=request, instance_clinic_id=patient.clinic_id)
         prescription = Prescription.objects.create(
-            clinic_id__in=accessible_clinic_ids(user),
+            clinic_id=cid,
             patient=patient,
             prescribed_by=user,
             **serializer.validated_data,
@@ -169,8 +174,9 @@ class PatientViewSet(viewsets.ModelViewSet):
             raise ValidationError("User must belong to a clinic to record vaccinations.")
         serializer = VaccinationWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        cid = clinic_id_for_mutation(user, request=request, instance_clinic_id=patient.clinic_id)
         vaccination = Vaccination.objects.create(
-            clinic_id__in=accessible_clinic_ids(user),
+            clinic_id=cid,
             patient=patient,
             administered_by=user,
             **serializer.validated_data,
@@ -361,7 +367,7 @@ class PatientViewSet(viewsets.ModelViewSet):
 
         # PatientHistoryEntry uses record (MedicalRecord), not patient_id. Get or create MedicalRecord.
         record, _ = MedicalRecord.objects.get_or_create(
-            clinic_id__in=accessible_clinic_ids(user),
+            clinic_id=patient.clinic_id,
             patient_id=patient.id,
             defaults={"created_by": user},
         )
@@ -380,7 +386,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             raise ValidationError({"note": "Note is required."})
 
         entry = serializer.save(
-            clinic_id__in=accessible_clinic_ids(user),
+            clinic_id=patient.clinic_id,
             created_by=user,
         )
 
