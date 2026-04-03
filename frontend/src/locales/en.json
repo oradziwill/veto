@@ -178,6 +178,7 @@
     "noPatientsForOwner": "No patients found for this owner",
     "selectPatient": "Select Patient",
     "vitalParams": "Vital Parameters",
+    "lastRecorded": "Last recorded",
     "visitNotes": "Visit Notes",
     "visitNotesPlaceholder": "Enter visit notes...",
     "medication": "Medication",

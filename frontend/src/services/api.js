@@ -58,6 +58,7 @@ export const patientsAPI = {
   create: (data) => api.post("/patients/", data),
   update: (id, data) => api.put(`/patients/${id}/`, data),
   delete: (id) => api.delete(`/patients/${id}/`),
+  lastVitals: (id) => api.get(`/patients/${id}/last-vitals/`),
 };
 
 export const appointmentsAPI = {

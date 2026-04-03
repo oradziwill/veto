@@ -178,6 +178,7 @@
     "noPatientsForOwner": "Brak pacjentów dla tego właściciela",
     "selectPatient": "Wybierz pacjenta",
     "vitalParams": "Parametry życiowe",
+    "lastRecorded": "Ostatni pomiar",
     "visitNotes": "Notatki z wizyty",
     "visitNotesPlaceholder": "Wpisz notatki z wizyty...",
     "medication": "Lekarstwa",
