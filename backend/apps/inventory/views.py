@@ -6,6 +6,7 @@ from rest_framework import serializers, viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.permissions import HasClinic, IsStaffOrVet
+from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
 
 from .models import InventoryItem, InventoryMovement
 from .serializers import (
@@ -21,8 +22,10 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get_queryset(self):
-        user = self.request.user
-        qs = InventoryItem.objects.filter(clinic_id=user.clinic_id).order_by("name")
+        ids = accessible_clinic_ids(self.request.user)
+        if not ids:
+            return InventoryItem.objects.none()
+        qs = InventoryItem.objects.filter(clinic_id__in=ids).order_by("name")
 
         q = self.request.query_params.get("q")
         if q:
@@ -49,9 +52,10 @@ class InventoryItemViewSet(viewsets.ModelViewSet):
         Stock changes happen via InventoryMovement only.
         """
         user = self.request.user
+        cid = clinic_id_for_mutation(user, request=self.request, instance_clinic_id=None)
         try:
             with transaction.atomic():
-                serializer.save(clinic_id=user.clinic_id, created_by=user)
+                serializer.save(clinic_id=cid, created_by=user)
         except IntegrityError as err:
             raise serializers.ValidationError(
                 {"sku": ["SKU must be unique within the clinic."]}
@@ -62,8 +66,10 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get_queryset(self):
-        user = self.request.user
-        qs = InventoryMovement.objects.filter(clinic_id=user.clinic_id).select_related("item")
+        ids = accessible_clinic_ids(self.request.user)
+        if not ids:
+            return InventoryMovement.objects.none()
+        qs = InventoryMovement.objects.filter(clinic_id__in=ids).select_related("item")
 
         item_id = self.request.query_params.get("item")
         if item_id:
@@ -78,9 +84,10 @@ class InventoryMovementViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        item = serializer.validated_data["item"]
         try:
             with transaction.atomic():
-                movement = serializer.save(clinic_id=user.clinic_id, created_by=user)
+                movement = serializer.save(clinic_id=item.clinic_id, created_by=user)
                 apply_movement(movement)
         except Exception as err:
             raise serializers.ValidationError({"detail": str(err)}) from err

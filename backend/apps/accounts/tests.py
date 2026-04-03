@@ -87,3 +87,22 @@ def test_jwt_token_obtain_invalid_credentials(api_client, clinic):
     )
     assert response.status_code == 401
     assert response.data["code"] == "authentication_failed"
+
+
+@pytest.mark.django_db
+def test_me_includes_network_for_network_admin(api_client):
+    from apps.tenancy.models import ClinicNetwork
+
+    net = ClinicNetwork.objects.create(name="Chain")
+    u = User.objects.create_user(
+        username="na-me",
+        password="pass",
+        role=User.Role.NETWORK_ADMIN,
+        network=net,
+        is_staff=True,
+    )
+    api_client.force_authenticate(user=u)
+    response = api_client.get("/api/me/")
+    assert response.status_code == 200
+    assert response.data["network"] == net.id
+    assert response.data["role"] == User.Role.NETWORK_ADMIN

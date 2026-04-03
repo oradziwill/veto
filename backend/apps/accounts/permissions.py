@@ -9,6 +9,17 @@ def _user_can_perform_clinical_actions(user) -> bool:
     return role in ("doctor", "admin")
 
 
+def _has_clinic_access(user) -> bool:
+    if not (user and user.is_authenticated):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    if getattr(user, "clinic_id", None):
+        return True
+    role = getattr(user, "role", None)
+    return role == "network_admin" and bool(getattr(user, "network_id", None))
+
+
 class IsVet(BasePermission):
     """
     Allows access only to authenticated users marked as vets.
@@ -36,14 +47,14 @@ class IsDoctorOrAdmin(BasePermission):
 
 class HasClinic(BasePermission):
     """
-    Allows access only to authenticated users that belong to a clinic.
+    Allows access only to authenticated users that belong to a clinic,
+    or network admins scoped to a network.
     """
 
-    message = "User must belong to a clinic."
+    message = "User must belong to a clinic or a clinic network."
 
     def has_permission(self, request, view) -> bool:
-        user = request.user
-        return bool(user and user.is_authenticated and getattr(user, "clinic_id", None))
+        return _has_clinic_access(request.user)
 
 
 class IsClinicStaffOrReadOnly(BasePermission):
@@ -89,13 +100,15 @@ class IsAdminOrReadOnly(BasePermission):
             return False
         if request.method in SAFE_METHODS:
             role = getattr(user, "role", None)
-            return role in ("doctor", "receptionist", "admin") or getattr(user, "is_staff", False)
+            return role in ("doctor", "receptionist", "admin", "network_admin") or getattr(
+                user, "is_staff", False
+            )
         return getattr(user, "role", None) == "admin"
 
 
 class IsStaffOrVet(BasePermission):
     """
-    Allows staff, superusers, vets, or any clinic role (doctor, receptionist, admin).
+    Staff, superusers, vets, or any clinic role (doctor, receptionist, admin, network_admin).
     Use for: appointments, inventory - all clinic personas can access.
     """
 
@@ -108,6 +121,6 @@ class IsStaffOrVet(BasePermission):
         if getattr(user, "is_superuser", False):
             return True
         role = getattr(user, "role", None)
-        if role in ("doctor", "receptionist", "admin"):
+        if role in ("doctor", "receptionist", "admin", "network_admin"):
             return True
         return bool(getattr(user, "is_staff", False) or getattr(user, "is_vet", False))
