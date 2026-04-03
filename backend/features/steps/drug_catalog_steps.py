@@ -65,15 +65,6 @@ def step_receptionist_create_manual(context, name):
     )
 
 
-@then("the response status is {status:d}")
-def step_response_status(context, status):
-    assert context.last_response is not None
-    assert context.last_response.status_code == status, (
-        f"expected {status}, got {context.last_response.status_code}: "
-        f"{getattr(context.last_response, 'data', context.last_response.content)}"
-    )
-
-
 @then('the search results contain "{name}"')
 def step_search_contains_name(context, name):
     data = context.last_response.data
