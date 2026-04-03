@@ -6,7 +6,42 @@ from django.db import models
 from django.utils.text import slugify
 
 
+class ClinicNetwork(models.Model):
+    """
+    A group of clinics under one management brand (e.g. chain / franchise).
+    Clinics may exist without a network (standalone); assign network when ready.
+    """
+
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name)[:200] or "network"
+            slug = base
+            i = 2
+            while ClinicNetwork.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base}-{i}"
+                i += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Clinic(models.Model):
+    network = models.ForeignKey(
+        ClinicNetwork,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="clinics",
+    )
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     address = models.CharField(max_length=512, blank=True)
