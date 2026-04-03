@@ -14,6 +14,88 @@ import './Modal.css'
 
 import { translateSpecies } from '../../utils/species'
 
+const VITAL_FIELD_CONFIGS = {
+  Dog: [
+    { section: 'Podstawowe parametry życiowe', fields: [
+      { key: 'temperatura', label: 'Temperatura', default: '38.5', unit: '°C' },
+      { key: 'tetno', label: 'Tętno', default: '90', unit: 'bpm' },
+      { key: 'oddechy', label: 'Oddechy', default: '20', unit: '/min' },
+    ]},
+    { section: 'Stan ogólny', fields: [
+      { key: 'zachowanie', label: 'Zachowanie', default: 'spokojny / czujny' },
+      { key: 'bcs', label: 'BCS', default: '5/9' },
+      { key: 'nawodnienie', label: 'Nawodnienie', default: 'prawidłowe' },
+    ]},
+    { section: 'Badanie kliniczne', fields: [
+      { key: 'blony_sluzowe', label: 'Błony śluzowe', default: 'różowe, wilgotne' },
+      { key: 'crt', label: 'CRT', default: '< 2 s' },
+      { key: 'wezly_chlonne', label: 'Węzły chłonne', default: 'niepowiększone' },
+      { key: 'serce', label: 'Osłuchiwanie serca', default: 'bez szmerów' },
+      { key: 'pluca', label: 'Osłuchiwanie płuc', default: 'prawidłowe' },
+    ]},
+    { section: 'Dodatkowe', fields: [
+      { key: 'apetyt', label: 'Apetyt', default: 'prawidłowy' },
+      { key: 'mocz_kal', label: 'Oddawanie moczu/kału', default: 'prawidłowe' },
+      { key: 'szczepienia', label: 'Szczepienia', default: 'aktualne' },
+    ]},
+  ],
+  Cat: [
+    { section: 'Podstawowe parametry', fields: [
+      { key: 'temperatura', label: 'Temperatura', default: '38.5', unit: '°C' },
+      { key: 'tetno', label: 'Tętno', default: '160', unit: 'bpm' },
+      { key: 'oddechy', label: 'Oddechy', default: '25', unit: '/min' },
+    ]},
+    { section: 'Stan ogólny', fields: [
+      { key: 'zachowanie', label: 'Zachowanie', default: 'czujny (ew. lekko zestresowany)' },
+      { key: 'bcs', label: 'BCS', default: '5/9' },
+      { key: 'nawodnienie', label: 'Nawodnienie', default: 'prawidłowe' },
+    ]},
+    { section: 'Badanie kliniczne', fields: [
+      { key: 'blony_sluzowe', label: 'Błony śluzowe', default: 'różowe' },
+      { key: 'crt', label: 'CRT', default: '< 2 s' },
+      { key: 'serce', label: 'Serce', default: 'rytmy prawidłowe' },
+      { key: 'pluca', label: 'Płuca', default: 'bez zmian osłuchowych' },
+      { key: 'oczy_uszy', label: 'Oczy/uszy', default: 'bez zmian' },
+    ]},
+    { section: 'Dodatkowe', fields: [
+      { key: 'apetyt', label: 'Apetyt', default: 'prawidłowy' },
+      { key: 'kuweta', label: 'Kuweta', default: 'prawidłowa' },
+      { key: 'szczepienia', label: 'Szczepienia', default: 'aktualne' },
+    ]},
+  ],
+  Rabbit: [
+    { section: 'Podstawowe parametry', fields: [
+      { key: 'temperatura', label: 'Temperatura', default: '39.5', unit: '°C' },
+      { key: 'tetno', label: 'Tętno', default: '200', unit: 'bpm' },
+      { key: 'oddechy', label: 'Oddechy', default: '40', unit: '/min' },
+    ]},
+    { section: 'Stan ogólny', fields: [
+      { key: 'zachowanie', label: 'Zachowanie', default: 'czujny' },
+      { key: 'bcs', label: 'BCS', default: '3/5' },
+      { key: 'nawodnienie', label: 'Nawodnienie', default: 'prawidłowe' },
+    ]},
+    { section: 'Badanie kliniczne', fields: [
+      { key: 'zeby', label: 'Zęby', default: 'prawidłowe (brak przerostu)' },
+      { key: 'brzuch', label: 'Brzuch', default: 'miękki, niebolesny' },
+      { key: 'perystaltyka', label: 'Perystaltyka', default: 'obecna' },
+      { key: 'blony_sluzowe', label: 'Błony śluzowe', default: 'różowe' },
+    ]},
+    { section: 'Dodatkowe', fields: [
+      { key: 'apetyt', label: 'Apetyt', default: 'prawidłowy' },
+      { key: 'kal', label: 'Kał', default: 'prawidłowe bobki' },
+      { key: 'aktywnosc', label: 'Aktywność', default: 'prawidłowa' },
+    ]},
+  ],
+}
+
+const initVitalParams = (species) => {
+  const config = VITAL_FIELD_CONFIGS[species]
+  if (!config) return {}
+  const defaults = {}
+  config.forEach(section => section.fields.forEach(f => { defaults[f.key] = f.default }))
+  return defaults
+}
+
 const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, initialChiefComplaint = '', standalone = false }) => {
   const { t } = useTranslation()
   const [ownerSearch, setOwnerSearch] = useState('')
@@ -31,6 +113,9 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     medicalReceipts: '',
     additionalNotes: '',
   })
+
+  const [vitalParams, setVitalParams] = useState({})
+  const [patientSpecies, setPatientSpecies] = useState('Dog')
 
   const [services, setServices] = useState([])
   const [selectedServices, setSelectedServices] = useState([]) // { id, name, price } - can add same service multiple times
@@ -106,6 +191,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         setOwnerSearch(`${owner.first_name} ${owner.last_name}`)
         loadPatientsForOwner(owner.id)
       }
+      setPatientSpecies(initialPatient.species || null)
+      setVitalParams(initVitalParams(initialPatient.species))
       setFormData({
         patient: initialPatient.id.toString(),
         visitNotes: initialChiefComplaint || '',
@@ -122,6 +209,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       medicalReceipts: '',
       additionalNotes: '',
     })
+    setPatientSpecies('Dog')
+    setVitalParams({})
     setOwnerSearch('')
     setSelectedOwner(null)
     setOwnerSearchResults([])
@@ -150,6 +239,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
             const patient = currentAppointment.patient
             setSelectedOwner(patient.owner)
             setOwnerSearch(`${patient.owner.first_name} ${patient.owner.last_name}`)
+            setPatientSpecies(patient.species || null)
+            setVitalParams(initVitalParams(patient.species))
             setFormData(prev => ({ ...prev, patient: patient.id.toString() }))
             loadPatientsForOwner(patient.owner.id)
           }
@@ -241,10 +332,14 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    if (name === 'patient' && value) {
+      const patient = patients.find(p => p.id.toString() === value)
+      setPatientSpecies(patient?.species || null)
+      setVitalParams(initVitalParams(patient?.species))
+      setFormData(prev => ({ ...prev, patient: value }))
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }))
+    }
   }
 
   const addService = () => {
@@ -296,11 +391,26 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     try {
       const patientId = parseInt(formData.patient, 10)
       
-      // Combine visit notes, medication, and additional notes into a structured note
+      // Combine vital params, visit notes, medication, and additional notes into a structured note
       // The API requires 'note' field to be present and non-empty
       const noteParts = []
+
+      // Format vital parameters as structured text
+      if (patientSpecies && VITAL_FIELD_CONFIGS[patientSpecies] && Object.keys(vitalParams).length > 0) {
+        const vitalLines = []
+        VITAL_FIELD_CONFIGS[patientSpecies].forEach(section => {
+          vitalLines.push(`=== ${section.section} ===`)
+          section.fields.forEach(f => {
+            const val = vitalParams[f.key] ?? ''
+            const unit = f.unit ? ` ${f.unit}` : ''
+            vitalLines.push(`${f.label}: ${val}${unit}`)
+          })
+        })
+        noteParts.push(vitalLines.join('\n'))
+      }
+
       if (formData.visitNotes.trim()) {
-        noteParts.push(`VISIT NOTES:\n${formData.visitNotes.trim()}`)
+        noteParts.push(`Notatki:\n${formData.visitNotes.trim()}`)
       }
       if (selectedMedications.length > 0) {
         const medLines = selectedMedications.map(m => `- ${m.name} x${m.quantity} ${m.unit}`)
@@ -314,7 +424,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       
       // Validate that at least one note field is filled (API requires 'note' field)
       if (!combinedNote.trim()) {
-        setError(t('startVisit.noteRequired'))
+        setError(t('startVisit.fillSomeNotes'))
         setLoading(false)
         return
       }
@@ -394,7 +504,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
 
       onSuccess()
       onClose()
-      
+
       // Reset form
       setFormData({
         patient: '',
@@ -402,6 +512,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         medicalReceipts: '',
         additionalNotes: '',
       })
+      setVitalParams(initVitalParams('Dog'))
+      setPatientSpecies('Dog')
       setSelectedServices([])
       setSelectedMedications([])
       setMedicationToAdd('')
@@ -617,6 +729,53 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
             )}
           </div>
 
+          {patientSpecies && VITAL_FIELD_CONFIGS[patientSpecies] && (
+            <div className="form-group">
+              <label>{t('startVisit.vitalParams')}</label>
+              {VITAL_FIELD_CONFIGS[patientSpecies].map(section => (
+                <div key={section.section} style={{ marginBottom: '1rem' }}>
+                  <div style={{
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: '#4a5568',
+                    marginBottom: '0.5rem',
+                    paddingBottom: '0.25rem',
+                    borderBottom: '1px solid #e2e8f0',
+                  }}>
+                    {section.section}
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                    gap: '0.5rem',
+                  }}>
+                    {section.fields.map(f => (
+                      <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                        <label htmlFor={`vital_${f.key}`} style={{ fontSize: '0.8rem', color: '#4a5568', fontWeight: '500' }}>
+                          {f.label}{f.unit ? ` (${f.unit})` : ''}
+                        </label>
+                        <input
+                          id={`vital_${f.key}`}
+                          type="text"
+                          value={vitalParams[f.key] ?? ''}
+                          onChange={e => setVitalParams(prev => ({ ...prev, [f.key]: e.target.value }))}
+                          style={{
+                            padding: '0.35rem 0.5rem',
+                            fontSize: '0.9rem',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="form-group">
             <label htmlFor="visitNotes">{t('startVisit.visitNotes')}</label>
             <textarea
@@ -624,12 +783,9 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
               name="visitNotes"
               value={formData.visitNotes}
               onChange={handleChange}
-              rows="4"
+              rows="3"
               placeholder={t('startVisit.visitNotesPlaceholder')}
             />
-            <small style={{ color: '#666', fontSize: '0.85rem' }}>
-              {t('startVisit.noteRequired')}
-            </small>
           </div>
 
           <div className="form-group">
