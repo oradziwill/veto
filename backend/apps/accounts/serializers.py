@@ -14,6 +14,7 @@ class MeSerializer(serializers.ModelSerializer):
             "role",
             "is_vet",
             "clinic",
+            "network",
             "is_staff",
             "is_superuser",
         ]

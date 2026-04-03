@@ -5,6 +5,7 @@ import re
 from rest_framework import serializers
 
 from apps.scheduling.models import Appointment
+from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
 
 from .models import InventoryItem, InventoryMovement
 
@@ -55,13 +56,22 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
         not a 500 IntegrityError.
         """
         request = self.context.get("request")
-        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
-        if not clinic_id:
+        user = getattr(request, "user", None)
+        if not user:
             return attrs
+
+        if self.instance:
+            effective_clinic_id = self.instance.clinic_id
+            if effective_clinic_id not in set(accessible_clinic_ids(user)):
+                raise serializers.ValidationError("Clinic not accessible.")
+        else:
+            effective_clinic_id = clinic_id_for_mutation(
+                user, request=request, instance_clinic_id=None
+            )
 
         sku = attrs.get("sku") or getattr(self.instance, "sku", None)
         if sku:
-            qs = InventoryItem.objects.filter(clinic_id=clinic_id, sku=sku)
+            qs = InventoryItem.objects.filter(clinic_id=effective_clinic_id, sku=sku)
             if self.instance:
                 qs = qs.exclude(pk=self.instance.pk)
             if qs.exists():
@@ -92,24 +102,25 @@ class InventoryMovementWriteSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         request = self.context.get("request")
-        clinic_id = getattr(getattr(request, "user", None), "clinic_id", None)
+        user = getattr(request, "user", None)
+        accessible = set(accessible_clinic_ids(user)) if user else set()
 
         qty = attrs.get("quantity")
         if qty is not None and qty <= 0:
             raise serializers.ValidationError({"quantity": "quantity must be > 0"})
 
-        # ---- HARDEN TENANCY: item must belong to user's clinic ----
-        item = attrs.get("item")  # this is an InventoryItem instance after DRF parsing
-        if clinic_id and item and item.clinic_id != clinic_id:
+        item = attrs.get("item")
+        if item and item.clinic_id not in accessible:
             raise serializers.ValidationError(
-                {"item": "Inventory item must belong to your clinic."}
+                {"item": "Inventory item must belong to a clinic you can access."}
             )
 
-        # ---- Optional: appointment scoping hardening ----
+        effective_clinic_id = item.clinic_id if item else None
+
         appointment_id = attrs.get("appointment_id")
-        if appointment_id and clinic_id:
+        if appointment_id and effective_clinic_id:
             try:
-                appt = Appointment.objects.get(pk=appointment_id, clinic_id=clinic_id)
+                appt = Appointment.objects.get(pk=appointment_id, clinic_id=effective_clinic_id)
             except Appointment.DoesNotExist as err:
                 raise serializers.ValidationError(
                     {"appointment_id": "Appointment must belong to your clinic."}
