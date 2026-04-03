@@ -96,6 +96,24 @@ const initVitalParams = (species) => {
   return defaults
 }
 
+// Map API last-vitals fields to our internal vital param keys
+const LAST_VITALS_MAP = {
+  temperature_c: 'temperatura',
+  heart_rate_bpm: 'tetno',
+  respiratory_rate_rpm: 'oddechy',
+}
+
+const overlayLastVitals = (defaults, lastVitals) => {
+  if (!lastVitals) return defaults
+  const result = { ...defaults }
+  Object.entries(LAST_VITALS_MAP).forEach(([apiKey, paramKey]) => {
+    if (lastVitals[apiKey] != null && paramKey in result) {
+      result[paramKey] = String(lastVitals[apiKey])
+    }
+  })
+  return result
+}
+
 const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, initialChiefComplaint = '', standalone = false }) => {
   const { t } = useTranslation()
   const [ownerSearch, setOwnerSearch] = useState('')
@@ -116,6 +134,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
 
   const [vitalParams, setVitalParams] = useState({})
   const [patientSpecies, setPatientSpecies] = useState('Dog')
+  const [lastVitalsInfo, setLastVitalsInfo] = useState(null) // { recorded_at } from API
 
   const [services, setServices] = useState([])
   const [selectedServices, setSelectedServices] = useState([]) // { id, name, price } - can add same service multiple times
@@ -192,7 +211,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         loadPatientsForOwner(owner.id)
       }
       setPatientSpecies(initialPatient.species || null)
-      setVitalParams(initVitalParams(initialPatient.species))
+      applyLastVitals(initialPatient.id, initialPatient.species)
       setFormData({
         patient: initialPatient.id.toString(),
         visitNotes: initialChiefComplaint || '',
@@ -211,6 +230,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     })
     setPatientSpecies('Dog')
     setVitalParams({})
+    setLastVitalsInfo(null)
     setOwnerSearch('')
     setSelectedOwner(null)
     setOwnerSearchResults([])
@@ -240,7 +260,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
             setSelectedOwner(patient.owner)
             setOwnerSearch(`${patient.owner.first_name} ${patient.owner.last_name}`)
             setPatientSpecies(patient.species || null)
-            setVitalParams(initVitalParams(patient.species))
+            applyLastVitals(patient.id, patient.species)
             setFormData(prev => ({ ...prev, patient: patient.id.toString() }))
             loadPatientsForOwner(patient.owner.id)
           }
@@ -252,6 +272,22 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
 
     checkCurrentAppointment()
   }, [isOpen, initialPatient, initialChiefComplaint])
+
+  const applyLastVitals = async (patientId, species) => {
+    const defaults = initVitalParams(species)
+    try {
+      const res = await patientsAPI.lastVitals(patientId)
+      if (res.status === 200 && res.data) {
+        setVitalParams(overlayLastVitals(defaults, res.data))
+        setLastVitalsInfo({ recorded_at: res.data.recorded_at })
+        return
+      }
+    } catch {
+      // no previous exam or error — use defaults
+    }
+    setVitalParams(defaults)
+    setLastVitalsInfo(null)
+  }
 
   const loadPatientsForOwner = async (ownerId) => {
     try {
@@ -335,7 +371,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     if (name === 'patient' && value) {
       const patient = patients.find(p => p.id.toString() === value)
       setPatientSpecies(patient?.species || null)
-      setVitalParams(initVitalParams(patient?.species))
+      applyLastVitals(patient?.id, patient?.species)
       setFormData(prev => ({ ...prev, patient: value }))
     } else {
       setFormData(prev => ({ ...prev, [name]: value }))
@@ -514,6 +550,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       })
       setVitalParams(initVitalParams('Dog'))
       setPatientSpecies('Dog')
+      setLastVitalsInfo(null)
       setSelectedServices([])
       setSelectedMedications([])
       setMedicationToAdd('')
@@ -731,7 +768,21 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
 
           {patientSpecies && VITAL_FIELD_CONFIGS[patientSpecies] && (
             <div className="form-group">
-              <label>{t('startVisit.vitalParams')}</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                <label style={{ margin: 0 }}>{t('startVisit.vitalParams')}</label>
+                {lastVitalsInfo && (
+                  <span style={{
+                    fontSize: '0.75rem',
+                    color: '#2f855a',
+                    backgroundColor: '#f0fff4',
+                    border: '1px solid #9ae6b4',
+                    borderRadius: '4px',
+                    padding: '0.15rem 0.5rem',
+                  }}>
+                    {t('startVisit.lastRecorded')}: {new Date(lastVitalsInfo.recorded_at).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
               {VITAL_FIELD_CONFIGS[patientSpecies].map(section => (
                 <div key={section.section} style={{ marginBottom: '1rem' }}>
                   <div style={{
