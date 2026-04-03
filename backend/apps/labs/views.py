@@ -74,7 +74,10 @@ class LabOrderViewSet(viewsets.ModelViewSet):
         qs = (
             LabOrder.objects.filter(clinic_id=user.clinic_id)
             .select_related("patient", "lab", "ordered_by", "appointment", "hospital_stay")
-            .prefetch_related("lines__test", "lines__result")
+            .prefetch_related(
+                "lines__test",
+                "lines__result__components__lab_test",
+            )
             .order_by("-ordered_at")
         )
         patient_id = self.request.query_params.get("patient")
@@ -141,5 +144,10 @@ class LabOrderViewSet(viewsets.ModelViewSet):
         data = {k: v for k, v in request.data.items() if k != "order_line_id"}
         serializer = LabResultWriteSerializer(result, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
-        result = serializer.save(created_by=request.user)
+        result = result = serializer.save(created_by=request.user)
+        if result.source == LabResult.Source.INTEGRATION:
+            result.source = LabResult.Source.MIXED
+        else:
+            result.source = LabResult.Source.MANUAL
+        result.save(update_fields=["source"])
         return Response(LabResultSerializer(result).data)

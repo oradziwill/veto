@@ -20,6 +20,8 @@ python-dateutil>=2.9
 # -------------------------
 pytest>=8.0
 pytest-django>=4.8
+behave>=1.2
+behave-django>=1.4
 
 # -------------------------
 # Code quality (used in CI)

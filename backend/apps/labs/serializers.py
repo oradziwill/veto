@@ -1,6 +1,19 @@
 from rest_framework import serializers
 
-from .models import Lab, LabOrder, LabOrderLine, LabResult, LabTest
+from .models import (
+    Lab,
+    LabExternalIdentifier,
+    LabIngestionEnvelope,
+    LabIntegrationDevice,
+    LabObservation,
+    LabOrder,
+    LabOrderLine,
+    LabResult,
+    LabResultComponent,
+    LabSample,
+    LabTest,
+    LabTestCodeMap,
+)
 
 
 class LabSerializer(serializers.ModelSerializer):
@@ -34,9 +47,32 @@ class LabTestSerializer(serializers.ModelSerializer):
         ]
 
 
+class LabResultComponentSerializer(serializers.ModelSerializer):
+    test_code = serializers.CharField(source="lab_test.code", read_only=True)
+    test_name = serializers.CharField(source="lab_test.name", read_only=True)
+
+    class Meta:
+        model = LabResultComponent
+        fields = [
+            "id",
+            "lab_test",
+            "test_code",
+            "test_name",
+            "value_text",
+            "value_numeric",
+            "unit",
+            "ref_low",
+            "ref_high",
+            "abnormal_flag",
+            "sort_order",
+            "source_observation",
+        ]
+
+
 class LabResultSerializer(serializers.ModelSerializer):
     test_name = serializers.CharField(source="order_line.test.name", read_only=True)
     test_code = serializers.CharField(source="order_line.test.code", read_only=True)
+    components = LabResultComponentSerializer(many=True, read_only=True)
 
     class Meta:
         model = LabResult
@@ -45,6 +81,9 @@ class LabResultSerializer(serializers.ModelSerializer):
             "order_line",
             "test_name",
             "test_code",
+            "source",
+            "integration_updated_at",
+            "primary_observation",
             "value",
             "value_numeric",
             "unit",
@@ -52,6 +91,7 @@ class LabResultSerializer(serializers.ModelSerializer):
             "status",
             "notes",
             "completed_at",
+            "components",
         ]
 
 
@@ -146,4 +186,165 @@ class LabResultWriteSerializer(serializers.ModelSerializer):
             "reference_range",
             "status",
             "notes",
+        ]
+
+
+class LabIntegrationDeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabIntegrationDevice
+        fields = [
+            "id",
+            "clinic",
+            "lab",
+            "name",
+            "vendor",
+            "device_model",
+            "connection_kind",
+            "config",
+            "ingest_token",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["clinic", "created_at", "updated_at"]
+        extra_kwargs = {"ingest_token": {"write_only": True, "required": False}}
+
+    def create(self, validated_data):
+        return LabIntegrationDevice.objects.create(
+            clinic_id=self.context["request"].user.clinic_id,
+            **validated_data,
+        )
+
+
+class LabExternalIdentifierSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabExternalIdentifier
+        fields = ["id", "clinic", "sample", "scheme", "value"]
+        read_only_fields = ["id", "clinic", "sample"]
+
+
+class _IdentifierPairSerializer(serializers.Serializer):
+    scheme = serializers.CharField(max_length=64)
+    value = serializers.CharField(max_length=256)
+
+
+class LabSampleWriteSerializer(serializers.ModelSerializer):
+    identifiers = _IdentifierPairSerializer(many=True, required=False)
+
+    class Meta:
+        model = LabSample
+        fields = [
+            "id",
+            "lab_order",
+            "internal_sample_code",
+            "sample_type",
+            "collected_at",
+            "status",
+            "identifiers",
+        ]
+        read_only_fields = ["id"]
+
+    def validate_lab_order(self, order):
+        user = self.context["request"].user
+        if order.clinic_id != getattr(user, "clinic_id", None):
+            raise serializers.ValidationError("Order must belong to your clinic.")
+        return order
+
+    def create(self, validated_data):
+        idents = validated_data.pop("identifiers", [])
+        request = self.context["request"]
+        sample = LabSample.objects.create(
+            clinic_id=request.user.clinic_id,
+            **validated_data,
+        )
+        for row in idents:
+            LabExternalIdentifier.objects.create(
+                clinic_id=request.user.clinic_id,
+                sample=sample,
+                scheme=row["scheme"],
+                value=row["value"],
+            )
+        return sample
+
+
+class LabSampleReadSerializer(serializers.ModelSerializer):
+    identifiers = LabExternalIdentifierSerializer(many=True, read_only=True, source="external_ids")
+
+    class Meta:
+        model = LabSample
+        fields = [
+            "id",
+            "clinic",
+            "lab_order",
+            "internal_sample_code",
+            "sample_type",
+            "collected_at",
+            "status",
+            "created_at",
+            "identifiers",
+        ]
+
+
+class LabTestCodeMapSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabTestCodeMap
+        fields = [
+            "id",
+            "clinic",
+            "device",
+            "vendor_code",
+            "vendor_unit",
+            "lab_test",
+            "priority",
+            "species",
+        ]
+
+
+class LabIngestionEnvelopeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabIngestionEnvelope
+        fields = [
+            "id",
+            "clinic",
+            "device",
+            "idempotency_key",
+            "source_type",
+            "processing_status",
+            "raw_sha256",
+            "raw_s3_bucket",
+            "raw_s3_key",
+            "received_at",
+            "parsed_at",
+            "error_code",
+            "error_detail",
+            "payload_metadata",
+            "correlation_id",
+        ]
+
+
+class LabObservationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabObservation
+        fields = [
+            "id",
+            "clinic",
+            "envelope",
+            "device",
+            "lab_order",
+            "lab_order_line",
+            "sample",
+            "match_status",
+            "vendor_test_code",
+            "vendor_test_name",
+            "internal_test",
+            "value_text",
+            "value_numeric",
+            "unit",
+            "ref_low",
+            "ref_high",
+            "abnormal_flag",
+            "result_status",
+            "natural_key",
+            "observed_at",
+            "ingested_at",
         ]
