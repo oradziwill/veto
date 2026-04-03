@@ -41,6 +41,12 @@ python manage.py behave features/tenancy.feature --simple
 
 `--simple` uses the DRF `APIClient` (no live HTTP server), same style as existing drug catalog and lab integration features.
 
+## CI (GitHub Actions)
+
+Behave runs in `.github/workflows/ci.yml` after pytest in both backend jobs (SQLite and PostgreSQL parity):
+
+- `python manage.py behave --simple`
+
 ## Tenancy feature file
 
 `backend/features/tenancy.feature` covers:
