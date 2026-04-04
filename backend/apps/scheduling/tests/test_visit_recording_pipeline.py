@@ -17,7 +17,10 @@ def test_visit_recording_upload_creates_row(api_client, doctor, appointment, set
     settings.VISIT_RECORDINGS_PROCESS_INLINE_ON_UPLOAD = False
     mock_s3 = MagicMock()
 
-    with patch("apps.scheduling.views._get_recording_s3_client", return_value=mock_s3):
+    with patch(
+        "apps.scheduling.views_recording_helpers._get_recording_s3_client",
+        return_value=mock_s3,
+    ):
         api_client.force_authenticate(user=doctor)
         upload = SimpleUploadedFile("visit.webm", b"fake-bytes", content_type="audio/webm")
         response = api_client.post(
@@ -41,9 +44,12 @@ def test_visit_recording_upload_inline_processing(api_client, doctor, appointmen
     mock_s3 = MagicMock()
     mock_s3.get_object.return_value = {"Body": io.BytesIO(b"audio-bytes")}
 
-    with patch("apps.scheduling.views._get_recording_s3_client", return_value=mock_s3):
+    with patch(
+        "apps.scheduling.views_recording_helpers._get_recording_s3_client",
+        return_value=mock_s3,
+    ):
         with patch(
-            "apps.scheduling.views.process_visit_recording",
+            "apps.scheduling.views_visit_recordings.process_visit_recording",
             side_effect=lambda recording, audio_bytes: VisitRecording.objects.filter(
                 pk=recording.pk
             ).update(
