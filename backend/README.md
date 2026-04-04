@@ -91,6 +91,7 @@ Admin: http://localhost:8000/admin/
 
 ## Feature Docs
 
+- **OpenAPI**: `GET /api/schema/`, Swagger UI: `GET /api/schema/swagger-ui/` (schema UI requires auth when `DJANGO_DEBUG` is off)
 - [Document ingestion async flow](documentation/DOCUMENT_INGESTION.md)
 - [Visit recording + AI summary (frontend handoff)](documentation/VISIT_RECORDING_AI_SUMMARY.md)
 
@@ -110,6 +111,10 @@ Admin: http://localhost:8000/admin/
 | `DJANGO_REDIS_URL` | No | Alternative to `REDIS_URL` if the former is reserved by hosting |
 | `REDIS_CACHE_KEY_PREFIX` | No | Key namespace for shared Redis (default `veto`) |
 | `REDIS_SOCKET_CONNECT_TIMEOUT` | No | Redis connect timeout seconds (default `5`) |
+| `API_THROTTLE_ANON` | No | DRF anon throttle, e.g. `120/hour` (see `DEFAULT_THROTTLE_RATES`) |
+| `API_THROTTLE_USER` | No | DRF authenticated user throttle (default `5000/hour`) |
+| `API_THROTTLE_TRANSCRIBE` | No | Scoped limit for `POST …/visits/.../transcribe/` (default `40/hour` per user) |
+| `API_THROTTLE_RECORDING_UPLOAD` | No | Scoped limit for visit recording upload (default `80/hour` per user) |
 | `REMINDER_EMAIL_PROVIDER` | No | Reminder email provider (`internal` or `sendgrid`) |
 | `REMINDER_SMS_PROVIDER` | No | Reminder SMS provider (`internal` or `twilio`) |
 | `REMINDER_WEBHOOK_TOKEN` | No | Shared secret for reminder provider webhooks |

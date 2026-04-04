@@ -55,6 +55,23 @@ MIDDLEWARE = [
 STATIC_ROOT = BASE_DIR / "staticfiles"  # noqa: F405
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
+# --- Password validation (staff accounts; stricter than empty dev settings) ---
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 10},
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+]
+
 # --- Cache (optional but strongly recommended behind a load balancer) ---
 # Set REDIS_URL (e.g. AWS ElastiCache) so portal OTP/magic-link rate limits apply
 # across all instances. If unset, production inherits LocMem from base settings

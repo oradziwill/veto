@@ -16,6 +16,11 @@ class PortalPrincipal:
         self.client_id = client_id
         self.portal_clinic_id = clinic_id
 
+    @property
+    def pk(self) -> int:
+        """DRF throttling uses request.user.pk for per-user rate limits."""
+        return self.client_id
+
 
 class PortalJWTAuthentication(authentication.BaseAuthentication):
     """
