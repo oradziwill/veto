@@ -9,6 +9,32 @@ from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
 
 from .models import InventoryItem, InventoryMovement
 
+# GTIN family (EAN-8 … GTIN-14); allow up to 32 for future numeric identifiers.
+BARCODE_MIN_LEN = 8
+BARCODE_MAX_LEN = 32
+
+
+def normalize_inventory_barcode(value: str | None) -> str:
+    """
+    Normalize optional wholesale/package barcode: strip non-digits, enforce length.
+    Returns '' when unset. Raises ValidationError if a non-empty value is invalid.
+    """
+    if value is None:
+        return ""
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    digits = "".join(c for c in raw if c.isdigit())
+    if not digits:
+        raise serializers.ValidationError(
+            "Barcode must contain only digits (after removing spaces)."
+        )
+    if len(digits) < BARCODE_MIN_LEN or len(digits) > BARCODE_MAX_LEN:
+        raise serializers.ValidationError(
+            f"Barcode must be {BARCODE_MIN_LEN}–{BARCODE_MAX_LEN} digits (e.g. EAN-13, GTIN-14)."
+        )
+    return digits
+
 
 class InventoryItemReadSerializer(serializers.ModelSerializer):
     is_low_stock = serializers.SerializerMethodField()
@@ -28,13 +54,16 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = InventoryItem
         fields = [
+            "id",
             "name",
             "sku",
+            "barcode",
             "category",
             "unit",
             "stock_on_hand",
             "low_stock_threshold",
         ]
+        read_only_fields = ["id"]
 
     def validate_sku(self, value: str) -> str:
         """
@@ -50,10 +79,14 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
         value = value.strip("_")
         return value
 
+    def validate_barcode(self, value):
+        if value is None or value == "":
+            return ""
+        return normalize_inventory_barcode(value)
+
     def validate(self, attrs):
         """
-        Enforce uniqueness of (clinic, sku) at the serializer level so we return 400,
-        not a 500 IntegrityError.
+        Enforce uniqueness of (clinic, sku) and (clinic, barcode) at serializer level.
         """
         request = self.context.get("request")
         user = getattr(request, "user", None)
@@ -77,6 +110,20 @@ class InventoryItemWriteSerializer(serializers.ModelSerializer):
             if qs.exists():
                 raise serializers.ValidationError(
                     {"sku": ["SKU must be unique within the clinic."]}
+                )
+
+        if "barcode" in attrs:
+            barcode = attrs.get("barcode") or ""
+        else:
+            barcode = (getattr(self.instance, "barcode", "") or "") if self.instance else ""
+
+        if barcode:
+            qs = InventoryItem.objects.filter(clinic_id=effective_clinic_id, barcode=barcode)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    {"barcode": ["Barcode must be unique within the clinic."]}
                 )
 
         return attrs

@@ -17,7 +17,8 @@ POST /api/auth/token/refresh/
 GET /api/inventory/items/
 
 Query params:
-- q: search by name or SKU
+- q: search by name, SKU, or barcode (substring)
+- barcode: exact match on normalized package barcode (optional; use after scan)
 - category: medication | supply | food | other
 - low_stock=true: only low-stock items
 
@@ -26,6 +27,7 @@ Query params:
   "id": 1,
   "name": "Antibiotic A",
   "sku": "ANTIBIOTIC_A",
+  "barcode": "5901234123457",
   "category": "medication",
   "unit": "vials",
   "stock_on_hand": 100,
@@ -40,7 +42,14 @@ SKU is auto-normalized:
 - uppercase
 - spaces replaced with underscores
 
-Duplicate SKU per clinic returns 400.
+Optional **barcode** (EAN/GTIN-style): 8–32 digits; stored without spaces. Must be unique per clinic when set.
+
+Duplicate SKU or duplicate barcode per clinic returns 400.
+
+### Resolve by barcode (wholesale intake)
+GET /api/inventory/items/resolve_barcode/?code=5901234123457
+
+Returns a single item (200) or 404 / 409. See [INVENTORY_BARCODE.md](INVENTORY_BARCODE.md).
 
 ---
 
@@ -90,6 +99,7 @@ POST requires vet role.
 401: auth
 403: permission
 404: not found
+409: conflict (e.g. `resolve_barcode` finds multiple items in scope)
 
 ---
 

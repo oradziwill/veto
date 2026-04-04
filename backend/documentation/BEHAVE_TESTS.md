@@ -33,6 +33,7 @@ Behave picks up [`behave.ini`](../behave.ini) (`paths = features`).
 
 - **`features/drug_catalog.feature`** — drug catalog search auth, manual product create + search, receptionist forbidden on create.
 - **`features/lab_integration.feature`** — lab ingest idempotency, `LabResultComponent` materialization, resolve unmatched observation. See [`LAB_INTEGRATION.md`](LAB_INTEGRATION.md).
+- **`features/inventory.feature`** — inventory package barcode create, `resolve_barcode`, duplicate barcode rejection. See [`INVENTORY_BARCODE.md`](INVENTORY_BARCODE.md).
 
 ## Settings
 
