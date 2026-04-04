@@ -188,6 +188,20 @@ Or add a `.platform/hooks/postdeploy` script to run migrations automatically on 
 
 ---
 
+## Phase 3b: ElastiCache Redis (recommended for multiple instances)
+
+Portal OTP, magic-link, and confirm rate limits use Django's cache. With **more than one** EC2 instance behind the load balancer, configure **Redis** so counters are shared across workers.
+
+1. Create an **ElastiCache** Redis cluster in the same VPC as Elastic Beanstalk.
+2. Security group: allow inbound Redis port (e.g. **6379**) from the EB instance security group.
+3. On the EB environment, set **`REDIS_URL`**, for example:
+   `redis://:<auth-token>@master.xxxxxx.cache.amazonaws.com:6379/0`
+   Use **`rediss://`** if your cluster requires TLS (see AWS/ElastiCache docs for your engine version).
+
+If **`REDIS_URL`** is unset, the app uses **LocMem** (per-process) cache — fine for single-instance experiments, **not** for accurate cross-instance rate limits.
+
+---
+
 ## Phase 4: Configure environment variables
 
 ### Step 4.1: Set vars in EB

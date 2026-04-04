@@ -55,6 +55,11 @@ MIDDLEWARE = [
 STATIC_ROOT = BASE_DIR / "staticfiles"  # noqa: F405
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
+# --- Cache (optional but strongly recommended behind a load balancer) ---
+# Set REDIS_URL (e.g. AWS ElastiCache) so portal OTP/magic-link rate limits apply
+# across all instances. If unset, production inherits LocMem from base settings
+# (each worker has its own counters — not suitable for multi-instance).
+
 # --- Database (RDS env vars) ---
 RDS_HOSTNAME = os.getenv("RDS_HOSTNAME")
 if not RDS_HOSTNAME:

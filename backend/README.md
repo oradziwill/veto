@@ -105,6 +105,10 @@ Admin: http://localhost:8000/admin/
 | `POSTGRES_PASSWORD` | With `POSTGRES_DB` | PostgreSQL password |
 | `POSTGRES_HOST` | No | PostgreSQL host (default `127.0.0.1`) |
 | `POSTGRES_PORT` | No | PostgreSQL port (default `5432`) |
+| `REDIS_URL` | No | If set, default Django cache uses Redis (shared limits across instances; use behind ALB). See `DJANGO_REDIS_URL` |
+| `DJANGO_REDIS_URL` | No | Alternative to `REDIS_URL` if the former is reserved by hosting |
+| `REDIS_CACHE_KEY_PREFIX` | No | Key namespace for shared Redis (default `veto`) |
+| `REDIS_SOCKET_CONNECT_TIMEOUT` | No | Redis connect timeout seconds (default `5`) |
 | `REMINDER_EMAIL_PROVIDER` | No | Reminder email provider (`internal` or `sendgrid`) |
 | `REMINDER_SMS_PROVIDER` | No | Reminder SMS provider (`internal` or `twilio`) |
 | `REMINDER_WEBHOOK_TOKEN` | No | Shared secret for reminder provider webhooks |
