@@ -17,6 +17,8 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from .caches import get_caches_config
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -159,13 +161,8 @@ else:
         }
     }
 
-# Cache (portal OTP rate limits; use Redis in multi-instance production if needed)
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "veto-default-cache",
-    }
-}
+# Cache (portal OTP / confirm rate limits; Redis when REDIS_URL is set — see config/caches.py)
+CACHES = get_caches_config()
 
 
 # Password validation

@@ -50,6 +50,11 @@ ksef2>=0.1
 stripe>=11.0,<14.0
 
 # -------------------------
+# Cache (Redis for multi-instance; Django RedisCache backend)
+# -------------------------
+redis>=5.0,<6.0
+
+# -------------------------
 # Environment variables
 # -------------------------
 python-dotenv>=1.0.0
