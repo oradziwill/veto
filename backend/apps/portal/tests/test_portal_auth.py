@@ -53,7 +53,7 @@ def test_confirm_code_mailbox_rate_limit(api_client, clinic, client_with_members
     REMINDER_SENDGRID_API_KEY="sg.test",
     REMINDER_SENDGRID_FROM_EMAIL="noreply@example.com",
 )
-@patch("apps.portal.views.send_portal_otp_email")
+@patch("apps.portal.views_auth.send_portal_otp_email")
 def test_request_code_sends_email_when_enabled(
     mock_send, api_client, clinic, client_with_membership
 ):
