@@ -1,4 +1,3 @@
-from django.db.models import Q
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,6 +6,7 @@ from apps.accounts.permissions import HasClinic, IsClinicAdmin
 from apps.audit.services import log_audit_event
 from apps.audit.snapshots import client_membership_snapshot, client_snapshot
 from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
+from apps.tenancy.reception_fts import filter_clients_queryset_for_reception
 
 from .models import Client, ClientClinic
 from .serializers import ClientClinicSerializer, ClientSerializer
@@ -26,21 +26,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 
         q = self.request.query_params.get("q")
         if q:
-            parts = q.strip().split()
-            base_q = (
-                Q(first_name__icontains=q)
-                | Q(last_name__icontains=q)
-                | Q(phone__icontains=q)
-                | Q(email__icontains=q)
-            )
-            if len(parts) >= 2:
-                base_q |= Q(
-                    first_name__icontains=parts[0], last_name__icontains=" ".join(parts[1:])
-                )
-                base_q |= Q(
-                    first_name__icontains=" ".join(parts[1:]), last_name__icontains=parts[0]
-                )
-            qs = qs.filter(base_q)
+            qs = filter_clients_queryset_for_reception(qs, q)
 
         in_my_clinic = self.request.query_params.get("in_my_clinic")
         if in_my_clinic in ("0", "false", "False"):

@@ -163,6 +163,15 @@ def test_client_membership_create_ignores_foreign_clinic_input(api_client, recep
 
 
 @pytest.mark.django_db
+def test_clients_list_q_search(api_client, receptionist, client_with_membership):
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.get("/api/clients/", {"q": client_with_membership.last_name[:4]})
+    assert r.status_code == 200
+    ids = {row["id"] for row in r.data}
+    assert client_with_membership.id in ids
+
+
+@pytest.mark.django_db
 def test_gdpr_export_admin_only(api_client, clinic_admin, receptionist, client_with_membership):
     api_client.force_authenticate(user=receptionist)
     r = api_client.get(f"/api/clients/{client_with_membership.id}/gdpr-export/")

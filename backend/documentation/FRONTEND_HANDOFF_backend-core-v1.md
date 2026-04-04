@@ -70,7 +70,7 @@ Base: **`/api/clients/`**
 Auth: required
 
 Supports:
-- `GET /api/clients/?q=<search>` (search across name/phone/email)
+- `GET /api/clients/?q=<search>` (name / phone / email; on **PostgreSQL** also weighted `simple` full-text + same `icontains` fallbacks for partial phone etc.)
 - Optional filter: `GET /api/clients/?in_my_clinic=1`
 
 ### Client membership management
@@ -94,6 +94,7 @@ Auth: required
 Key points:
 - Patients belong to a clinic (auto-set from current user’s clinic).
 - On patient create/update, backend auto-creates a client↔clinic membership if missing.
+- List: `GET /api/patients/?search=…` — pet name, microchip, owner name/phone (on **PostgreSQL** adds `simple` full-text over the same fields plus species/breed; partial phone still matched via `icontains`).
 
 ### Read shape (list/retrieve)
 Includes nested mini objects:
