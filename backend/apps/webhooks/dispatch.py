@@ -79,7 +79,12 @@ def schedule_deliveries_for_event(clinic_id: int, event_type: str, payload: dict
         if getattr(settings, "WEBHOOK_DELIVERY_USE_THREAD", True):
             transaction.on_commit(_spawn)
         else:
-            _deliver_delivery_thread_entry(delivery_id)
+            # Same thread as caller (e.g. tests): do not close DB connections — that
+            # breaks django-pytest / request transactions on PostgreSQL.
+            try:
+                _deliver_delivery(delivery_id)
+            except Exception:
+                logger.exception("Webhook delivery %s crashed", delivery_id)
 
 
 def _deliver_delivery_thread_entry(delivery_id: int) -> None:

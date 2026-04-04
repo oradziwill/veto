@@ -56,7 +56,7 @@ More types can be added in `apps.webhooks.models.WebhookEventType` and `apps.web
 ## Delivery behavior
 
 - Each matching subscription creates a `WebhookDelivery` row and POSTs in a **background thread** (non-blocking for the API), **after** the surrounding DB transaction commits (`transaction.on_commit`).
-- Set **`WEBHOOK_DELIVERY_USE_THREAD=0`** to deliver synchronously in-process (local tests / debugging only; blocks the request).
+- Set **`WEBHOOK_DELIVERY_USE_THREAD=0`** to deliver synchronously in-process (local tests / debugging only; blocks the request). Uses the caller’s DB connection (does not run `close_old_connections` like the background-thread path).
 - Timeouts: **15s**. Responses are truncated for storage on the delivery record.
 - Failures (network, HTTP error) mark the delivery `failed` with `error` / `http_status` when applicable.
 
