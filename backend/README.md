@@ -115,6 +115,7 @@ Admin: http://localhost:8000/admin/
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | No | Full OTLP traces URL (alternative to base endpoint) |
 | `OTEL_SERVICE_NAME` | No | Trace resource `service.name` (default `veto-backend`) |
 | `OTEL_SDK_DISABLED` | No | `true` disables tracing even if OTLP endpoint is set |
+| `WEBHOOK_DELIVERY_USE_THREAD` | No | `0` delivers integration webhooks synchronously (default `1`; see `documentation/INTEGRATION_WEBHOOKS.md`) |
 | `REDIS_CACHE_KEY_PREFIX` | No | Key namespace for shared Redis (default `veto`) |
 | `REDIS_SOCKET_CONNECT_TIMEOUT` | No | Redis connect timeout seconds (default `5`) |
 | `API_THROTTLE_ANON` | No | DRF anon throttle, e.g. `120/hour` (see `DEFAULT_THROTTLE_RATES`) |
@@ -435,6 +436,7 @@ Config in `pyproject.toml`.
 - `documentation/ASYNC_REPORT_EXPORTS.md` – Async CSV exports (incl. `accounting_invoice_lines` for accountants)
 - `documentation/ASYNC_JOB_QUEUE.md` – Redis/RQ workers for queued exports
 - `documentation/OPENTELEMETRY.md` – Optional OTLP tracing (Django)
+- `documentation/INTEGRATION_WEBHOOKS.md` – Outbound HTTPS webhooks for integrations (clinic admin)
 - `documentation/CHANGELOG_cleanup-and-next-steps.md` – Changes in this branch
 - `documentation/FRONTEND_HANDOFF_backend-core-v1.md` – API integration guide
 - `documentation/AVAILABILITY_API.md` – Availability endpoint

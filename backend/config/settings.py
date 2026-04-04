@@ -104,6 +104,7 @@ INSTALLED_APPS = [
     "apps.audit.apps.AuditConfig",
     "apps.reports.apps.ReportsConfig",
     "apps.portal.apps.PortalConfig",
+    "apps.webhooks.apps.WebhooksConfig",
     "behave_django",
 ]
 
@@ -170,6 +171,9 @@ CACHES = get_caches_config()
 
 # Redis Queue (async workers); see documentation/ASYNC_JOB_QUEUE.md
 RQ_QUEUES, RQ_REPORT_EXPORT_ENQUEUE = build_rq_config()
+
+# Outbound integration webhooks — see documentation/INTEGRATION_WEBHOOKS.md
+WEBHOOK_DELIVERY_USE_THREAD = _env_bool("WEBHOOK_DELIVERY_USE_THREAD", True)
 
 # Superuser / network_admin clinic-id lists (see apps.tenancy.access); invalidated when Clinic rows change.
 ACCESSIBLE_CLINIC_IDS_CACHE_TIMEOUT = int(

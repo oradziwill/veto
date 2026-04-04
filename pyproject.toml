@@ -30,5 +30,7 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["backend"]
+testpaths = ["backend/apps", "backend/tests"]
 python_files = ["test_*.py", "*_test.py", "tests.py"]
-addopts = "-q"
+addopts = "-q --import-mode=importlib"
