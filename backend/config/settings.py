@@ -202,6 +202,9 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
 _default_cors_origins = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -373,4 +376,11 @@ VISIT_RECORDINGS_PROCESS_INLINE_ON_UPLOAD = (
     os.getenv("VISIT_RECORDINGS_PROCESS_INLINE_ON_UPLOAD", "true").lower() == "true"
     if DEBUG
     else os.getenv("VISIT_RECORDINGS_PROCESS_INLINE_ON_UPLOAD", "false").lower() == "true"
+)
+
+# Direct visit audio → clinical exam transcription (Whisper + structuring)
+VISIT_TRANSCRIPTION_INLINE_PROCESSING = (
+    os.getenv("VISIT_TRANSCRIPTION_INLINE_PROCESSING", "true").lower() == "true"
+    if DEBUG
+    else os.getenv("VISIT_TRANSCRIPTION_INLINE_PROCESSING", "false").lower() == "true"
 )

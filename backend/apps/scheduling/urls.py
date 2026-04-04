@@ -10,6 +10,7 @@ from .views import (
     VisitRecordingDetailView,
     VisitRecordingListView,
     VisitRecordingUploadView,
+    VisitTranscriptionJobDetailView,
     VisitTranscriptionView,
     WaitingQueueViewSet,
 )
@@ -43,6 +44,11 @@ urlpatterns = [
         "visits/<int:appointment_id>/transcribe/",
         VisitTranscriptionView.as_view(),
         name="visit-transcribe",
+    ),
+    path(
+        "visits/<int:appointment_id>/transcribe/jobs/<int:job_id>/",
+        VisitTranscriptionJobDetailView.as_view(),
+        name="visit-transcription-job",
     ),
     path(
         "visits/<int:appointment_id>/recordings/upload/",

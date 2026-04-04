@@ -570,5 +570,68 @@ class VisitRecording(models.Model):
         return f"VisitRecording({self.id}, appointment={self.appointment_id}, status={self.status})"
 
 
+class VisitTranscriptionJob(models.Model):
+    """Queued visit audio → Whisper + structured summary; poll status like VisitRecording."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
+    clinic = models.ForeignKey(
+        Clinic,
+        on_delete=models.CASCADE,
+        related_name="visit_transcription_jobs",
+    )
+    appointment = models.ForeignKey(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name="visit_transcription_jobs",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="visit_transcription_jobs",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    audio = models.FileField(
+        upload_to="visit_transcriptions/%Y/%m/%d/",
+        max_length=512,
+        blank=True,
+        null=True,
+    )
+    original_filename = models.CharField(max_length=512)
+    content_type = models.CharField(max_length=255, blank=True)
+    size_bytes = models.BigIntegerField()
+
+    transcript = models.TextField(blank=True)
+    structured = models.JSONField(default=dict, blank=True)
+    needs_review = models.BooleanField(null=True, blank=True)
+    unknown_fields = models.JSONField(default=list, blank=True)
+    last_error = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["clinic", "status"]),
+            models.Index(fields=["appointment", "-created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"VisitTranscriptionJob({self.id}, appointment={self.appointment_id}, status={self.status})"
+
+
 # Register additional scheduling models kept in separate modules
 from .models_working_hours import VetWorkingHours  # noqa: E402,F401

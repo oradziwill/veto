@@ -99,6 +99,7 @@ Admin: http://localhost:8000/admin/
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OPENAI_API_KEY` | No | For AI patient summaries; omit to disable |
+| `VISIT_TRANSCRIPTION_INLINE_PROCESSING` | No | `true` runs visit transcribe in the HTTP request (default `true` when `DJANGO_DEBUG`, else `false`). If `false`, run `process_visit_transcription_jobs` |
 | `SECRET_KEY` | No | Uses dev default if not set |
 | `POSTGRES_DB` | No | If set, backend uses PostgreSQL instead of SQLite |
 | `POSTGRES_USER` | With `POSTGRES_DB` | PostgreSQL username |

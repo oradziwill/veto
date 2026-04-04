@@ -11,6 +11,7 @@ from io import StringIO
 import boto3
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
+from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.db.models import Count, Max, OuterRef, Q, Subquery
 from django.http import HttpResponse
@@ -40,6 +41,7 @@ from apps.scheduling.models import (
     HospitalStayTask,
     Room,
     VisitRecording,
+    VisitTranscriptionJob,
     WaitingQueueEntry,
 )
 from apps.scheduling.serializers import (
@@ -70,13 +72,7 @@ from apps.scheduling.services.visit_recording_pipeline import (
     process_visit_recording,
     safe_error_text,
 )
-from apps.scheduling.services.visit_transcription import (
-    SUMMARY_UNKNOWN,
-    VisitTranscriptionError,
-    enforce_strict_summary,
-    structure_transcript_with_claude,
-    transcribe_audio_with_whisper,
-)
+from apps.scheduling.services.visit_transcription_job import process_visit_transcription_job
 from apps.tenancy.access import (
     accessible_clinic_ids,
     clinic_id_for_mutation,
@@ -683,6 +679,29 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return Response(status=204)
 
 
+def _visit_transcription_job_payload(job: VisitTranscriptionJob) -> dict:
+    """API shape for job status + completed transcription (matches legacy POST body)."""
+    out: dict = {
+        "id": job.id,
+        "status": job.status,
+    }
+    if job.status == VisitTranscriptionJob.Status.FAILED:
+        out["last_error"] = job.last_error or None
+        return out
+    if job.status == VisitTranscriptionJob.Status.COMPLETED:
+        out["transcript"] = job.transcript
+        out["structured"] = job.structured
+        out["strict_mode"] = True
+        out["needs_review"] = job.needs_review
+        out["unknown_fields"] = list(job.unknown_fields or [])
+        return out
+    if job.status == VisitTranscriptionJob.Status.PROCESSING:
+        out["detail"] = "Transcription in progress."
+        return out
+    out["detail"] = "Transcription queued. Poll GET until status is completed or failed."
+    return out
+
+
 class VisitTranscriptionView(APIView):
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
     allowed_audio_types = {
@@ -722,60 +741,51 @@ class VisitTranscriptionView(APIView):
         if not audio_bytes:
             return Response({"detail": "Uploaded audio file is empty."}, status=400)
 
-        try:
-            transcript = transcribe_audio_with_whisper(
-                audio_bytes=audio_bytes,
-                filename=upload.name or f"visit-{appointment_id}.webm",
-                content_type=upload.content_type or "application/octet-stream",
-            )
-            structured_raw = structure_transcript_with_claude(transcript=transcript)
-            structured, needs_review = enforce_strict_summary(
-                transcript=transcript,
-                structured=structured_raw,
-            )
-        except VisitTranscriptionError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
-
-        exam, _created = ClinicalExam.objects.get_or_create(
+        inline = bool(getattr(settings, "VISIT_TRANSCRIPTION_INLINE_PROCESSING", False))
+        safe_name = _safe_s3_filename(upload.name or f"visit-{appointment_id}.webm")
+        job = VisitTranscriptionJob(
             clinic_id=appointment.clinic_id,
             appointment=appointment,
-            defaults={"created_by": request.user},
+            created_by=request.user,
+            status=VisitTranscriptionJob.Status.PENDING,
+            original_filename=upload.name or safe_name,
+            content_type=upload.content_type or "",
+            size_bytes=upload.size,
         )
-        exam.transcript = transcript
-        exam.ai_notes_raw = {
-            **structured,
-            "_strict_mode": True,
-            "_needs_review": needs_review,
-            "_unknown_fields": [k for k, v in structured.items() if v == SUMMARY_UNKNOWN],
-        }
-        exam.initial_notes = structured.get("anamnesis", "")
-        exam.clinical_examination = structured.get("clinical_findings", "")
-        exam.initial_diagnosis = structured.get("diagnosis", "")
-        exam.additional_notes = structured.get("treatment_plan", "")
-        exam.owner_instructions = structured.get("owner_instructions", "")
-        exam.save(
-            update_fields=[
-                "transcript",
-                "ai_notes_raw",
-                "initial_notes",
-                "clinical_examination",
-                "initial_diagnosis",
-                "additional_notes",
-                "owner_instructions",
-                "updated_at",
-            ]
-        )
+        job.audio.save(safe_name, ContentFile(audio_bytes), save=False)
+        job.save()
 
-        return Response(
-            {
-                "transcript": transcript,
-                "structured": structured,
-                "strict_mode": True,
-                "needs_review": needs_review,
-                "unknown_fields": [k for k, v in structured.items() if v == SUMMARY_UNKNOWN],
-            },
-            status=200,
+        if inline:
+            process_visit_transcription_job(job.id)
+            job.refresh_from_db()
+            if job.status == VisitTranscriptionJob.Status.FAILED:
+                return Response(
+                    {"detail": job.last_error or "Transcription failed."},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            return Response(_visit_transcription_job_payload(job), status=200)
+
+        detail_url = request.build_absolute_uri(
+            f"/api/visits/{appointment_id}/transcribe/jobs/{job.id}/"
         )
+        body = _visit_transcription_job_payload(job)
+        body["job_url"] = detail_url
+        return Response(body, status=202)
+
+
+class VisitTranscriptionJobDetailView(APIView):
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+
+    def get(self, request, appointment_id: int, job_id: int):
+        allowed = accessible_clinic_ids(request.user)
+        job = VisitTranscriptionJob.objects.filter(
+            pk=job_id,
+            appointment_id=appointment_id,
+            clinic_id__in=allowed,
+        ).first()
+        if not job:
+            return Response({"detail": "Transcription job not found."}, status=404)
+        return Response(_visit_transcription_job_payload(job), status=200)
 
 
 class VisitRecordingUploadView(APIView):
