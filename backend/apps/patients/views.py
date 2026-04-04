@@ -1,7 +1,7 @@
 import os
 
 from django.conf import settings
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -40,6 +40,7 @@ from apps.tenancy.access import (
     clinic_instance_for_mutation,
     user_can_access_clinic,
 )
+from apps.tenancy.reception_fts import filter_patients_queryset_for_reception
 
 
 class PatientViewSet(viewsets.ModelViewSet):
@@ -284,18 +285,11 @@ class PatientViewSet(viewsets.ModelViewSet):
             "clinic",
         )
 
-        # Search across patient name, microchip, owner name, surname, and phone
         search = self.request.query_params.get("search")
         if search:
             search = search.strip()
         if search:
-            qs = qs.filter(
-                Q(name__icontains=search)
-                | Q(microchip_no__icontains=search)
-                | Q(owner__first_name__icontains=search)
-                | Q(owner__last_name__icontains=search)
-                | Q(owner__phone__icontains=search)
-            )
+            qs = filter_patients_queryset_for_reception(qs, search)
 
         species = self.request.query_params.get("species")
         owner_id = self.request.query_params.get("owner")
