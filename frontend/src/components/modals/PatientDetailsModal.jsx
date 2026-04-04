@@ -6,6 +6,36 @@ import './Modal.css'
 
 const TABS = ['overview', 'history', 'prescriptions']
 
+/**
+ * Splits a structured visit note into { services, medications, cleanNote }.
+ * Sections written by StartVisitModal:
+ *   "Usługi:\n- Service (price PLN)\n..."
+ *   "Leki:\n- Med xQty unit\n..."
+ * Everything else is returned as cleanNote.
+ */
+function parseNote(note) {
+  if (!note) return { services: [], medications: [], cleanNote: '' }
+
+  const paragraphs = note.split(/\n\n+/)
+  const services = []
+  const medications = []
+  const rest = []
+
+  for (const para of paragraphs) {
+    const lines = para.split('\n')
+    const header = lines[0].trim()
+    if (header === 'Usługi:') {
+      lines.slice(1).forEach(l => { if (l.trim()) services.push(l.replace(/^- /, '').trim()) })
+    } else if (header === 'Leki:') {
+      lines.slice(1).forEach(l => { if (l.trim()) medications.push(l.replace(/^- /, '').trim()) })
+    } else {
+      rest.push(para)
+    }
+  }
+
+  return { services, medications, cleanNote: rest.join('\n\n') }
+}
+
 const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
   const { t, i18n } = useTranslation()
   const [activeTab, setActiveTab] = useState('overview')
@@ -305,35 +335,68 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
               )}
               {!loadingHistory && history.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {history.map((entry) => (
-                    <div key={entry.id} style={{ padding: '1.25rem', backgroundColor: '#f7fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                        <div>
-                          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#2d3748', marginBottom: '0.25rem' }}>
-                            {t('patientDetails.visitDate')}: {formatDate(entry.visit_date || entry.created_at)}
+                  {history.map((entry) => {
+                    const { services, medications, cleanNote } = parseNote(entry.note)
+                    return (
+                      <div key={entry.id} style={{ padding: '1.25rem', backgroundColor: '#f7fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                          <div>
+                            <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#2d3748', marginBottom: '0.25rem' }}>
+                              {t('patientDetails.visitDate')}: {formatDate(entry.visit_date || entry.created_at)}
+                            </div>
+                            {entry.created_by_name && <div style={{ fontSize: '0.8125rem', color: '#718096' }}>{t('patientDetails.recordedBy')}: {entry.created_by_name}</div>}
                           </div>
-                          {entry.created_by_name && <div style={{ fontSize: '0.8125rem', color: '#718096' }}>{t('patientDetails.recordedBy')}: {entry.created_by_name}</div>}
+                          {entry.appointment && (
+                            <div style={{ fontSize: '0.8125rem', color: '#718096', padding: '0.25rem 0.75rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #cbd5e0' }}>
+                              {t('patientDetails.appointment')} #{entry.appointment}
+                            </div>
+                          )}
                         </div>
-                        {entry.appointment && (
-                          <div style={{ fontSize: '0.8125rem', color: '#718096', padding: '0.25rem 0.75rem', backgroundColor: 'white', borderRadius: '4px', border: '1px solid #cbd5e0' }}>
-                            {t('patientDetails.appointment')} #{entry.appointment}
+
+                        {/* Services */}
+                        {services.length > 0 && (
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#276749', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.375rem' }}>
+                              {t('patientDetails.servicesPerformed', { defaultValue: 'Usługi' })}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
+                              {services.map((s, i) => (
+                                <span key={i} style={{ padding: '0.25rem 0.625rem', backgroundColor: '#c6f6d5', color: '#22543d', borderRadius: '999px', fontSize: '0.8125rem', fontWeight: '500' }}>
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Medications */}
+                        {medications.length > 0 && (
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#2b6cb0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.375rem' }}>
+                              {t('patientDetails.medicationsLabel', { defaultValue: 'Leki' })}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
+                              {medications.map((m, i) => (
+                                <span key={i} style={{ padding: '0.25rem 0.625rem', backgroundColor: '#bee3f8', color: '#2a4365', borderRadius: '999px', fontSize: '0.8125rem', fontWeight: '500' }}>
+                                  {m}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Clinical note */}
+                        {cleanNote && (
+                          <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#718096', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.375rem' }}>
+                              {t('patientDetails.notesLabel')}
+                            </div>
+                            <div style={{ fontSize: '0.875rem', color: '#2d3748', padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{cleanNote}</div>
                           </div>
                         )}
                       </div>
-                      {entry.note && (
-                        <div style={{ marginBottom: '0.75rem' }}>
-                          <div style={{ fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.5rem' }}>{t('patientDetails.notesLabel')}:</div>
-                          <div style={{ fontSize: '0.9375rem', color: '#2d3748', padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{entry.note}</div>
-                        </div>
-                      )}
-                      {entry.receipt_summary && (
-                        <div>
-                          <div style={{ fontSize: '0.875rem', fontWeight: '500', color: '#718096', marginBottom: '0.25rem' }}>{t('patientDetails.receiptSummary')}:</div>
-                          <div style={{ fontSize: '0.9375rem', color: '#2d3748', fontWeight: '500' }}>{entry.receipt_summary}</div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

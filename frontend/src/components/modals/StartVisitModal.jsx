@@ -448,9 +448,13 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       if (formData.visitNotes.trim()) {
         noteParts.push(`Notatki:\n${formData.visitNotes.trim()}`)
       }
+      if (selectedServices.length > 0) {
+        const svcLines = selectedServices.map(s => `- ${s.name} (${s.price} PLN)`)
+        noteParts.push(`Usługi:\n${svcLines.join('\n')}`)
+      }
       if (selectedMedications.length > 0) {
         const medLines = selectedMedications.map(m => `- ${m.name} x${m.quantity} ${m.unit}`)
-        noteParts.push(`MEDICATION:\n${medLines.join('\n')}`)
+        noteParts.push(`Leki:\n${medLines.join('\n')}`)
       }
       if (formData.additionalNotes.trim()) {
         noteParts.push(`ADDITIONAL NOTES:\n${formData.additionalNotes.trim()}`)
@@ -465,15 +469,45 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         return
       }
 
-      // Create history entry via patient history endpoint
-      // According to PATIENT_VISIT_HISTORY_API.md:
-      // - note: required
-      // - receipt_summary: optional
-      // - appointment: optional (must belong to same patient and clinic)
+      // If services or medications are selected, create a draft invoice first
+      // so we can link it to the history entry
+      let invoiceId = null
+      if ((selectedServices.length > 0 || selectedMedications.length > 0) && selectedOwner?.id) {
+        const invoiceLines = [
+          ...selectedServices.map(s => ({
+            description: s.name,
+            quantity: 1,
+            unit_price: String(s.price),
+            service: s.id,
+          })),
+          ...selectedMedications.map(m => ({
+            description: m.name,
+            quantity: m.quantity,
+            unit_price: '0.00',
+            inventory_item: m.id,
+          })),
+        ]
+        try {
+          const invoiceRes = await invoicesAPI.create({
+            client: selectedOwner.id,
+            patient: patientId,
+            ...(suggestedAppointment?.id && { appointment: suggestedAppointment.id }),
+            status: 'draft',
+            lines: invoiceLines,
+          })
+          invoiceId = invoiceRes.data?.id ?? null
+        } catch (invErr) {
+          console.error('Error creating invoice:', invErr)
+          // Don't fail the whole operation; visit will be saved without invoice link
+        }
+      }
+
+      // Create history entry, linking the invoice so services appear in visit history
       const historyData = {
         note: combinedNote.trim(),
         receipt_summary: formData.medicalReceipts.trim() || '',
         ...(suggestedAppointment?.id && { appointment: suggestedAppointment.id }),
+        ...(invoiceId && { invoice: invoiceId }),
       }
 
       await patientHistoryAPI.create(patientId, historyData)
@@ -493,36 +527,6 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
           console.error('Error recording inventory movement for', med.name, movErr)
           const detail = movErr.response?.data?.detail || movErr.response?.data?.quantity?.[0] || movErr.message
           movementErrors.push(`${med.name}: ${detail || 'unknown error'}`)
-        }
-      }
-
-      // If services or medications are selected, create a draft invoice
-      if ((selectedServices.length > 0 || selectedMedications.length > 0) && selectedOwner?.id) {
-        const invoiceLines = [
-          ...selectedServices.map(s => ({
-            description: s.name,
-            quantity: 1,
-            unit_price: String(s.price),
-            service: s.id,
-          })),
-          ...selectedMedications.map(m => ({
-            description: m.name,
-            quantity: m.quantity,
-            unit_price: '0.00',
-            inventory_item: m.id,
-          })),
-        ]
-        try {
-          await invoicesAPI.create({
-            client: selectedOwner.id,
-            patient: patientId,
-            ...(suggestedAppointment?.id && { appointment: suggestedAppointment.id }),
-            status: 'draft',
-            lines: invoiceLines,
-          })
-        } catch (invErr) {
-          console.error('Error creating invoice:', invErr)
-          // Don't fail the whole operation; visit was saved
         }
       }
 
