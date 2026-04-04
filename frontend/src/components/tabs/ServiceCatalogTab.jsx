@@ -116,7 +116,6 @@ const ServiceCatalogTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>{t('serviceCatalog.title')}</h2>
         {!isCreating && (
           <button className="btn-primary" onClick={startCreate}>
             {t('serviceCatalog.addService')}

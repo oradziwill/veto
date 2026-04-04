@@ -4,6 +4,7 @@ import { patientsAPI } from "../../services/api";
 import { translateSpecies } from "../../utils/species";
 import AddPatientModal from "../modals/AddPatientModal";
 import PatientDetailsModal from "../modals/PatientDetailsModal";
+import SpeciesIcon from "../SpeciesIcon";
 import "./Tabs.css";
 
 const PatientsTab = ({ userRole = null }) => {
@@ -66,16 +67,6 @@ const PatientsTab = ({ userRole = null }) => {
     fetchPatients(term);
   };
 
-  const getSpeciesEmoji = (species) => {
-    const speciesLower = species?.toLowerCase() || "";
-    if (speciesLower.includes("dog")) return "🐕";
-    if (speciesLower.includes("cat")) return "🐱";
-    if (speciesLower.includes("rabbit")) return "🐰";
-    if (speciesLower.includes("bird")) return "🐦";
-    if (speciesLower.includes("hamster")) return "🐹";
-    return "🐾";
-  };
-
   const calculateAge = (birthDate) => {
     if (!birthDate) return t("common.unknown");
     const today = new Date();
@@ -91,7 +82,6 @@ const PatientsTab = ({ userRole = null }) => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>{t("patients.title")}</h2>
         <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
           {t("patients.addPatient")}
         </button>
@@ -135,55 +125,36 @@ const PatientsTab = ({ userRole = null }) => {
           </div>
         )}
 
-        <div className="patients-grid">
-          {!loading && patients.length === 0 ? (
-            <div className="empty-state">{t("patients.noPatientsFound")}</div>
-          ) : (
-            patients.map((patient) => (
-              <div key={patient.id} className="patient-card">
-                <div className="patient-card-header">
-                  <div className="patient-avatar">
-                    {getSpeciesEmoji(patient.species)}
-                  </div>
-                  <div className="patient-name-section">
-                    <h3>{patient.name}</h3>
-                    <p className="patient-species">
-                      {translateSpecies(patient.species, t)}{" "}
-                      {patient.breed ? `• ${patient.breed}` : ""}
-                    </p>
-                  </div>
-                </div>
-                <div className="patient-details">
-                  <div className="patient-detail-row">
-                    <span className="detail-label">{t("patients.owner")}</span>
-                    <span className="detail-value">
-                      {patient.owner
-                        ? `${patient.owner.first_name} ${patient.owner.last_name}`
-                        : t("common.unknown")}
-                    </span>
-                  </div>
-                  <div className="patient-detail-row">
-                    <span className="detail-label">{t("patients.age")}</span>
-                    <span className="detail-value">
-                      {calculateAge(patient.birth_date)}
-                    </span>
-                  </div>
-                </div>
-                <div className="patient-actions">
-                  <button
-                    className="btn-secondary"
-                    onClick={() => {
-                      setSelectedPatient(patient);
-                      setIsDetailsModalOpen(true);
-                    }}
-                  >
-                    {t("patients.viewDetails")}
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        {!loading && patients.length === 0 ? (
+          <div className="empty-state">{t("patients.noPatientsFound")}</div>
+        ) : (
+          <div className="patients-list">
+            {patients.map((patient) => (
+              <button
+                key={patient.id}
+                className="patient-row"
+                onClick={() => {
+                  setSelectedPatient(patient);
+                  setIsDetailsModalOpen(true);
+                }}
+              >
+                <SpeciesIcon species={patient.species} size={28} color="#16a34a" />
+                <span className="patient-row-name">{patient.name}</span>
+                <span className="patient-row-species">
+                  {translateSpecies(patient.species, t)}
+                  {patient.breed ? ` · ${patient.breed}` : ""}
+                </span>
+                <span className="patient-row-owner">
+                  {patient.owner
+                    ? `${patient.owner.first_name} ${patient.owner.last_name}`
+                    : "—"}
+                </span>
+                <span className="patient-row-age">{calculateAge(patient.birth_date)}</span>
+                <span className="patient-row-arrow">›</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <AddPatientModal

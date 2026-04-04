@@ -204,7 +204,6 @@ const OwnerDashboardTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>{t('ownerDashboard.title')}</h2>
         <span style={{ fontSize: '0.85rem', color: '#718096' }}>
           {now.toLocaleString('pl-PL', { month: 'long', year: 'numeric' })}
         </span>

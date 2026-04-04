@@ -18,7 +18,10 @@
     "title": "Veto Clinic",
     "startVisit": "Start Visit",
     "language": "Language",
-    "logout": "Logout"
+    "logout": "Logout",
+    "navSection": "Navigation",
+    "adminSection": "Admin",
+    "activeSection": "Active"
   },
   "tabs": {
     "patients": "Patients",
@@ -91,6 +94,7 @@
     "available": "Available",
     "allDoctors": "All doctors",
     "doctor": "Doctor:",
+    "today": "Today",
     "sun": "Sun",
     "mon": "Mon",
     "tue": "Tue",
