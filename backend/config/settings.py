@@ -165,6 +165,11 @@ else:
 # Cache (portal OTP / confirm rate limits; Redis when REDIS_URL is set — see config/caches.py)
 CACHES = get_caches_config()
 
+# Superuser / network_admin clinic-id lists (see apps.tenancy.access); invalidated when Clinic rows change.
+ACCESSIBLE_CLINIC_IDS_CACHE_TIMEOUT = int(
+    (os.getenv("ACCESSIBLE_CLINIC_IDS_CACHE_TIMEOUT") or "300").strip() or "300"
+)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

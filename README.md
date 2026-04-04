@@ -241,6 +241,16 @@ rm db.sqlite3
 
 ## Development
 
+### Git hooks
+
+This repo ships hooks under `.githooks/`. To block direct `git push` to `main` / `master` locally:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Override (emergencies only): `SKIP_PROTECT_MAIN_PUSH=1 git push ...`
+
 ### Running Tests
 
 **Backend:**

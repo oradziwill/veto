@@ -1,0 +1,19 @@
+#!/bin/sh
+# Reject pushes that update main/master on the remote (use a PR instead).
+# One-time setup:  git config core.hooksPath .githooks
+# Override (emergency only): SKIP_PROTECT_MAIN_PUSH=1 git push ...
+
+if [ -n "${SKIP_PROTECT_MAIN_PUSH}" ]; then
+  exit 0
+fi
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master)
+      echo "Refusing to push to $remote_ref. Push a feature branch and open a PR, or set SKIP_PROTECT_MAIN_PUSH=1 to override."
+      exit 1
+      ;;
+  esac
+done
+
+exit 0
