@@ -38,12 +38,18 @@ Base endpoints:
 - `GET /api/reports/exports/` - list jobs (clinic-scoped)
 - `GET /api/reports/exports/<id>/` - job details
 - `GET /api/reports/exports/<id>/download/` - download CSV when completed
-- `POST /api/reports/exports/process-pending/` - process pending jobs (admin-triggered)
+- `POST /api/reports/exports/process-pending/` - process pending jobs (admin-triggered); response includes optional `skipped` when a job was already claimed elsewhere
 
 Permissions:
 - authenticated
 - clinic membership required
 - clinic admin only
+
+## Async queue (optional)
+
+When Redis is configured (`REDIS_URL` / `RQ_REDIS_URL`) and `RQ_REPORT_EXPORT_ENQUEUE` is not disabled, **`POST /api/reports/exports/`** pushes a job to the **RQ** `default` queue. Run a worker (`python manage.py rqworker default`); see [ASYNC_JOB_QUEUE.md](ASYNC_JOB_QUEUE.md).
+
+If no worker is running, jobs stay `pending` and are still picked up by the options below.
 
 ## Processing options
 

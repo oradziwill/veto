@@ -1,8 +1,7 @@
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
+from apps.reports.job_runner import execute_report_export_job_by_id
 from apps.reports.models import ReportExportJob
-from apps.reports.services import build_report_csv
 
 
 class Command(BaseCommand):
@@ -24,35 +23,20 @@ class Command(BaseCommand):
         jobs = list(qs[:limit])
         processed = 0
         failed = 0
+        skipped = 0
 
         for job in jobs:
-            job.status = ReportExportJob.Status.PROCESSING
-            job.error = ""
-            job.save(update_fields=["status", "error", "updated_at"])
-            try:
-                file_name, content = build_report_csv(job)
-                job.file_name = file_name
-                job.file_content = content
-                job.status = ReportExportJob.Status.COMPLETED
-                job.completed_at = timezone.now()
-                job.save(
-                    update_fields=[
-                        "file_name",
-                        "file_content",
-                        "status",
-                        "completed_at",
-                        "updated_at",
-                    ]
-                )
+            result = execute_report_export_job_by_id(job.id)
+            if result == "processed":
                 processed += 1
-            except Exception as exc:
-                job.status = ReportExportJob.Status.FAILED
-                job.error = str(exc)
-                job.save(update_fields=["status", "error", "updated_at"])
+            elif result == "failed":
                 failed += 1
+            else:
+                skipped += 1
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Processed: {processed}, Failed: {failed}, Total scanned: {len(jobs)}"
+                f"Processed: {processed}, Failed: {failed}, Skipped: {skipped}, "
+                f"Total scanned: {len(jobs)}"
             )
         )

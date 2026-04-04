@@ -107,8 +107,10 @@ Admin: http://localhost:8000/admin/
 | `POSTGRES_PASSWORD` | With `POSTGRES_DB` | PostgreSQL password |
 | `POSTGRES_HOST` | No | PostgreSQL host (default `127.0.0.1`) |
 | `POSTGRES_PORT` | No | PostgreSQL port (default `5432`) |
-| `REDIS_URL` | No | If set, default Django cache uses Redis (shared limits across instances; use behind ALB). See `DJANGO_REDIS_URL` |
+| `REDIS_URL` | No | If set, default Django cache uses Redis (shared limits across instances; use behind ALB). See `DJANGO_REDIS_URL`. Also enables **RQ** enqueue of report exports unless `RQ_REPORT_EXPORT_ENQUEUE=0`. |
 | `DJANGO_REDIS_URL` | No | Alternative to `REDIS_URL` if the former is reserved by hosting |
+| `RQ_REDIS_URL` | No | Optional dedicated Redis URL for **django-rq** workers (defaults to `REDIS_URL`). See `documentation/ASYNC_JOB_QUEUE.md` |
+| `RQ_REPORT_EXPORT_ENQUEUE` | No | `1`/`0` — enqueue report exports on create (defaults on when a Redis URL is set). |
 | `REDIS_CACHE_KEY_PREFIX` | No | Key namespace for shared Redis (default `veto`) |
 | `REDIS_SOCKET_CONNECT_TIMEOUT` | No | Redis connect timeout seconds (default `5`) |
 | `API_THROTTLE_ANON` | No | DRF anon throttle, e.g. `120/hour` (see `DEFAULT_THROTTLE_RATES`) |
@@ -427,6 +429,7 @@ Config in `pyproject.toml`.
 ## Documentation
 
 - `documentation/ASYNC_REPORT_EXPORTS.md` – Async CSV exports (incl. `accounting_invoice_lines` for accountants)
+- `documentation/ASYNC_JOB_QUEUE.md` – Redis/RQ workers for queued exports
 - `documentation/CHANGELOG_cleanup-and-next-steps.md` – Changes in this branch
 - `documentation/FRONTEND_HANDOFF_backend-core-v1.md` – API integration guide
 - `documentation/AVAILABILITY_API.md` – Availability endpoint

@@ -17,9 +17,10 @@ from apps.tenancy.access import (
     clinic_id_for_mutation,
 )
 
+from .job_runner import execute_report_export_job_by_id
 from .models import ReportExportJob
+from .rq_tasks import try_enqueue_report_export_job
 from .serializers import ReportExportJobCreateSerializer, ReportExportJobReadSerializer
-from .services import build_report_csv
 
 
 class PortalBookingMetricsView(APIView):
@@ -110,6 +111,7 @@ class ReportExportJobViewSet(viewsets.ModelViewSet):
             entity_id=job.id,
             after={"report_type": job.report_type, "status": job.status},
         )
+        try_enqueue_report_export_job(job.id)
         return Response(ReportExportJobReadSerializer(job).data, status=201)
 
     @action(detail=True, methods=["get"], url_path="download")
@@ -144,6 +146,7 @@ class ReportExportJobViewSet(viewsets.ModelViewSet):
 
         processed = 0
         failed = 0
+        skipped = 0
         jobs = list(
             ReportExportJob.objects.filter(
                 clinic_id__in=accessible_clinic_ids(request.user),
@@ -151,29 +154,15 @@ class ReportExportJobViewSet(viewsets.ModelViewSet):
             ).order_by("created_at", "id")[:limit]
         )
         for job in jobs:
-            job.status = ReportExportJob.Status.PROCESSING
-            job.error = ""
-            job.save(update_fields=["status", "error", "updated_at"])
-            try:
-                file_name, content = build_report_csv(job)
-                job.file_name = file_name
-                job.file_content = content
-                job.status = ReportExportJob.Status.COMPLETED
-                job.completed_at = timezone.now()
-                job.save(
-                    update_fields=[
-                        "file_name",
-                        "file_content",
-                        "status",
-                        "completed_at",
-                        "updated_at",
-                    ]
-                )
+            result = execute_report_export_job_by_id(job.id)
+            if result == "processed":
                 processed += 1
-            except Exception as exc:
-                job.status = ReportExportJob.Status.FAILED
-                job.error = str(exc)
-                job.save(update_fields=["status", "error", "updated_at"])
+            elif result == "failed":
                 failed += 1
+            else:
+                skipped += 1
 
-        return Response({"processed": processed, "failed": failed}, status=200)
+        return Response(
+            {"processed": processed, "failed": failed, "skipped": skipped},
+            status=200,
+        )
