@@ -22,6 +22,7 @@ from apps.accounts.permissions import HasClinic, IsAdminOrReadOnly, IsClinicAdmi
 from apps.audit.services import log_audit_event
 from apps.audit.snapshots import invoice_audit_payload
 from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
+from apps.tenancy.models import Clinic
 
 from .ksef_service import KSeFError
 from .ksef_service import submit_invoice as ksef_submit
@@ -184,6 +185,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def submit_ksef(self, request, pk=None):
         """Build FA3 XML and submit this invoice to KSeF."""
         invoice = self.get_object()
+        if not Clinic.objects.filter(pk=invoice.clinic_id, feature_ksef_enabled=True).exists():
+            return Response(
+                {"detail": "KSeF is disabled for this clinic."},
+                status=403,
+            )
         if invoice.ksef_status == "accepted":
             return Response({"detail": "Invoice already accepted by KSeF."}, status=400)
 
@@ -219,6 +225,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def ksef_xml_preview(self, request, pk=None):
         """Return the FA3 XML for this invoice (for preview/debugging)."""
         invoice = self.get_object()
+        if not Clinic.objects.filter(pk=invoice.clinic_id, feature_ksef_enabled=True).exists():
+            return Response(
+                {"detail": "KSeF is disabled for this clinic."},
+                status=403,
+            )
         xml_bytes = build_fa3_xml(invoice)
         from django.http import HttpResponse
 

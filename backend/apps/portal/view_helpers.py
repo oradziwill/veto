@@ -31,6 +31,7 @@ def get_clinic_by_slug(slug: str) -> Clinic | None:
             "online_booking_enabled",
             "portal_booking_deposit_amount",
             "portal_booking_deposit_line_label",
+            "feature_portal_deposit_enabled",
         )
         .first()
     )

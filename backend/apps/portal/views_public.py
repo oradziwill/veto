@@ -17,12 +17,13 @@ class PortalClinicPublicView(APIView):
         err, clinic = public_clinic_or_404(slug)
         if err:
             return err
+        deposit_amt = clinic.effective_portal_deposit_amount()
         return Response(
             {
                 "slug": clinic.slug,
                 "name": clinic.name,
                 "online_booking_enabled": clinic.online_booking_enabled,
-                "portal_booking_deposit_pln": str(clinic.portal_booking_deposit_amount),
+                "portal_booking_deposit_pln": str(deposit_amt),
                 "portal_booking_deposit_label": clinic.portal_booking_deposit_line_label,
             }
         )

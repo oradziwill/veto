@@ -164,7 +164,7 @@ class PortalAppointmentListCreateView(APIView):
                 {"detail": "Invalid datetime format for starts_at/ends_at."}, status=400
             )
 
-        deposit_amt = clinic.portal_booking_deposit_amount or Decimal("0")
+        deposit_amt = clinic.effective_portal_deposit_amount()
         needs_deposit = deposit_amt > 0
         initial_status = (
             Appointment.Status.SCHEDULED if needs_deposit else Appointment.Status.CONFIRMED
