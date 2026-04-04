@@ -76,6 +76,25 @@ class Clinic(models.Model):
         help_text="If disabled, queued SMS reminders are cancelled during processing (email is unaffected).",
     )
 
+    feature_ai_enabled = models.BooleanField(
+        default=True,
+        help_text="Patient AI summary and scheduling assistant (capacity / optimization).",
+    )
+    feature_ksef_enabled = models.BooleanField(
+        default=True,
+        help_text="KSeF invoice submission and XML preview in staff API.",
+    )
+    feature_portal_deposit_enabled = models.BooleanField(
+        default=True,
+        help_text="Portal booking deposit flow; when off, bookings confirm without a deposit even if amount > 0.",
+    )
+
+    def effective_portal_deposit_amount(self) -> Decimal:
+        """Deposit amount applied to public portal booking (ignores config when feature off)."""
+        if not self.feature_portal_deposit_enabled:
+            return Decimal("0")
+        return self.portal_booking_deposit_amount or Decimal("0")
+
     def save(self, *args, **kwargs):
         if not self.slug:
             base = slugify(self.name)[:200] or "clinic"

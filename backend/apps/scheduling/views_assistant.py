@@ -16,6 +16,7 @@ from apps.scheduling.services.scheduling_assistant import (
     generate_optimization_suggestions,
 )
 from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
+from apps.tenancy.models import Clinic
 
 logger = logging.getLogger(__name__)
 DEFAULT_WINDOW_DAYS = 14
@@ -91,6 +92,13 @@ class SchedulingCapacityInsightsView(APIView):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get(self, request):
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
+        if not Clinic.objects.filter(pk=cid, feature_ai_enabled=True).exists():
+            return Response(
+                {"detail": "Scheduling assistant is disabled for this clinic."},
+                status=403,
+            )
+
         start_date, end_date, window_error = _parse_window(request)
         if window_error:
             return Response({"detail": window_error}, status=400)
@@ -119,7 +127,6 @@ class SchedulingCapacityInsightsView(APIView):
         if rows_limit_error:
             return Response({"detail": rows_limit_error}, status=400)
 
-        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         try:
             payload = generate_capacity_insights(
                 clinic_id=cid,
@@ -163,6 +170,13 @@ class SchedulingOptimizationSuggestionsView(APIView):
     permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
 
     def get(self, request):
+        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
+        if not Clinic.objects.filter(pk=cid, feature_ai_enabled=True).exists():
+            return Response(
+                {"detail": "Scheduling assistant is disabled for this clinic."},
+                status=403,
+            )
+
         start_date, end_date, window_error = _parse_window(request)
         if window_error:
             return Response({"detail": window_error}, status=400)
@@ -188,7 +202,6 @@ class SchedulingOptimizationSuggestionsView(APIView):
         if threshold_error:
             return Response({"detail": threshold_error}, status=400)
 
-        cid = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
         try:
             payload = generate_optimization_suggestions(
                 clinic_id=cid,

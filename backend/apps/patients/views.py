@@ -40,6 +40,7 @@ from apps.tenancy.access import (
     clinic_instance_for_mutation,
     user_can_access_clinic,
 )
+from apps.tenancy.models import Clinic
 from apps.tenancy.reception_fts import filter_patients_queryset_for_reception
 
 
@@ -436,6 +437,13 @@ class PatientViewSet(viewsets.ModelViewSet):
         """
         GET /api/patients/<id>/ai-summary/ -> Generate AI summary of patient history and condition
         """
+        patient = self.get_object()
+        if not Clinic.objects.filter(pk=patient.clinic_id, feature_ai_enabled=True).exists():
+            return Response(
+                {"detail": "AI summary is disabled for this clinic."},
+                status=403,
+            )
+
         try:
             from openai import OpenAI
         except ImportError:
@@ -454,7 +462,6 @@ class PatientViewSet(viewsets.ModelViewSet):
             )
 
         user = request.user
-        patient = self.get_object()  # already clinic-filtered by get_queryset
 
         # Check if we have a cached summary that's still valid
         # Cache is invalid if there are new history entries since the summary was created
