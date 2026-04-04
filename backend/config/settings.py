@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "rest_framework",
+    "drf_spectacular",
     "corsheaders",
     # Local apps
     "apps.tenancy.apps.TenancyConfig",
@@ -226,6 +227,11 @@ elif DEBUG:
     CSRF_TRUSTED_ORIGINS = list(_default_cors_origins)
 else:
     CSRF_TRUSTED_ORIGINS = []
+_throttle_anon = os.getenv("API_THROTTLE_ANON", "120/hour")
+_throttle_user = os.getenv("API_THROTTLE_USER", "5000/hour")
+_throttle_transcribe = os.getenv("API_THROTTLE_TRANSCRIBE", "40/hour")
+_throttle_recording = os.getenv("API_THROTTLE_RECORDING_UPLOAD", "80/hour")
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "apps.portal.authentication.PortalJWTAuthentication",
@@ -235,7 +241,31 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "EXCEPTION_HANDLER": "config.exception_handler.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": _throttle_anon,
+        "user": _throttle_user,
+        "visit_transcribe": _throttle_transcribe,
+        "visit_recording_upload": _throttle_recording,
+    },
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "VETO API",
+    "DESCRIPTION": "Veterinary clinic management REST API (staff JWT + client portal).",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SCHEMA_PATH_PREFIX": "/api/",
+}
+if DEBUG:
+    SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = ["rest_framework.permissions.AllowAny"]
+else:
+    SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = ["rest_framework.permissions.IsAuthenticated"]
 
 LOGGING = {
     "version": 1,

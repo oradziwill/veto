@@ -8,6 +8,7 @@ from django.db import transaction
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin
@@ -52,6 +53,8 @@ def _visit_transcription_job_payload(job: VisitTranscriptionJob) -> dict:
 
 class VisitTranscriptionView(APIView):
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+    throttle_classes = [ScopedRateThrottle, UserRateThrottle]
+    throttle_scope = "visit_transcribe"
     allowed_audio_types = {
         "audio/webm",
         "audio/ogg",
@@ -140,6 +143,8 @@ class VisitTranscriptionJobDetailView(APIView):
 
 class VisitRecordingUploadView(APIView):
     permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+    throttle_classes = [ScopedRateThrottle, UserRateThrottle]
+    throttle_scope = "visit_recording_upload"
     allowed_types = {
         "audio/webm",
         "audio/ogg",
