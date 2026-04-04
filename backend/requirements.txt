@@ -54,6 +54,7 @@ stripe>=11.0,<14.0
 # Cache (Redis for multi-instance; Django RedisCache backend)
 # -------------------------
 redis>=5.0,<6.0
+django-rq>=3.0,<4.0
 
 # -------------------------
 # Environment variables

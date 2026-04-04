@@ -1,4 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
+from django.test import override_settings
 from django.urls import reverse
 
 from apps.accounts.models import User
@@ -26,6 +29,37 @@ def test_create_report_export_job_admin_only(api_client, clinic_admin, reception
     )
     assert ok.status_code == 201
     assert ok.data["status"] == ReportExportJob.Status.PENDING
+
+
+@pytest.mark.django_db
+@override_settings(RQ_REPORT_EXPORT_ENQUEUE=True)
+def test_create_report_export_enqueues_when_enabled(api_client, clinic_admin):
+    with patch("django_rq.get_queue") as gq:
+        gq.return_value.enqueue = MagicMock()
+        api_client.force_authenticate(user=clinic_admin)
+        ok = api_client.post(
+            reverse("report-exports-list"),
+            {"report_type": ReportExportJob.ReportType.REVENUE_SUMMARY, "params": {}},
+            format="json",
+        )
+        assert ok.status_code == 201
+        gq.return_value.enqueue.assert_called_once()
+
+
+@pytest.mark.django_db
+def test_execute_report_export_job_by_id(clinic, clinic_admin):
+    from apps.reports.job_runner import execute_report_export_job_by_id
+
+    job = ReportExportJob.objects.create(
+        clinic=clinic,
+        requested_by=clinic_admin,
+        report_type=ReportExportJob.ReportType.REVENUE_SUMMARY,
+        params={},
+        status=ReportExportJob.Status.PENDING,
+    )
+    assert execute_report_export_job_by_id(job.id) == "processed"
+    job.refresh_from_db()
+    assert job.status == ReportExportJob.Status.COMPLETED
 
 
 @pytest.mark.django_db

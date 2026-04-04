@@ -18,6 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 from .caches import get_caches_config
+from .rq import build_rq_config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -84,6 +85,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "corsheaders",
+    "django_rq",
     # Local apps
     "apps.tenancy.apps.TenancyConfig",
     "apps.accounts.apps.AccountsConfig",
@@ -165,6 +167,9 @@ else:
 
 # Cache (portal OTP / confirm rate limits; Redis when REDIS_URL is set — see config/caches.py)
 CACHES = get_caches_config()
+
+# Redis Queue (async workers); see documentation/ASYNC_JOB_QUEUE.md
+RQ_QUEUES, RQ_REPORT_EXPORT_ENQUEUE = build_rq_config()
 
 # Superuser / network_admin clinic-id lists (see apps.tenancy.access); invalidated when Clinic rows change.
 ACCESSIBLE_CLINIC_IDS_CACHE_TIMEOUT = int(
