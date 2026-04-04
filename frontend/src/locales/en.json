@@ -400,6 +400,7 @@
     "appointment": "Appointment",
     "notesLabel": "Notes",
     "receiptSummary": "Receipt Summary",
+    "servicesPerformed": "Services performed",
     "close": "Close"
   },
   "billing": {
