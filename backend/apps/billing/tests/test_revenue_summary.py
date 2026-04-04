@@ -4,6 +4,7 @@ import pytest
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.audit.models import AuditLog
 from apps.billing.models import Invoice, InvoiceLine, Payment
 from apps.clients.models import Client, ClientClinic
 from apps.tenancy.models import Clinic
@@ -28,6 +29,19 @@ def test_revenue_summary_admin_only(clinic_admin, receptionist, api_client):
     assert r.status_code == 200
     assert "total_invoiced" in r.data
     assert "by_period" in r.data
+
+
+@pytest.mark.django_db
+def test_revenue_summary_csv_export_writes_audit_log(clinic_admin, api_client):
+    api_client.force_authenticate(user=clinic_admin)
+    r = api_client.get("/api/billing/revenue-summary/?export=csv")
+    assert r.status_code == 200
+    assert r["Content-Type"].startswith("text/csv")
+    assert AuditLog.objects.filter(
+        clinic_id=clinic_admin.clinic_id,
+        action="revenue_summary_exported_csv",
+        entity_type="revenue_summary",
+    ).exists()
 
 
 @pytest.mark.django_db

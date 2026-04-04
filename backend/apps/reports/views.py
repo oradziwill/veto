@@ -120,6 +120,14 @@ class ReportExportJobViewSet(viewsets.ModelViewSet):
                 {"detail": "Report is not ready for download."},
                 status=status.HTTP_409_CONFLICT,
             )
+        log_audit_event(
+            clinic_id=job.clinic_id,
+            actor=request.user,
+            action="report_export_job_downloaded",
+            entity_type="report_export_job",
+            entity_id=job.id,
+            metadata={"report_type": job.report_type, "file_name": job.file_name or ""},
+        )
         response = HttpResponse(job.file_content, content_type=f"{job.content_type}; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{job.file_name or "report.csv"}"'
         return response

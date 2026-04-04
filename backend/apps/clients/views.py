@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsClinicAdmin
 from apps.audit.services import log_audit_event
+from apps.audit.snapshots import client_membership_snapshot, client_snapshot
 from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
 
 from .models import Client, ClientClinic
@@ -57,6 +58,49 @@ class ClientViewSet(viewsets.ModelViewSet):
             clinic_id=cid,
             defaults={"is_active": True},
         )
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="client_created",
+            entity_type="client",
+            entity_id=client.id,
+            after=client_snapshot(client),
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        cid = clinic_id_for_mutation(
+            self.request.user,
+            request=self.request,
+            instance_clinic_id=None,
+        )
+        before = client_snapshot(instance)
+        client = serializer.save()
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="client_updated",
+            entity_type="client",
+            entity_id=client.id,
+            before=before,
+            after=client_snapshot(client),
+        )
+
+    def perform_destroy(self, instance):
+        cid = clinic_id_for_mutation(
+            self.request.user, request=self.request, instance_clinic_id=None
+        )
+        entity_id = instance.id
+        before = client_snapshot(instance)
+        super().perform_destroy(instance)
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="client_deleted",
+            entity_type="client",
+            entity_id=entity_id,
+            before=before,
+        )
 
     @action(
         detail=True,
@@ -98,12 +142,45 @@ class ClientClinicViewSet(viewsets.ModelViewSet):
         cid = clinic_id_for_mutation(
             self.request.user, request=self.request, instance_clinic_id=None
         )
-        serializer.save(clinic_id=cid)
+        membership = serializer.save(clinic_id=cid)
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="client_membership_created",
+            entity_type="client_clinic",
+            entity_id=membership.id,
+            after=client_membership_snapshot(membership),
+        )
 
     def perform_update(self, serializer):
+        instance = serializer.instance
         cid = clinic_id_for_mutation(
             self.request.user,
             request=self.request,
-            instance_clinic_id=serializer.instance.clinic_id,
+            instance_clinic_id=instance.clinic_id,
         )
-        serializer.save(clinic_id=cid)
+        before = client_membership_snapshot(instance)
+        membership = serializer.save(clinic_id=cid)
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="client_membership_updated",
+            entity_type="client_clinic",
+            entity_id=membership.id,
+            before=before,
+            after=client_membership_snapshot(membership),
+        )
+
+    def perform_destroy(self, instance):
+        cid = instance.clinic_id
+        entity_id = instance.id
+        before = client_membership_snapshot(instance)
+        super().perform_destroy(instance)
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="client_membership_deleted",
+            entity_type="client_clinic",
+            entity_id=entity_id,
+            before=before,
+        )

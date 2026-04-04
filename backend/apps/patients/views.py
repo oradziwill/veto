@@ -10,6 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
+from apps.audit.services import log_audit_event
+from apps.audit.snapshots import patient_snapshot
 from apps.billing.models import Invoice
 from apps.billing.serializers import InvoiceReadSerializer
 from apps.billing.services.recent_supply_lines import recent_supply_line_suggestions
@@ -323,6 +325,14 @@ class PatientViewSet(viewsets.ModelViewSet):
                 clinic_id=patient.clinic_id,
                 defaults={"is_active": True},
             )
+        log_audit_event(
+            clinic_id=patient.clinic_id,
+            actor=user,
+            action="patient_created",
+            entity_type="patient",
+            entity_id=patient.id,
+            after=patient_snapshot(patient),
+        )
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -331,6 +341,7 @@ class PatientViewSet(viewsets.ModelViewSet):
         if instance.clinic_id and not user_can_access_clinic(user, instance.clinic_id):
             raise ValidationError("You cannot modify patients outside your clinic.")
 
+        before = patient_snapshot(instance)
         patient = serializer.save()
 
         if patient.owner_id and patient.clinic_id:
@@ -339,6 +350,29 @@ class PatientViewSet(viewsets.ModelViewSet):
                 clinic_id=patient.clinic_id,
                 defaults={"is_active": True},
             )
+        log_audit_event(
+            clinic_id=patient.clinic_id,
+            actor=user,
+            action="patient_updated",
+            entity_type="patient",
+            entity_id=patient.id,
+            before=before,
+            after=patient_snapshot(patient),
+        )
+
+    def perform_destroy(self, instance):
+        cid = instance.clinic_id
+        entity_id = instance.id
+        before = patient_snapshot(instance)
+        super().perform_destroy(instance)
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="patient_deleted",
+            entity_type="patient",
+            entity_id=entity_id,
+            before=before,
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="history")
     def history(self, request, pk=None):

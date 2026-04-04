@@ -3,6 +3,7 @@ from datetime import timedelta
 import pytest
 from django.utils import timezone
 
+from apps.audit.models import AuditLog
 from apps.billing.models import Invoice, InvoiceLine
 from apps.inventory.models import InventoryItem, InventoryMovement
 from apps.scheduling.models import Appointment
@@ -38,6 +39,12 @@ def test_create_invoice_with_lines(
     assert len(r.data["lines"]) == 1
     assert r.data["lines"][0]["line_total"] == "150.00"
     assert r.data["total"] == "150.00"
+    assert AuditLog.objects.filter(
+        clinic_id=receptionist.clinic_id,
+        action="invoice_created",
+        entity_type="invoice",
+        entity_id=str(r.data["id"]),
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -70,6 +77,12 @@ def test_record_payment(
     assert r.status_code == 201
     invoice.refresh_from_db()
     assert invoice.status == "paid"
+    assert AuditLog.objects.filter(
+        clinic_id=receptionist.clinic_id,
+        action="invoice_payment_recorded",
+        entity_type="invoice",
+        entity_id=str(invoice.id),
+    ).exists()
 
 
 @pytest.mark.django_db

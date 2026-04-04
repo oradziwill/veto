@@ -2,6 +2,7 @@ import pytest
 from django.urls import reverse
 
 from apps.accounts.models import User
+from apps.audit.models import AuditLog
 from apps.billing.models import Invoice, InvoiceLine
 from apps.reports.models import ReportExportJob
 from apps.tenancy.models import Clinic
@@ -70,6 +71,12 @@ def test_process_pending_and_download_report(
     assert "invoice_id,created_date,status,line_total,payments_count" in download.content.decode(
         "utf-8"
     )
+    assert AuditLog.objects.filter(
+        clinic_id=clinic.id,
+        action="report_export_job_downloaded",
+        entity_type="report_export_job",
+        entity_id=str(job.id),
+    ).exists()
 
 
 @pytest.mark.django_db

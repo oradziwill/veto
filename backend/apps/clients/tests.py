@@ -35,6 +35,64 @@ def test_client_create_auto_links_membership(api_client, receptionist):
     assert ClientClinic.objects.filter(
         client_id=r.data["id"], clinic_id=receptionist.clinic_id, is_active=True
     ).exists()
+    assert AuditLog.objects.filter(
+        clinic_id=receptionist.clinic_id,
+        action="client_created",
+        entity_type="client",
+        entity_id=str(r.data["id"]),
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_client_update_writes_audit_log(api_client, receptionist, client_with_membership):
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.patch(
+        f"/api/clients/{client_with_membership.id}/",
+        {"phone": "+48111222333"},
+        format="json",
+    )
+    assert r.status_code == 200
+    row = AuditLog.objects.filter(
+        clinic_id=receptionist.clinic_id,
+        action="client_updated",
+        entity_type="client",
+        entity_id=str(client_with_membership.id),
+    ).first()
+    assert row is not None
+    assert row.after.get("phone") == "+48111222333"
+
+
+@pytest.mark.django_db
+def test_client_delete_without_patients_writes_audit_log(api_client, receptionist):
+    lone = Client.objects.create(first_name="Solo", last_name="Owner")
+    ClientClinic.objects.create(client=lone, clinic=receptionist.clinic, is_active=True)
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.delete(f"/api/clients/{lone.id}/")
+    assert r.status_code == 204
+    assert AuditLog.objects.filter(
+        clinic_id=receptionist.clinic_id,
+        action="client_deleted",
+        entity_type="client",
+        entity_id=str(lone.id),
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_client_membership_create_writes_audit_log(api_client, receptionist):
+    client = Client.objects.create(first_name="New", last_name="Member")
+    api_client.force_authenticate(user=receptionist)
+    r = api_client.post(
+        "/api/client-memberships/",
+        {"client": client.id, "is_active": True},
+        format="json",
+    )
+    assert r.status_code == 201
+    assert AuditLog.objects.filter(
+        clinic_id=receptionist.clinic_id,
+        action="client_membership_created",
+        entity_type="client_clinic",
+        entity_id=str(r.data["id"]),
+    ).exists()
 
 
 @pytest.mark.django_db

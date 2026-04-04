@@ -19,6 +19,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import HasClinic, IsAdminOrReadOnly, IsClinicAdmin, IsStaffOrVet
+from apps.audit.services import log_audit_event
+from apps.audit.snapshots import invoice_audit_payload
 from apps.tenancy.access import accessible_clinic_ids, clinic_id_for_mutation
 
 from .ksef_service import KSeFError
@@ -88,19 +90,73 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        invoice = serializer.save()
+        invoice = self.perform_create(serializer)
+        invoice = (
+            Invoice.objects.filter(pk=invoice.pk)
+            .select_related("client", "patient", "appointment")
+            .prefetch_related("lines", "payments")
+            .get()
+        )
         return Response(
             InvoiceReadSerializer(invoice).data,
             status=201,
         )
+
+    def perform_create(self, serializer):
+        invoice = serializer.save()
+        log_audit_event(
+            clinic_id=invoice.clinic_id,
+            actor=self.request.user,
+            action="invoice_created",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            after=invoice_audit_payload(invoice),
+        )
+        return invoice
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        invoice = serializer.save()
+        invoice = self.perform_update(serializer)
+        invoice = (
+            Invoice.objects.filter(pk=invoice.pk)
+            .select_related("client", "patient", "appointment")
+            .prefetch_related("lines", "payments")
+            .get()
+        )
         return Response(InvoiceReadSerializer(invoice).data)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        instance = Invoice.objects.filter(pk=instance.pk).prefetch_related("lines").get()
+        before = invoice_audit_payload(instance)
+        invoice = serializer.save()
+        log_audit_event(
+            clinic_id=invoice.clinic_id,
+            actor=self.request.user,
+            action="invoice_updated",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            before=before,
+            after=invoice_audit_payload(invoice),
+        )
+        return invoice
+
+    def perform_destroy(self, instance):
+        cid = instance.clinic_id
+        entity_id = instance.id
+        before = invoice_audit_payload(instance)
+        super().perform_destroy(instance)
+        log_audit_event(
+            clinic_id=cid,
+            actor=self.request.user,
+            action="invoice_deleted",
+            entity_type="invoice",
+            entity_id=entity_id,
+            before=before,
+        )
 
     @action(detail=True, methods=["post"], url_path="send")
     def send_invoice(self, request, pk=None):
@@ -113,6 +169,15 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             )
         invoice.status = Invoice.Status.SENT
         invoice.save(update_fields=["status", "updated_at"])
+        log_audit_event(
+            clinic_id=invoice.clinic_id,
+            actor=request.user,
+            action="invoice_sent",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            before={"status": Invoice.Status.DRAFT},
+            after={"status": invoice.status},
+        )
         return Response(InvoiceReadSerializer(invoice).data)
 
     @action(detail=True, methods=["post"], url_path="submit-ksef")
@@ -133,6 +198,17 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             invoice.ksef_status = "accepted"
             invoice.save(update_fields=["ksef_number", "ksef_status", "updated_at"])
 
+            log_audit_event(
+                clinic_id=invoice.clinic_id,
+                actor=request.user,
+                action="invoice_ksef_submitted",
+                entity_type="invoice",
+                entity_id=invoice.id,
+                after={
+                    "ksef_status": invoice.ksef_status,
+                    "ksef_number": invoice.ksef_number or "",
+                },
+            )
             return Response(InvoiceReadSerializer(invoice).data)
         except KSeFError as exc:
             invoice.ksef_status = "error"
@@ -158,7 +234,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         serializer = PaymentWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        Payment.objects.create(
+        payment = Payment.objects.create(
             invoice=invoice,
             created_by=request.user,
             **serializer.validated_data,
@@ -168,6 +244,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             .select_related("client", "patient", "appointment")
             .prefetch_related("lines", "payments")
             .get()
+        )
+        log_audit_event(
+            clinic_id=invoice.clinic_id,
+            actor=request.user,
+            action="invoice_payment_recorded",
+            entity_type="invoice",
+            entity_id=invoice.id,
+            metadata={
+                "payment_id": payment.id,
+                "amount": str(payment.amount),
+                "method": payment.method,
+                "invoice_status_after": invoice.status,
+            },
         )
         if invoice.amount_paid >= invoice.total:
             invoice.status = Invoice.Status.PAID
@@ -437,6 +526,18 @@ class RevenueSummaryView(APIView):
                 ]
                 for item in payload["by_period"]
             ]
+            log_audit_event(
+                clinic_id=clinic_id,
+                actor=request.user,
+                action="revenue_summary_exported_csv",
+                entity_type="revenue_summary",
+                entity_id=clinic_id,
+                metadata={
+                    "from": payload["from"],
+                    "to": payload["to"],
+                    "period": payload["period"],
+                },
+            )
             return self._csv_response(
                 filename=f"revenue-summary-{payload['from']}-to-{payload['to']}.csv",
                 headers=["label", "invoiced", "paid"],
