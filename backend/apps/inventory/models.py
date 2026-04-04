@@ -56,7 +56,7 @@ class InventoryItem(models.Model):
         indexes = [
             models.Index(fields=["clinic", "name"]),
             models.Index(fields=["clinic", "sku"]),
-            models.Index(fields=["clinic", "barcode"]),
+            models.Index(fields=["clinic", "barcode"], name="inventory_inv_clinic__idx"),
             models.Index(fields=["clinic", "category"]),
             models.Index(fields=["clinic", "stock_on_hand"]),
         ]
