@@ -9,10 +9,49 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.conf import settings
+from django.core.cache import cache
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
+
+SUPERUSER_CLINIC_IDS_CACHE_KEY = "tenancy:superuser_clinic_ids"
+
+
+def network_clinic_ids_cache_key(network_id: int) -> str:
+    return f"tenancy:network_clinic_ids:{network_id}"
+
+
+def _accessible_clinic_ids_cache_timeout() -> int:
+    return int(getattr(settings, "ACCESSIBLE_CLINIC_IDS_CACHE_TIMEOUT", 300))
+
+
+def _all_clinic_ids_for_superuser() -> list[int]:
+    cached = cache.get(SUPERUSER_CLINIC_IDS_CACHE_KEY)
+    if cached is not None:
+        return list(cached)
+    from apps.tenancy.models import Clinic
+
+    ids = list(Clinic.objects.order_by().values_list("id", flat=True))
+    cache.set(
+        SUPERUSER_CLINIC_IDS_CACHE_KEY,
+        ids,
+        _accessible_clinic_ids_cache_timeout(),
+    )
+    return ids
+
+
+def _clinic_ids_for_network(network_id: int) -> list[int]:
+    key = network_clinic_ids_cache_key(network_id)
+    cached = cache.get(key)
+    if cached is not None:
+        return list(cached)
+    from apps.tenancy.models import Clinic
+
+    ids = list(Clinic.objects.filter(network_id=network_id).order_by().values_list("id", flat=True))
+    cache.set(key, ids, _accessible_clinic_ids_cache_timeout())
+    return ids
 
 
 def accessible_clinic_ids(user: AbstractBaseUser | None) -> list[int]:
@@ -26,18 +65,14 @@ def accessible_clinic_ids(user: AbstractBaseUser | None) -> list[int]:
     if not user or not user.is_authenticated:
         return []
     if getattr(user, "is_superuser", False):
-        from apps.tenancy.models import Clinic
-
-        return list(Clinic.objects.order_by().values_list("id", flat=True))
+        return _all_clinic_ids_for_superuser()
 
     role = getattr(user, "role", None)
     if role == "network_admin":
         nid = getattr(user, "network_id", None)
         if not nid:
             return []
-        from apps.tenancy.models import Clinic
-
-        return list(Clinic.objects.filter(network_id=nid).order_by().values_list("id", flat=True))
+        return _clinic_ids_for_network(int(nid))
 
     cid = getattr(user, "clinic_id", None)
     if cid:
