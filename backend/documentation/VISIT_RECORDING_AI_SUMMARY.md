@@ -74,6 +74,15 @@ Important response fields:
 - Use returned `recording_id` for detail polling.
 - Do not assume immediate `ready`; treat this as asynchronous processing.
 
+## Visit audio → clinical exam (direct transcribe)
+
+Staff can upload **audio only** for an appointment (no S3 recording pipeline):
+
+- `POST /api/visits/{appointment_id}/transcribe/` — same multipart field `audio` as before.
+- **`202 Accepted`** when async (default in production): body includes `id`, `status: pending`, and `job_url`. Poll `GET` on `job_url` until `completed` or `failed` (same polling idea as recordings).
+- **`200 OK`** when `VISIT_TRANSCRIPTION_INLINE_PROCESSING=true` (default in local DEBUG): body matches completed job (`transcript`, `structured`, `needs_review`, `unknown_fields`, plus `id` and `status`).
+- Processing worker: `python manage.py process_visit_transcription_jobs` (cron / EB worker), or `--job-id <id>` for a single row.
+
 ## Strict AI mode (anti-hallucination)
 
 Backend enforces strict extraction mode:

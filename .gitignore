@@ -45,3 +45,4 @@ backend/db.sqlite3
 .vscode/
 .idea/
 backend/staticfiles/
+backend/media/
