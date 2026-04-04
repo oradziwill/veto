@@ -352,6 +352,7 @@
     "tabs": {
       "overview": "Przegląd",
       "history": "Historia",
+      "vaccinations": "Szczepienia",
       "prescriptions": "Recepty"
     },
     "prescriptions": {
