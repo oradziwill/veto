@@ -21,6 +21,7 @@ from apps.tenancy.models import Clinic
 from .authentication import PortalPrincipal
 from .permissions import IsPortalClient
 from .services.booking import portal_slot_matches_availability
+from .services.idempotency import run_idempotent_portal_post
 from .services.staff_notify_booking import notify_staff_new_portal_booking
 from .view_helpers import dump_public_availability, portal_appointment_booking_payload
 
@@ -163,99 +164,120 @@ class PortalAppointmentListCreateView(APIView):
                 {"detail": "Invalid datetime format for starts_at/ends_at."}, status=400
             )
 
-        if not portal_slot_matches_availability(
-            clinic_id=clinic.id,
-            vet_id=vet_id,
-            room_id=room_id,
-            starts_at=starts_at,
-            ends_at=ends_at,
-        ):
-            return Response(
-                {"detail": "Selected time is no longer available."},
-                status=409,
-            )
-
         deposit_amt = clinic.portal_booking_deposit_amount or Decimal("0")
         needs_deposit = deposit_amt > 0
         initial_status = (
             Appointment.Status.SCHEDULED if needs_deposit else Appointment.Status.CONFIRMED
         )
 
-        with transaction.atomic():
-            appt = Appointment(
-                clinic=clinic,
-                patient=patient,
+        payload_for_hash = {
+            "patient_id": patient_id,
+            "vet_id": vet_id,
+            "room_id": room_id,
+            "starts_at": starts_at_raw,
+            "ends_at": ends_at_raw,
+            "reason": reason,
+        }
+
+        def do_book():
+            if not portal_slot_matches_availability(
+                clinic_id=clinic.id,
                 vet_id=vet_id,
                 room_id=room_id,
                 starts_at=starts_at,
                 ends_at=ends_at,
-                visit_type=Appointment.VisitType.OUTPATIENT,
-                status=initial_status,
-                reason=reason,
-                booked_via_portal=True,
-            )
-            appt.save()
-            patient.ai_summary = ""
-            patient.ai_summary_updated_at = None
-            patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
+            ):
+                return Response(
+                    {"detail": "Selected time is no longer available."},
+                    status=409,
+                )
 
-            deposit_invoice = None
-            if needs_deposit:
-                deposit_invoice = Invoice.objects.create(
+            appt: Appointment | None = None
+            deposit_invoice: Invoice | None = None
+            with transaction.atomic():
+                appt = Appointment(
                     clinic=clinic,
-                    client=patient.owner,
                     patient=patient,
-                    appointment=appt,
-                    status=Invoice.Status.DRAFT,
-                    currency="PLN",
-                    created_by=None,
+                    vet_id=vet_id,
+                    room_id=room_id,
+                    starts_at=starts_at,
+                    ends_at=ends_at,
+                    visit_type=Appointment.VisitType.OUTPATIENT,
+                    status=initial_status,
+                    reason=reason,
+                    booked_via_portal=True,
                 )
-                line_label = (
-                    clinic.portal_booking_deposit_line_label or "Online booking deposit"
-                ).strip() or "Online booking deposit"
-                InvoiceLine.objects.create(
-                    invoice=deposit_invoice,
-                    description=line_label[:255],
-                    quantity=Decimal("1"),
-                    unit_price=deposit_amt,
-                    vat_rate=InvoiceLine.VatRate.RATE_8,
-                )
-                appt.portal_deposit_invoice = deposit_invoice
-                appt.save(update_fields=["portal_deposit_invoice", "updated_at"])
+                appt.save()
+                patient.ai_summary = ""
+                patient.ai_summary_updated_at = None
+                patient.save(update_fields=["ai_summary", "ai_summary_updated_at"])
 
-        log_audit_event(
-            clinic_id=clinic.id,
-            actor=None,
-            action="portal_appointment_booked",
-            entity_type="appointment",
-            entity_id=appt.id,
-            after={
-                "patient_id": patient.id,
-                "vet_id": vet_id,
-                "starts_at": starts_at.isoformat(),
-                "ends_at": ends_at.isoformat(),
-                "client_id": p.client_id,
-                "needs_deposit": needs_deposit,
-                "deposit_invoice_id": deposit_invoice.id if deposit_invoice else None,
-            },
-            metadata={"source": "portal"},
-        )
+                if needs_deposit:
+                    deposit_invoice = Invoice.objects.create(
+                        clinic=clinic,
+                        client=patient.owner,
+                        patient=patient,
+                        appointment=appt,
+                        status=Invoice.Status.DRAFT,
+                        currency="PLN",
+                        created_by=None,
+                    )
+                    line_label = (
+                        clinic.portal_booking_deposit_line_label or "Online booking deposit"
+                    ).strip() or "Online booking deposit"
+                    InvoiceLine.objects.create(
+                        invoice=deposit_invoice,
+                        description=line_label[:255],
+                        quantity=Decimal("1"),
+                        unit_price=deposit_amt,
+                        vat_rate=InvoiceLine.VatRate.RATE_8,
+                    )
+                    appt.portal_deposit_invoice = deposit_invoice
+                    appt.save(update_fields=["portal_deposit_invoice", "updated_at"])
 
-        notify_staff_new_portal_booking(
-            clinic_id=clinic.id,
-            patient_name=patient.name,
-            appointment_id=appt.id,
-            vet_id=vet_id,
-            starts_at=starts_at,
-        )
+            assert appt is not None
 
-        if deposit_invoice:
-            deposit_invoice = (
-                Invoice.objects.filter(pk=deposit_invoice.pk).prefetch_related("lines").get()
+            log_audit_event(
+                clinic_id=clinic.id,
+                actor=None,
+                action="portal_appointment_booked",
+                entity_type="appointment",
+                entity_id=appt.id,
+                after={
+                    "patient_id": patient.id,
+                    "vet_id": vet_id,
+                    "starts_at": starts_at.isoformat(),
+                    "ends_at": ends_at.isoformat(),
+                    "client_id": p.client_id,
+                    "needs_deposit": needs_deposit,
+                    "deposit_invoice_id": deposit_invoice.id if deposit_invoice else None,
+                },
+                metadata={"source": "portal"},
             )
-        return Response(
-            portal_appointment_booking_payload(appt, deposit_invoice),
-            status=201,
+            notify_staff_new_portal_booking(
+                clinic_id=clinic.id,
+                patient_name=patient.name,
+                appointment_id=appt.id,
+                vet_id=vet_id,
+                starts_at=starts_at,
+            )
+
+            if deposit_invoice:
+                deposit_invoice = (
+                    Invoice.objects.filter(pk=deposit_invoice.pk).prefetch_related("lines").get()
+                )
+            return Response(
+                portal_appointment_booking_payload(appt, deposit_invoice),
+                status=201,
+            )
+
+        return run_idempotent_portal_post(
+            request=request,
+            client_id=p.client_id,
+            clinic_id=clinic.id,
+            operation="portal_book_appointment",
+            payload_for_hash=payload_for_hash,
+            handler=do_book,
         )
 
 

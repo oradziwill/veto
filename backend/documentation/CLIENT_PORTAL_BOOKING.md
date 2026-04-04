@@ -76,6 +76,8 @@ JSON body:
 - **`reason`** (optional string, max 255)
 - **`room_id`** (optional int) — must belong to clinic if provided
 
+**Idempotency:** optional header **`Idempotency-Key`** (1–128 chars) on **`POST …/appointments/`**, **`POST …/invoices/…/stripe-checkout/`**, and **`POST …/complete-deposit/`**. Retries with the same key and body get the stored status + JSON; the same key with a different body yields **409**.
+
 **Deposit (clinic setting):** `Clinic.portal_booking_deposit_amount` (default `0`). If **> 0**:
 
 - Visit is created with `status=scheduled` (not `confirmed` until deposit is paid).
