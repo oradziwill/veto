@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { patientHistoryAPI, patientAISummaryAPI, prescriptionsAPI } from '../../services/api'
+import { patientHistoryAPI, patientAISummaryAPI, prescriptionsAPI, vaccinationsAPI } from '../../services/api'
 import { translateSpecies } from '../../utils/species'
 import './Modal.css'
 
-const TABS = ['overview', 'history', 'prescriptions']
+const TABS = ['overview', 'history', 'vaccinations', 'prescriptions']
 
 /**
  * Splits a structured visit note into { services, medications, cleanNote }.
@@ -51,6 +51,15 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
   const [aiSummaryError, setAiSummaryError] = useState(null)
   const [, setAiSummaryCached] = useState(false)
 
+  // Vaccinations
+  const [vaccinations, setVaccinations] = useState([])
+  const [loadingVaccinations, setLoadingVaccinations] = useState(false)
+  const [vaccinationsError, setVaccinationsError] = useState(null)
+  const [showVaxForm, setShowVaxForm] = useState(false)
+  const [savingVax, setSavingVax] = useState(false)
+  const [saveVaxError, setSaveVaxError] = useState(null)
+  const [vaxForm, setVaxForm] = useState({ vaccine_name: '', batch_number: '', administered_at: '', next_due_at: '', notes: '' })
+
   // Prescriptions
   const [prescriptions, setPrescriptions] = useState([])
   const [loadingPrescriptions, setLoadingPrescriptions] = useState(false)
@@ -63,6 +72,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
   const hasFetchedRef = useRef(false)
   const hasFetchedAISummaryRef = useRef(false)
   const hasFetchedRxRef = useRef(false)
+  const hasFetchedVaxRef = useRef(false)
   const currentPatientIdRef = useRef(null)
 
   useEffect(() => {
@@ -79,9 +89,15 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
       setShowAddForm(false)
       setSaveError(null)
       setForm({ drug_name: '', dosage: '', duration_days: '', notes: '' })
+      setVaccinations([])
+      setVaccinationsError(null)
+      setShowVaxForm(false)
+      setSaveVaxError(null)
+      setVaxForm({ vaccine_name: '', batch_number: '', administered_at: '', next_due_at: '', notes: '' })
       hasFetchedRef.current = false
       hasFetchedAISummaryRef.current = false
       hasFetchedRxRef.current = false
+      hasFetchedVaxRef.current = false
       currentPatientIdRef.current = null
       setActiveTab('overview')
       return
@@ -93,6 +109,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
       hasFetchedRef.current = false
       hasFetchedAISummaryRef.current = false
       hasFetchedRxRef.current = false
+      hasFetchedVaxRef.current = false
       currentPatientIdRef.current = patient.id
     }
 
@@ -140,6 +157,18 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
           hasFetchedRxRef.current = false
         })
         .finally(() => setLoadingPrescriptions(false))
+    }
+
+    if (!hasFetchedVaxRef.current) {
+      hasFetchedVaxRef.current = true
+      setLoadingVaccinations(true)
+      vaccinationsAPI.list(patient.id)
+        .then((res) => setVaccinations(res.data.results || res.data || []))
+        .catch(() => {
+          setVaccinationsError(t('patientDetails.vaccinations.loadError', { defaultValue: 'Failed to load vaccinations.' }))
+          hasFetchedVaxRef.current = false
+        })
+        .finally(() => setLoadingVaccinations(false))
     }
   }, [isOpen, patient?.id])
 
@@ -195,6 +224,39 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
       setSaveError(src ? Object.values(src).flat().join(' ') : t('patientDetails.prescriptions.saveError'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleAddVaccination = async () => {
+    setSavingVax(true)
+    setSaveVaxError(null)
+    try {
+      const payload = {
+        vaccine_name: vaxForm.vaccine_name,
+        administered_at: vaxForm.administered_at,
+        ...(vaxForm.batch_number ? { batch_number: vaxForm.batch_number } : {}),
+        ...(vaxForm.next_due_at ? { next_due_at: vaxForm.next_due_at } : {}),
+        ...(vaxForm.notes ? { notes: vaxForm.notes } : {}),
+      }
+      const res = await vaccinationsAPI.create(patient.id, payload)
+      setVaccinations((prev) => [res.data, ...prev])
+      setShowVaxForm(false)
+      setVaxForm({ vaccine_name: '', batch_number: '', administered_at: '', next_due_at: '', notes: '' })
+    } catch (err) {
+      const data = err.response?.data
+      setSaveVaxError(data ? Object.values(data).flat().join(' ') : t('patientDetails.vaccinations.saveError', { defaultValue: 'Failed to save vaccination.' }))
+    } finally {
+      setSavingVax(false)
+    }
+  }
+
+  const handleDeleteVaccination = async (id) => {
+    if (!window.confirm(t('patientDetails.vaccinations.confirmDelete', { defaultValue: 'Delete this vaccination record?' }))) return
+    try {
+      await vaccinationsAPI.delete(id)
+      setVaccinations((prev) => prev.filter((v) => v.id !== id))
+    } catch {
+      // silently ignore
     }
   }
 
@@ -394,6 +456,95 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
                             <div style={{ fontSize: '0.875rem', color: '#2d3748', padding: '0.75rem', backgroundColor: 'white', borderRadius: '6px', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>{cleanNote}</div>
                           </div>
                         )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── VACCINATIONS TAB ─────────────────────────────────── */}
+          {activeTab === 'vaccinations' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#2d3748', margin: 0 }}>{t('patientDetails.vaccinations.title', { defaultValue: 'Szczepienia' })}</h3>
+                {canWrite && !showVaxForm && (
+                  <button className="btn-primary" onClick={() => { setShowVaxForm(true); setSaveVaxError(null) }} style={{ fontSize: '0.875rem', padding: '0.4rem 0.9rem' }}>
+                    + {t('patientDetails.vaccinations.add', { defaultValue: 'Dodaj szczepienie' })}
+                  </button>
+                )}
+              </div>
+
+              {showVaxForm && (
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f7fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <div>
+                      <label style={labelStyle}>{t('patientDetails.vaccinations.vaccineName', { defaultValue: 'Nazwa szczepionki' })} *</label>
+                      <input style={inputStyle} value={vaxForm.vaccine_name} onChange={e => setVaxForm(f => ({ ...f, vaccine_name: e.target.value }))} placeholder="np. Vanguard Plus 5" />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>{t('patientDetails.vaccinations.batchNumber', { defaultValue: 'Numer serii' })}</label>
+                      <input style={inputStyle} value={vaxForm.batch_number} onChange={e => setVaxForm(f => ({ ...f, batch_number: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>{t('patientDetails.vaccinations.administeredAt', { defaultValue: 'Data podania' })} *</label>
+                      <input type="date" style={inputStyle} value={vaxForm.administered_at} onChange={e => setVaxForm(f => ({ ...f, administered_at: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>{t('patientDetails.vaccinations.nextDueAt', { defaultValue: 'Następna dawka' })}</label>
+                      <input type="date" style={inputStyle} value={vaxForm.next_due_at} onChange={e => setVaxForm(f => ({ ...f, next_due_at: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <label style={labelStyle}>{t('patientDetails.vaccinations.notes', { defaultValue: 'Uwagi' })}</label>
+                    <input style={inputStyle} value={vaxForm.notes} onChange={e => setVaxForm(f => ({ ...f, notes: e.target.value }))} />
+                  </div>
+                  {saveVaxError && <div style={{ color: '#c53030', fontSize: '0.875rem', marginBottom: '0.5rem' }}>{saveVaxError}</div>}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn-primary" onClick={handleAddVaccination} disabled={savingVax || !vaxForm.vaccine_name || !vaxForm.administered_at} style={{ fontSize: '0.875rem', padding: '0.4rem 0.9rem' }}>
+                      {savingVax ? t('common.saving', { defaultValue: 'Zapisuję...' }) : t('common.save', { defaultValue: 'Zapisz' })}
+                    </button>
+                    <button className="btn-secondary" onClick={() => { setShowVaxForm(false); setSaveVaxError(null) }} style={{ fontSize: '0.875rem', padding: '0.4rem 0.9rem' }}>
+                      {t('common.cancel')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {loadingVaccinations && <div style={{ padding: '2rem', textAlign: 'center', color: '#718096' }}>{t('common.loading', { defaultValue: 'Ładowanie...' })}</div>}
+              {vaccinationsError && <div style={{ padding: '1rem', backgroundColor: '#fff5f5', borderRadius: '6px', border: '1px solid #fed7d7', color: '#c53030' }}>{vaccinationsError}</div>}
+              {!loadingVaccinations && !vaccinationsError && vaccinations.length === 0 && (
+                <div style={{ padding: '2rem', textAlign: 'center', color: '#718096', backgroundColor: '#f7fafc', borderRadius: '6px' }}>
+                  {t('patientDetails.vaccinations.empty', { defaultValue: 'Brak rekordów szczepień.' })}
+                </div>
+              )}
+              {vaccinations.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {vaccinations.map((v) => {
+                    const isOverdue = v.next_due_at && new Date(v.next_due_at) < new Date()
+                    const isDueSoon = v.next_due_at && !isOverdue && (new Date(v.next_due_at) - new Date()) < 30 * 24 * 60 * 60 * 1000
+                    return (
+                      <div key={v.id} style={{ padding: '1rem 1.25rem', backgroundColor: '#f7fafc', borderRadius: '8px', border: `1px solid ${isOverdue ? '#fed7d7' : '#e2e8f0'}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                              <span style={{ fontWeight: '600', fontSize: '0.975rem', color: '#2d3748' }}>{v.vaccine_name}</span>
+                              {isOverdue && <span style={{ padding: '0.1rem 0.5rem', backgroundColor: '#fed7d7', color: '#c53030', borderRadius: '999px', fontSize: '0.75rem', fontWeight: '600' }}>{t('patientDetails.vaccinations.overdue', { defaultValue: 'Przeterminowane' })}</span>}
+                              {isDueSoon && <span style={{ padding: '0.1rem 0.5rem', backgroundColor: '#fef3c7', color: '#92400e', borderRadius: '999px', fontSize: '0.75rem', fontWeight: '600' }}>{t('patientDetails.vaccinations.dueSoon', { defaultValue: 'Wkrótce' })}</span>}
+                            </div>
+                            <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8125rem', color: '#718096', flexWrap: 'wrap' }}>
+                              <span>📅 {t('patientDetails.vaccinations.given', { defaultValue: 'Podano' })}: <strong style={{ color: '#2d3748' }}>{formatDateOnly(v.administered_at)}</strong></span>
+                              {v.next_due_at && <span>🔁 {t('patientDetails.vaccinations.nextDue', { defaultValue: 'Kolejna' })}: <strong style={{ color: isOverdue ? '#c53030' : '#2d3748' }}>{formatDateOnly(v.next_due_at)}</strong></span>}
+                              {v.batch_number && <span>{t('patientDetails.vaccinations.batch', { defaultValue: 'Seria' })}: {v.batch_number}</span>}
+                              {v.administered_by_name && <span>{t('patientDetails.vaccinations.by', { defaultValue: 'Przez' })}: {v.administered_by_name}</span>}
+                            </div>
+                            {v.notes && <div style={{ marginTop: '0.375rem', fontSize: '0.8125rem', color: '#4a5568' }}>{v.notes}</div>}
+                          </div>
+                          {canWrite && (
+                            <button onClick={() => handleDeleteVaccination(v.id)} style={{ background: 'none', border: 'none', color: '#a0aec0', cursor: 'pointer', fontSize: '1.1rem', padding: '0.25rem', lineHeight: 1, marginLeft: '0.5rem' }} title={t('common.delete')}>×</button>
+                          )}
+                        </div>
                       </div>
                     )
                   })}

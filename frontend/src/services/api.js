@@ -142,6 +142,12 @@ export const patientHistoryAPI = {
     api.post(`/patients/${patientId}/history/`, data),
 };
 
+export const vaccinationsAPI = {
+  list: (patientId) => api.get(`/patients/${patientId}/vaccinations/`),
+  create: (patientId, data) => api.post(`/patients/${patientId}/vaccinations/`, data),
+  delete: (id) => api.delete(`/vaccinations/${id}/`),
+}
+
 export const patientAISummaryAPI = {
   get: (patientId) => api.get(`/patients/${patientId}/ai-summary/`),
 };
