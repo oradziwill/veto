@@ -58,7 +58,6 @@ const AIAssistantTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>{t("aiAssistant.title")}</h2>
         <div className="ai-info">
           <span className="ai-status">{t("aiAssistant.online")}</span>
         </div>

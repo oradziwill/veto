@@ -53,7 +53,6 @@ const InventoryTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>{t('inventory.title')}</h2>
         <button className="btn-primary" onClick={() => setIsAddOpen(true)}>
           {t('inventory.addItem')}
         </button>

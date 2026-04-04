@@ -1,222 +1,231 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
-import { appointmentsAPI } from '../../services/api'
+import { appointmentsAPI, vetsAPI } from '../../services/api'
 import AddAppointmentModal from '../modals/AddAppointmentModal'
-import './Tabs.css'
+import VisitDetailsModal from '../modals/VisitDetailsModal'
+import './VisitsTab.css'
 
-// Placeholder data
-const placeholderAppointments = [
-  {
-    id: 1,
-    patient: { name: 'Max', owner: { first_name: 'John', last_name: 'Doe' } },
-    reason: 'Routine Checkup',
-    starts_at: new Date(new Date().setHours(10, 0, 0, 0)).toISOString(),
-    status: 'scheduled',
-  },
-  {
-    id: 2,
-    patient: { name: 'Luna', owner: { first_name: 'Jane', last_name: 'Smith' } },
-    reason: 'Vaccination',
-    starts_at: new Date(new Date().setHours(11, 30, 0, 0)).toISOString(),
-    status: 'scheduled',
-  },
-  {
-    id: 3,
-    patient: { name: 'Bunny', owner: { first_name: 'Mike', last_name: 'Johnson' } },
-    reason: 'Follow-up',
-    starts_at: new Date(new Date().setHours(14, 0, 0, 0)).toISOString(),
-    status: 'completed',
-  },
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 8) // 8–19
+
+const VET_COLORS = [
+  '#16a34a', '#2563eb', '#d97706', '#8b5cf6',
+  '#ef4444', '#0d9488', '#ec4899', '#f97316',
 ]
 
-const VisitsTab = () => {
+const toDateStr = (d) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const VisitsTab = ({ userRole = null, currentUserId = null }) => {
   const { t, i18n } = useTranslation()
-  const [appointments, setAppointments] = useState(placeholderAppointments)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [filter, setFilter] = useState('today')
-  const [useAPI, setUseAPI] = useState(true)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
 
-  const getDateRangeParams = (filterType) => {
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const toYYYYMMDD = (d) => {
-      const y = d.getFullYear()
-      const m = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      return `${y}-${m}-${day}`
-    }
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [appointments, setAppointments] = useState([])
+  const [vets, setVets] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState(null)
 
-    switch (filterType) {
-      case 'today':
-        return { date: toYYYYMMDD(today) }
-      case 'week':
-        const weekEnd = new Date(today)
-        weekEnd.setDate(weekEnd.getDate() + 6)
-        return {
-          date_from: toYYYYMMDD(today),
-          date_to: toYYYYMMDD(weekEnd),
-        }
-      case 'month':
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-        return {
-          date_from: toYYYYMMDD(monthStart),
-          date_to: toYYYYMMDD(monthEnd),
-        }
-      default:
-        return {}
-    }
-  }
+  const isAdmin = userRole === 'admin'
 
-  const fetchAppointments = async (filterType) => {
-    if (!useAPI) {
-      setAppointments(placeholderAppointments)
-      return
-    }
+  const dateLabel = selectedDate.toLocaleDateString(locale, {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  })
 
+  const fetchData = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      setError(null)
-      const params = getDateRangeParams(filterType)
-      const response = await appointmentsAPI.list(params)
-      setAppointments(response.data.results || response.data || [])
-    } catch (err) {
-      // Fall back to placeholder data on error
-      setUseAPI(false)
-      setAppointments(placeholderAppointments)
-      console.error('Error fetching appointments, using placeholder data:', err)
+      const dateStr = toDateStr(selectedDate)
+      const params = { date: dateStr }
+      if (!isAdmin && currentUserId) params.vet = currentUserId
+
+      const [aptsRes, vetsRes] = await Promise.all([
+        appointmentsAPI.list(params),
+        isAdmin ? vetsAPI.list() : Promise.resolve(null),
+      ])
+
+      const apts = aptsRes.data.results || aptsRes.data || []
+      setAppointments(apts)
+
+      if (isAdmin && vetsRes) {
+        setVets(vetsRes.data.results || vetsRes.data || [])
+      }
+    } catch {
+      setAppointments([])
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchAppointments(filter)
-  }, [filter])
+  useEffect(() => { fetchData() }, [selectedDate, userRole, currentUserId])
 
-  const formatDateTime = (dateString) => {
-    const date = new Date(dateString)
-    const locale = i18n.language === 'pl' ? 'pl-PL' : 'en-US'
-    return {
-      time: date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }),
-      date: date.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' }),
-    }
+  const changeDate = (delta) => {
+    const d = new Date(selectedDate)
+    d.setDate(d.getDate() + delta)
+    setSelectedDate(d)
   }
 
-  const getStatusClass = (status) => {
-    const statusMap = {
-      scheduled: 'scheduled',
-      confirmed: 'scheduled',
-      checked_in: 'scheduled',
-      completed: 'completed',
-      cancelled: 'out-of-stock',
-      no_show: 'out-of-stock',
+  const aptsForHour = (hour, vetId = null) =>
+    appointments.filter(apt => {
+      const s = new Date(apt.starts_at)
+      const e = apt.ends_at ? new Date(apt.ends_at) : new Date(s.getTime() + 30 * 60 * 1000)
+      const hs = new Date(selectedDate); hs.setHours(hour, 0, 0, 0)
+      const he = new Date(hs); he.setHours(hour + 1, 0, 0, 0)
+      const inHour = s < he && e > hs
+      if (!inHour) return false
+      if (vetId !== null) return (apt.vet?.id ?? apt.vet) === vetId
+      return true
+    })
+
+  const cleanReason = (r) => (r || t('visits.visit')).replace('Unknown - ', '')
+
+  const formatTime = (ds) =>
+    new Date(ds).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
+
+  const getStatusColor = (status) => {
+    if (status === 'completed') return '#15803d'
+    if (status === 'cancelled' || status === 'no_show') return '#dc2626'
+    return null // use vet color
+  }
+
+  // For doctor view: render a single timeline column
+  const renderSingleColumn = () => (
+    <div className="visits-grid visits-grid--single">
+      <div className="vt-gutter" />
+      <div className="vt-col-header vt-col-header--mine">{t('visits.myVisits')}</div>
+
+      {HOURS.map(hour => {
+        const apts = aptsForHour(hour)
+        return (
+          <Fragment key={hour}>
+            <div className="vt-hour-label">{hour}:00</div>
+            <div className="vt-cell">
+              {apts.map(apt => (
+                <div
+                  key={apt.id}
+                  className="vt-event"
+                  style={{ background: getStatusColor(apt.status) || VET_COLORS[0] }}
+                  onClick={() => setSelectedAppointment(apt)}
+                >
+                  <span className="vt-event-time">{formatTime(apt.starts_at)}</span>
+                  <span className="vt-event-title">{cleanReason(apt.reason)}</span>
+                  {apt.patient?.name && (
+                    <span className="vt-event-patient">{apt.patient.name}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Fragment>
+        )
+      })}
+    </div>
+  )
+
+  // For admin view: one column per vet
+  const renderAdminColumns = () => {
+    // Only show vets that have appointments today, plus all vets if none
+    const activeVetIds = new Set(appointments.map(a => a.vet?.id ?? a.vet))
+    const displayVets = vets.length > 0
+      ? (activeVetIds.size > 0 ? vets.filter(v => activeVetIds.has(v.id)) : vets)
+      : []
+
+    if (displayVets.length === 0 && !loading) {
+      return <div className="vt-empty">{t('visits.noVisitsFound')}</div>
     }
-    return statusMap[status] || 'scheduled'
+
+    return (
+      <div
+        className="visits-grid"
+        style={{ gridTemplateColumns: `56px repeat(${displayVets.length}, minmax(160px, 1fr))` }}
+      >
+        {/* header row */}
+        <div className="vt-gutter" />
+        {displayVets.map((vet, i) => (
+          <div
+            key={vet.id}
+            className="vt-col-header"
+            style={{ borderBottom: `3px solid ${VET_COLORS[i % VET_COLORS.length]}` }}
+          >
+            <span
+              className="vt-col-dot"
+              style={{ background: VET_COLORS[i % VET_COLORS.length] }}
+            />
+            {vet.first_name} {vet.last_name}
+          </div>
+        ))}
+
+        {/* hour rows */}
+        {HOURS.map(hour => (
+          <Fragment key={hour}>
+            <div className="vt-hour-label">{hour}:00</div>
+            {displayVets.map((vet, i) => {
+              const apts = aptsForHour(hour, vet.id)
+              return (
+                <div key={vet.id} className="vt-cell">
+                  {apts.map(apt => (
+                    <div
+                      key={apt.id}
+                      className="vt-event"
+                      style={{ background: getStatusColor(apt.status) || VET_COLORS[i % VET_COLORS.length] }}
+                      onClick={() => setSelectedAppointment(apt)}
+                    >
+                      <span className="vt-event-time">{formatTime(apt.starts_at)}</span>
+                      <span className="vt-event-title">{cleanReason(apt.reason)}</span>
+                      {apt.patient?.name && (
+                        <span className="vt-event-patient">{apt.patient.name}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </Fragment>
+        ))}
+      </div>
+    )
   }
 
   return (
-    <div className="tab-container">
-      <div className="tab-header">
-        <h2>{t('visits.title')}</h2>
-        <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+    <div className="vt-root">
+      {/* Toolbar */}
+      <div className="vt-toolbar">
+        <div className="vt-nav">
+          <button className="vt-nav-btn" onClick={() => changeDate(-1)}>‹</button>
+          <button
+            className="vt-date-label"
+            onClick={() => setSelectedDate(new Date())}
+          >
+            {dateLabel}
+          </button>
+          <button className="vt-nav-btn" onClick={() => changeDate(1)}>›</button>
+        </div>
+        <button className="vt-add-btn" onClick={() => setIsAddModalOpen(true)}>
           {t('visits.newVisit')}
         </button>
       </div>
 
-      <div className="tab-content-wrapper">
-        <div className="visits-filters">
-          <button
-            className={`filter-btn ${filter === 'today' ? 'active' : ''}`}
-            onClick={() => setFilter('today')}
-          >
-            {t('visits.today')}
-          </button>
-          <button
-            className={`filter-btn ${filter === 'week' ? 'active' : ''}`}
-            onClick={() => setFilter('week')}
-          >
-            {t('visits.thisWeek')}
-          </button>
-          <button
-            className={`filter-btn ${filter === 'month' ? 'active' : ''}`}
-            onClick={() => setFilter('month')}
-          >
-            {t('visits.thisMonth')}
-          </button>
-          <button
-            className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            {t('visits.all')}
-          </button>
-        </div>
+      {loading && <div className="vt-loading">{t('visits.loadingVisits')}</div>}
 
-        {loading && <div className="loading-message">{t('visits.loadingVisits')}</div>}
-
-        <div className="visits-list">
-          {appointments.length === 0 ? (
-            <div className="empty-state">{t('visits.noVisitsFound')}</div>
-          ) : (
-            appointments.map((appointment) => {
-                const { time, date } = formatDateTime(appointment.starts_at)
-                return (
-                  <div key={appointment.id} className="visit-card">
-                    <div className="visit-time">
-                      <span className="time">{time}</span>
-                      <span className="date">{date}</span>
-                    </div>
-                    <div className="visit-info">
-                      <h3>
-                        {(() => {
-                          // Remove "Unknown -" prefix from reason if present
-                          let displayReason = appointment.reason || t('visits.visit');
-                          if (displayReason.startsWith('Unknown - ')) {
-                            displayReason = displayReason.replace('Unknown - ', '');
-                          }
-                          return displayReason;
-                        })()}
-                      </h3>
-                      <p className="visit-owner">
-                        {t('visits.owner')} {appointment.patient?.owner
-                          ? `${appointment.patient.owner.first_name || ''} ${appointment.patient.owner.last_name || ''}`.trim() || t('common.unknown')
-                          : t('common.unknown')}
-                      </p>
-                      <p className="visit-type">{t('visits.type')} {(() => {
-                        let reason = appointment.reason || t('visits.general');
-                        // Remove "Unknown -" prefix if present
-                        if (reason.startsWith('Unknown - ')) {
-                          reason = reason.replace('Unknown - ', '');
-                        }
-                        // Extract just the reason part if it contains "Pet Name - Reason" format
-                        if (reason.includes(' - ')) {
-                          const parts = reason.split(' - ');
-                          return parts.length > 1 ? parts[1] : parts[0];
-                        }
-                        return reason;
-                      })()}</p>
-                    </div>
-                    <div className="visit-status">
-                      <span className={`status-badge ${getStatusClass(appointment.status)}`}>
-                        {appointment.status ? (t(`visits.${appointment.status}`) || appointment.status) : t('visits.scheduled')}
-                      </span>
-                    </div>
-                  </div>
-              )
-            })
-          )}
+      {!loading && (
+        <div className="vt-scroll">
+          {isAdmin ? renderAdminColumns() : renderSingleColumn()}
         </div>
-      </div>
+      )}
 
       <AddAppointmentModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={() => {
-          fetchAppointments(filter)
-          setUseAPI(true)
-        }}
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSuccess={() => { setIsAddModalOpen(false); fetchData() }}
+      />
+
+      <VisitDetailsModal
+        isOpen={!!selectedAppointment}
+        onClose={() => setSelectedAppointment(null)}
+        appointment={selectedAppointment}
       />
     </div>
   )

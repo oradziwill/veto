@@ -106,7 +106,6 @@ const WaitingRoomTab = ({ userRole, onCallPatient, hasActiveVisit = false }) => 
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>{t('waitingRoom.title')}</h2>
         <button className="btn-primary" onClick={() => setIsAddModalOpen(true)}>
           {t('waitingRoom.addPatient')}
         </button>

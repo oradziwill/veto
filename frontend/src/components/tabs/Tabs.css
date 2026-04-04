@@ -207,6 +207,81 @@
   border-top: 1px solid #e2e8f0;
 }
 
+/* Patients List */
+.patients-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: white;
+}
+
+.patient-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr 1.5fr 1.5fr 5rem 1.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+  width: 100%;
+}
+
+.patient-row:last-child {
+  border-bottom: none;
+}
+
+.patient-row:hover {
+  background: #f8fafc;
+}
+
+.patient-row-emoji {
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.patient-row-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patient-row-species {
+  font-size: 0.85rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patient-row-owner {
+  font-size: 0.85rem;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.patient-row-age {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  text-align: right;
+}
+
+.patient-row-arrow {
+  font-size: 1.1rem;
+  color: #cbd5e1;
+  text-align: right;
+}
+
 /* Visits Tab */
 .visits-filters {
   display: flex;

@@ -617,7 +617,6 @@ const SchedulerTab = () => {
   return (
     <div className="tab-container">
       <div className="tab-header">
-        <h2>{t('scheduler.title')}</h2>
       </div>
 
       <div className="tab-content-wrapper">
