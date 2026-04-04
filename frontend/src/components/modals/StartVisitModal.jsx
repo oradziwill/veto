@@ -496,14 +496,22 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         }
       }
 
-      // If services are added, create a draft invoice
-      if (selectedServices.length > 0 && selectedOwner?.id) {
-        const invoiceLines = selectedServices.map(s => ({
-          description: s.name,
-          quantity: 1,
-          unit_price: String(s.price),
-          service: s.id,
-        }))
+      // If services or medications are selected, create a draft invoice
+      if ((selectedServices.length > 0 || selectedMedications.length > 0) && selectedOwner?.id) {
+        const invoiceLines = [
+          ...selectedServices.map(s => ({
+            description: s.name,
+            quantity: 1,
+            unit_price: String(s.price),
+            service: s.id,
+          })),
+          ...selectedMedications.map(m => ({
+            description: m.name,
+            quantity: m.quantity,
+            unit_price: '0.00',
+            inventory_item: m.id,
+          })),
+        ]
         try {
           await invoicesAPI.create({
             client: selectedOwner.id,
@@ -882,22 +890,34 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
                 </div>
                 {selectedMedications.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                    {selectedMedications.map((m, index) => (
-                      <div
-                        key={`${m.id}-${index}`}
-                        style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          padding: '0.5rem 0.75rem', backgroundColor: '#fef3c7', borderRadius: '4px', fontSize: '0.95rem',
-                        }}
-                      >
-                        <span>{m.name} × {m.quantity} {m.unit}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeMedication(index)}
-                          style={{ background: 'none', border: 'none', color: '#c53030', cursor: 'pointer', padding: '0.25rem', fontSize: '1.1rem', lineHeight: 1 }}
-                        >×</button>
-                      </div>
-                    ))}
+                    {selectedMedications.map((m, index) => {
+                      const item = medicationItems.find(i => i.id === m.id)
+                      const overStock = item && m.quantity > item.stock_on_hand
+                      return (
+                        <div
+                          key={`${m.id}-${index}`}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '0.5rem 0.75rem', backgroundColor: overStock ? '#fff5f5' : '#fef3c7', borderRadius: '4px', fontSize: '0.95rem',
+                            border: overStock ? '1px solid #fc8181' : 'none',
+                          }}
+                        >
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {m.name} × {m.quantity} {m.unit}
+                            {overStock && (
+                              <span style={{ color: '#c53030', fontSize: '0.8rem', fontWeight: 600 }}>
+                                ⚠ {t('startVisit.inventoryWarning', { defaultValue: 'stock' })}: {item.stock_on_hand}
+                              </span>
+                            )}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeMedication(index)}
+                            style={{ background: 'none', border: 'none', color: '#c53030', cursor: 'pointer', padding: '0.25rem', fontSize: '1.1rem', lineHeight: 1 }}
+                          >×</button>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </>
