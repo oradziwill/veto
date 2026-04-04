@@ -356,6 +356,23 @@ const DoctorsView = () => {
         </main>
       </div>
 
+      {/* ── Mobile bottom nav ── */}
+      <nav className="mobile-bottom-nav">
+        {[...staticTabs, ...adminTabs, ...dynamicTabs].slice(0, 5).map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              className={`mobile-nav-btn${activeTab === tab.id ? " active" : ""}`}
+              onClick={() => handleTabChange(tab.id)}
+            >
+              <Icon size={20} strokeWidth={1.75} />
+              <span className="mobile-nav-label">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
       <LoginModal
         isOpen={showLoginModal}
         isRequired={!isAuthenticated}

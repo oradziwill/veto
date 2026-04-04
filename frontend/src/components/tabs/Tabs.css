@@ -762,3 +762,21 @@
   color: #a0aec0;
   font-style: italic;
 }
+
+
+@media (max-width: 640px) {
+  .patient-row {
+    grid-template-columns: 2rem 1fr 3rem 1.5rem;
+  }
+  .patient-row-species,
+  .patient-row-owner {
+    display: none;
+  }
+  .patient-row-age {
+    font-size: 0.75rem;
+  }
+  .tab-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
