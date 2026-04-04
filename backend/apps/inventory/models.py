@@ -19,6 +19,8 @@ class InventoryItem(models.Model):
 
     name = models.CharField(max_length=255)
     sku = models.CharField(max_length=64)
+    # EAN/GTIN-style identifier from packaging (wholesale); digits only, 8–32 chars when set.
+    barcode = models.CharField(max_length=32, blank=True, default="")
 
     category = models.CharField(max_length=20, choices=Category.choices, default=Category.OTHER)
     unit = models.CharField(max_length=50)
@@ -45,10 +47,16 @@ class InventoryItem(models.Model):
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(fields=["clinic", "sku"], name="uniq_inventory_sku_per_clinic"),
+            models.UniqueConstraint(
+                fields=["clinic", "barcode"],
+                condition=~models.Q(barcode=""),
+                name="uniq_inventory_barcode_per_clinic_when_set",
+            ),
         ]
         indexes = [
             models.Index(fields=["clinic", "name"]),
             models.Index(fields=["clinic", "sku"]),
+            models.Index(fields=["clinic", "barcode"], name="inventory_inv_clinic__idx"),
             models.Index(fields=["clinic", "category"]),
             models.Index(fields=["clinic", "stock_on_hand"]),
         ]
