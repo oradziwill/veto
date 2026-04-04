@@ -51,5 +51,6 @@ urlpatterns = [
     path("api/", include("apps.consents.urls")),
     path("api/", include("apps.audit.urls")),
     path("api/", include("apps.reports.urls")),
+    path("api/", include("apps.webhooks.urls")),
     path("api/portal/", include("apps.portal.urls")),
 ]
