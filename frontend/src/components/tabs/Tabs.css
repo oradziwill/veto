@@ -62,19 +62,24 @@
 }
 
 .btn-link {
-  background: none;
+  background: #16a34a;
   border: none;
-  color: #48bb78;
+  color: white;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  transition: background 0.12s;
 }
 
 .btn-link:hover {
-  background-color: #f7fafc;
+  background: #15803d;
+}
+
+.btn-link:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* Search Bar */

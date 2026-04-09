@@ -19,24 +19,21 @@
 
 /* ── Root layout ──────────────────────────────────────────── */
 .doctors-view {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: row;
   background: var(--content-bg);
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 /* ── Sidebar ──────────────────────────────────────────────── */
 .doctors-sidebar {
   width: 224px;
-  min-height: 100vh;
+  height: 100vh;
   background: var(--sidebar-bg);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  height: 100vh;
   overflow-y: auto;
 }
 
@@ -322,8 +319,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
   min-width: 0;
+  overflow: hidden;
 }
 
 /* top bar */
@@ -374,6 +372,7 @@
   flex: 1;
   padding: 1.75rem;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .tab-content {
@@ -398,9 +397,14 @@
   }
 
   /* Body fills full width */
+  .doctors-view {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
   .doctors-body {
-    min-height: 100vh;
-    min-height: 100dvh;
+    height: 100%;
+    overflow: hidden;
   }
 
   /* Slimmer topbar */
