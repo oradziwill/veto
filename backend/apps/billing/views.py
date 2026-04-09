@@ -4,10 +4,14 @@ Billing API views.
 
 import calendar
 import csv
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
+from django.conf import settings
 from django.db.models import Count, DecimalField, F, Sum
 from django.db.models.functions import TruncDate, TruncMonth
 from django.http import HttpResponse
@@ -556,3 +560,53 @@ class RevenueSummaryView(APIView):
             )
 
         return Response(payload)
+
+
+class FiscalAgentStatusView(APIView):
+    """
+    GET /api/billing/fiscal/agent-status/
+
+    PoC endpoint for UI: checks if local fiscal agent is reachable.
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic, IsStaffOrVet]
+
+    def get(self, request):
+        base_url = (getattr(settings, "FISCAL_AGENT_BASE_URL", "") or "").strip().rstrip("/")
+        if not base_url:
+            return Response(
+                {
+                    "configured": False,
+                    "online": False,
+                    "detail": "FISCAL_AGENT_BASE_URL is not configured.",
+                },
+                status=503,
+            )
+
+        health_url = f"{base_url}/health"
+        started = time.monotonic()
+        try:
+            req = Request(health_url, headers={"Accept": "application/json"})
+            with urlopen(req, timeout=2) as resp:
+                _ = resp.read()  # we only care about reachability for now
+            latency_ms = int((time.monotonic() - started) * 1000)
+            return Response(
+                {
+                    "configured": True,
+                    "online": True,
+                    "latency_ms": latency_ms,
+                    "agent_base_url": base_url,
+                }
+            )
+        except URLError as e:
+            latency_ms = int((time.monotonic() - started) * 1000)
+            return Response(
+                {
+                    "configured": True,
+                    "online": False,
+                    "latency_ms": latency_ms,
+                    "agent_base_url": base_url,
+                    "detail": str(getattr(e, "reason", e)),
+                },
+                status=503,
+            )

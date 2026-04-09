@@ -108,6 +108,10 @@ INSTALLED_APPS = [
     "behave_django",
 ]
 
+# Local hardware bridge agents (PoC)
+# Example: http://127.0.0.1:5190 (ElzabBridge health endpoint at /health)
+FISCAL_AGENT_BASE_URL = (os.getenv("FISCAL_AGENT_BASE_URL") or "").strip()
+
 AUTH_USER_MODEL = "accounts.User"
 
 

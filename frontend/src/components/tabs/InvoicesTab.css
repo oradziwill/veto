@@ -23,6 +23,64 @@
   min-width: 120px;
 }
 
+.inv-agent {
+  min-width: 220px;
+}
+
+.inv-agent-status {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #475569;
+  line-height: 1.2;
+}
+
+.inv-agent-status.ok { color: #15803d; }
+.inv-agent-status.bad { color: #dc2626; }
+
+.inv-agent-actions {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.inv-agent-btn {
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  cursor: pointer;
+  transition: background 0.12s;
+  text-align: left;
+}
+
+.inv-agent-btn:hover:not(:disabled) {
+  background: #eef2ff;
+}
+
+.inv-agent-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.inv-agent-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-width: 320px;
+}
+
+.inv-agent-detail {
+  white-space: normal;
+  word-break: break-word;
+}
+
 .inv-stat-val {
   font-size: 1.75rem;
   font-weight: 700;

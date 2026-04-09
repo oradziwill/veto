@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { invoicesAPI } from '../../services/api'
+import { fiscalAPI, invoicesAPI } from '../../services/api'
 import CreateInvoiceModal from '../modals/CreateInvoiceModal'
 import './InvoicesTab.css'
 
@@ -29,6 +29,7 @@ const InvoicesTab = () => {
   const [statusFilter, setStatusFilter] = useState('')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [ksefSubmitting, setKsefSubmitting] = useState({})
+  const [agentCheck, setAgentCheck] = useState({ loading: false, online: null, latencyMs: null, detail: null })
 
   const fetchInvoices = async () => {
     setLoading(true)
@@ -46,6 +47,29 @@ const InvoicesTab = () => {
   }
 
   useEffect(() => { fetchInvoices() }, [statusFilter])
+
+  const checkFiscalAgent = async () => {
+    setAgentCheck({ loading: true, online: null, latencyMs: null, detail: null })
+    try {
+      const res = await fiscalAPI.agentStatus()
+      setAgentCheck({
+        loading: false,
+        online: !!res.data?.online,
+        latencyMs: res.data?.latency_ms ?? null,
+        detail: res.data?.detail ?? null,
+      })
+    } catch (err) {
+      const data = err.response?.data
+      setAgentCheck({
+        loading: false,
+        online: false,
+        latencyMs: data?.latency_ms ?? null,
+        detail: data?.detail || err.message || 'Error',
+      })
+    }
+  }
+
+  useEffect(() => { checkFiscalAgent() }, [])
 
   const handleSubmitKsef = async (invoiceId) => {
     setKsefSubmitting(prev => ({ ...prev, [invoiceId]: true }))
@@ -80,6 +104,29 @@ const InvoicesTab = () => {
         <div className="inv-stat">
           <span className="inv-stat-val amber">{outstanding}</span>
           <span className="inv-stat-lbl">{t('billing.outstanding')}</span>
+        </div>
+        <div className="inv-stat inv-agent">
+          <span className={`inv-agent-status ${agentCheck.online === true ? 'ok' : agentCheck.online === false ? 'bad' : ''}`}>
+            {agentCheck.loading
+              ? '…'
+              : agentCheck.online === true
+                ? 'Online'
+                : agentCheck.online === false
+                  ? 'Offline'
+                  : '—'}
+          </span>
+          <span className="inv-stat-lbl">Kasa fiskalna (agent)</span>
+          <div className="inv-agent-actions">
+            <button className="inv-agent-btn" onClick={checkFiscalAgent} disabled={agentCheck.loading}>
+              {agentCheck.loading ? 'Testuję…' : 'Test połączenia'}
+            </button>
+            {(agentCheck.latencyMs !== null || agentCheck.detail) && (
+              <div className="inv-agent-meta">
+                {agentCheck.latencyMs !== null && <span>{agentCheck.latencyMs}ms</span>}
+                {agentCheck.detail && <span className="inv-agent-detail">{agentCheck.detail}</span>}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
