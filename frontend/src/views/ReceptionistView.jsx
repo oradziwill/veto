@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import {
+  CalendarDays, Users, PawPrint, ClipboardList, Receipt,
+} from "lucide-react";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
 import CalendarTab from "../components/tabs/CalendarTab";
@@ -21,6 +24,7 @@ const ReceptionistView = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "calendar";
+
   const [isAuthenticated, setIsAuthenticated] = useState(
     !!localStorage.getItem("access_token")
   );
@@ -34,34 +38,22 @@ const ReceptionistView = () => {
   const userMenuRef = useRef(null);
 
   const fetchCurrentUser = () => {
-    authAPI
-      .me()
-      .then((res) => {
-        const { username, first_name, last_name, role } = res.data;
-        if (role === "doctor" || role === "admin") {
-          navigate("/doctors", { replace: true });
-          return;
-        }
-        const displayName =
-          first_name && last_name ? `${first_name} ${last_name}` : username;
-        setCurrentUser(displayName);
-      })
-      .catch(() => {});
-  };
-
-  const fetchVets = () => {
-    vetsAPI
-      .list()
-      .then((res) => {
-        setVets(res.data.results || res.data || []);
-      })
-      .catch(() => {});
+    authAPI.me().then((res) => {
+      const { username, first_name, last_name, role } = res.data;
+      if (role === "doctor" || role === "admin") {
+        navigate("/doctors", { replace: true });
+        return;
+      }
+      const displayName =
+        first_name && last_name ? `${first_name} ${last_name}` : username;
+      setCurrentUser(displayName);
+    }).catch(() => {});
   };
 
   useEffect(() => {
     if (localStorage.getItem("access_token")) {
       fetchCurrentUser();
-      fetchVets();
+      vetsAPI.list().then((res) => setVets(res.data.results || res.data || [])).catch(() => {});
     }
   }, []);
 
@@ -95,25 +87,20 @@ const ReceptionistView = () => {
     setShowUserMenu(false);
   };
 
-  const handleTabChange = (tabId) => {
-    setSearchParams({ tab: tabId });
-  };
+  const handleTabChange = (tabId) => setSearchParams({ tab: tabId });
 
   const avatarInitials = currentUser
-    ? currentUser
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
+    ? currentUser.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
     : null;
 
+  const currentLang = i18n.language?.slice(0, 2) || "pl";
+
   const tabs = [
-    { id: "calendar", label: t("tabs.calendar"), icon: "📅" },
-    { id: "waiting-room", label: t("tabs.waitingRoom"), icon: "🏥" },
-    { id: "patients", label: t("tabs.patients"), icon: "🐾" },
-    { id: "visits", label: t("tabs.visits"), icon: "📋" },
-    { id: "billing", label: t("tabs.billing"), icon: "💳" },
+    { id: "calendar",     label: t("tabs.calendar"),     icon: CalendarDays },
+    { id: "waiting-room", label: t("tabs.waitingRoom"),  icon: Users },
+    { id: "patients",     label: t("tabs.patients"),     icon: PawPrint },
+    { id: "visits",       label: t("tabs.visits"),       icon: ClipboardList },
+    { id: "billing",      label: t("tabs.billing"),      icon: Receipt },
   ];
 
   const renderTabContent = () => {
@@ -147,172 +134,114 @@ const ReceptionistView = () => {
     }
   };
 
-  const currentLang = i18n.language?.slice(0, 2) || "pl";
-
   return (
     <div className="doctors-view">
-      <header className="doctors-header">
-        <div className="header-content">
-          <h1 className="header-title">{t("header.title")}</h1>
-          <div className="header-actions">
-            <div
-              ref={userMenuRef}
-              className="header-user"
-              style={{ position: "relative" }}
-            >
-              <button
-                onClick={() => setShowUserMenu((prev) => !prev)}
-                className="user-avatar"
-                title={currentUser || ""}
-                style={{
-                  cursor: "pointer",
-                  border: "2px solid rgba(255,255,255,0.7)",
-                  background: "rgba(255,255,255,0.15)",
-                  color: "white",
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: "700",
-                  fontSize: "0.9rem",
-                  letterSpacing: "0.05em",
-                }}
-              >
-                {avatarInitials || "…"}
-              </button>
-
-              {showUserMenu && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "calc(100% + 10px)",
-                    right: 0,
-                    background: "white",
-                    borderRadius: "12px",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                    border: "1px solid #e2e8f0",
-                    minWidth: "220px",
-                    zIndex: 1000,
-                    overflow: "hidden",
-                  }}
-                >
-                  {currentUser && (
-                    <div
-                      style={{
-                        padding: "1rem",
-                        borderBottom: "1px solid #e2e8f0",
-                        background: "#f7fafc",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: "600",
-                          color: "#2d3748",
-                          fontSize: "0.95rem",
-                        }}
-                      >
-                        {currentUser}
-                      </div>
-                    </div>
-                  )}
-
-                  <div
-                    style={{
-                      padding: "0.75rem 1rem",
-                      borderBottom: "1px solid #e2e8f0",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        fontWeight: "600",
-                        color: "#718096",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                        marginBottom: "0.5rem",
-                      }}
-                    >
-                      {t("header.language")}
-                    </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      {LANGUAGES.map((lang) => {
-                        const active = currentLang === lang.code;
-                        return (
-                          <button
-                            key={lang.code}
-                            onClick={() => {
-                              i18n.changeLanguage(lang.code);
-                              localStorage.setItem("veto-language", lang.code);
-                            }}
-                            style={{
-                              flex: 1,
-                              padding: "0.4rem 0.5rem",
-                              border: `2px solid ${active ? "#48bb78" : "#e2e8f0"}`,
-                              borderRadius: "8px",
-                              background: active ? "#f0fff4" : "white",
-                              cursor: "pointer",
-                              fontSize: "0.85rem",
-                              fontWeight: active ? "600" : "400",
-                              color: active ? "#276749" : "#4a5568",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: "0.3rem",
-                            }}
-                          >
-                            <span>{lang.flag}</span>
-                            <span>{lang.code.toUpperCase()}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: "none",
-                      background: "transparent",
-                      cursor: "pointer",
-                      color: "#e53e3e",
-                      fontWeight: "600",
-                      textAlign: "left",
-                      fontSize: "0.9rem",
-                    }}
-                  >
-                    {t("header.logout")}
-                  </button>
-                </div>
-              )}
-            </div>
+      {/* ── Sidebar ── */}
+      <aside className="doctors-sidebar">
+        {/* Logo */}
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-mark">🐾</div>
+          <div>
+            <div className="sidebar-logo-text">Veto</div>
+            <div className="sidebar-logo-sub">Reception</div>
           </div>
         </div>
-      </header>
 
-      <div className="doctors-content">
+        {/* Navigation */}
         <nav className="doctors-nav">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              className={`nav-tab ${activeTab === tab.id ? "active" : ""}`}
-              onClick={() => handleTabChange(tab.id)}
-            >
-              <span className="tab-icon">{tab.icon}</span>
-              <span className="tab-label">{tab.label}</span>
-            </button>
-          ))}
+          <div className="sidebar-section-label">{t("header.navSection")}</div>
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                className={`nav-tab${activeTab === tab.id ? " active" : ""}`}
+                onClick={() => handleTabChange(tab.id)}
+              >
+                <Icon size={17} className="tab-icon" strokeWidth={1.75} />
+                <span className="tab-label">{tab.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
+        {/* User footer */}
+        <div className="sidebar-footer" ref={userMenuRef} style={{ position: "relative" }}>
+          {showUserMenu && (
+            <div className="sidebar-user-menu">
+              {currentUser && (
+                <div className="user-menu-header">
+                  <div className="user-menu-name">{currentUser}</div>
+                  <div className="user-menu-role">receptionist</div>
+                </div>
+              )}
+              <div className="user-menu-section">
+                <div className="user-menu-lang">
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      className={`lang-btn${currentLang === lang.code ? " active" : ""}`}
+                      onClick={() => {
+                        i18n.changeLanguage(lang.code);
+                        localStorage.setItem("veto-language", lang.code);
+                      }}
+                    >
+                      <span>{lang.flag}</span>
+                      <span>{lang.code.toUpperCase()}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="user-menu-divider" />
+              <button className="user-menu-logout" onClick={handleLogout}>
+                {t("header.logout")}
+              </button>
+            </div>
+          )}
+
+          <button
+            className="sidebar-user-btn"
+            onClick={() => setShowUserMenu((prev) => !prev)}
+          >
+            <div className="sidebar-avatar">{avatarInitials || "…"}</div>
+            <span className="sidebar-user-name">{currentUser || "…"}</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main body ── */}
+      <div className="doctors-body">
+        {/* Top bar */}
+        <div className="doctors-topbar">
+          <span className="topbar-title">
+            {tabs.find((tab) => tab.id === activeTab)?.label || ""}
+          </span>
+        </div>
+
+        {/* Content */}
         <main className="doctors-main">
           <div className="tab-content">
             {isAuthenticated ? renderTabContent() : null}
           </div>
         </main>
       </div>
+
+      {/* ── Mobile bottom nav ── */}
+      <nav className="mobile-bottom-nav">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              className={`mobile-nav-btn${activeTab === tab.id ? " active" : ""}`}
+              onClick={() => handleTabChange(tab.id)}
+            >
+              <Icon size={20} strokeWidth={1.75} />
+              <span className="mobile-nav-label">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
       <LoginModal
         isOpen={showLoginModal}
@@ -323,7 +252,6 @@ const ReceptionistView = () => {
           setShowLoginModal(false);
           setSearchParams({ tab: "calendar" });
           fetchCurrentUser();
-          fetchVets();
         }}
       />
     </div>

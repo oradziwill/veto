@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   PawPrint, ClipboardList, CalendarDays, Users, Package,
-  Bot, BarChart2, Layers, CalendarCog, Stethoscope, Plus,
+  Bot, BarChart2, Layers, CalendarCog, Stethoscope, Plus, Receipt,
 } from "lucide-react";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
@@ -14,6 +14,7 @@ import WaitingRoomTab from "../components/tabs/WaitingRoomTab";
 import ServiceCatalogTab from "../components/tabs/ServiceCatalogTab";
 import OwnerDashboardTab from "../components/tabs/OwnerDashboardTab";
 import SchedulerTab from "../components/tabs/SchedulerTab";
+import InvoicesTab from "../components/tabs/InvoicesTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
 import { authAPI, queueAPI, vetsAPI } from "../services/api";
@@ -126,6 +127,7 @@ const DoctorsView = () => {
 
   const adminTabs = userRole === "admin" ? [
     { id: "owner-dashboard", label: t("tabs.ownerDashboard"), icon: BarChart2 },
+    { id: "billing", label: t("tabs.billing"), icon: Receipt },
     { id: "service-catalog", label: t("tabs.serviceCatalog"), icon: Layers },
     { id: "scheduler", label: t("tabs.scheduler"), icon: CalendarCog },
   ] : [];
@@ -175,6 +177,8 @@ const DoctorsView = () => {
         return <InventoryTab />;
       case "ai-assistant":
         return <AIAssistantTab />;
+      case "billing":
+        return <InvoicesTab />;
       case "service-catalog":
         return <ServiceCatalogTab />;
       case "owner-dashboard":
