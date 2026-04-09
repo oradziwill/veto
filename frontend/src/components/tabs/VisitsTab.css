@@ -6,6 +6,13 @@
   min-height: 0;
 }
 
+@media (max-width: 640px) {
+  .vt-root {
+    height: calc(100vh - 56px - 2rem - 64px - 2px);
+    height: calc(100dvh - 56px - 2rem - 64px - 2px);
+  }
+}
+
 /* ── Toolbar ──────────────────────────────────────────── */
 .vt-toolbar {
   display: flex;
