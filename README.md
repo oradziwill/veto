@@ -35,6 +35,7 @@ Before you begin, ensure you have the following installed:
 - **Python 3.13+**
 - **Node.js 16+** and npm
 - **Git**
+- **.NET SDK 8+** (only if you plan to run local bridge agents under `bridge/`)
 
 ## Installation
 
@@ -181,6 +182,7 @@ veto/
 │   ├── package.json        # Node.js dependencies
 │   └── vite.config.js      # Vite configuration
 │
+├── bridge/                 # Local hardware bridge agents (e.g. fiscal/terminal)
 ├── API_ENDPOINTS.md        # API documentation
 └── README.md              # This file
 ```

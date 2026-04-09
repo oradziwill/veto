@@ -174,6 +174,10 @@ export const invoicesAPI = {
   submitKsef: (id) => api.post(`/billing/invoices/${id}/submit-ksef/`),
 };
 
+export const fiscalAPI = {
+  agentStatus: () => api.get("/billing/fiscal/agent-status/"),
+};
+
 export const schedulerAPI = {
   // Working hours (regular weekly schedule per vet)
   listWorkingHours: (params) => api.get("/schedule/working-hours/", { params }),
