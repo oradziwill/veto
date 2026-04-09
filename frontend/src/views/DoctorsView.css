@@ -23,6 +23,7 @@
   display: flex;
   flex-direction: row;
   background: var(--content-bg);
+  overflow-x: hidden;
 }
 
 /* ── Sidebar ──────────────────────────────────────────────── */
@@ -384,34 +385,99 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
-/* ── Responsive ───────────────────────────────────────────── */
-@media (max-width: 768px) {
+/* ── Mobile (phone) ───────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Stack layout: topbar → content → bottom nav */
   .doctors-view {
     flex-direction: column;
   }
+
+  /* Hide desktop sidebar entirely */
   .doctors-sidebar {
-    width: 100%;
-    min-height: unset;
-    height: auto;
-    position: static;
-  }
-  .doctors-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 0.5rem;
-  }
-  .nav-tab {
-    min-width: 120px;
-    flex-shrink: 0;
-  }
-  .tab-label {
-    display: block;
-  }
-  .sidebar-section-label,
-  .sidebar-footer {
     display: none;
   }
-  .sidebar-logo {
-    padding: 0.875rem 1rem;
+
+  /* Body fills full width */
+  .doctors-body {
+    min-height: 100vh;
+    min-height: 100dvh;
   }
+
+  /* Slimmer topbar */
+  .doctors-topbar {
+    height: 56px;
+    padding: 0 1rem;
+  }
+
+  .topbar-title {
+    font-size: 1.1rem;
+  }
+
+  /* Content area: subtract topbar + bottom nav */
+  .doctors-main {
+    padding: 1rem;
+    padding-bottom: calc(1rem + 64px); /* room for bottom nav */
+    overflow-y: auto;
+  }
+
+  .tab-content {
+    padding: 1rem;
+    border-radius: 10px;
+  }
+
+  /* ── Bottom navigation bar ── */
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+}
+
+/* Hidden on desktop */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--sidebar-bg);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  z-index: 100;
+  padding: 0 0.25rem;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.mobile-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  padding: 0.5rem 0.25rem;
+  border-radius: 8px;
+  transition: color 0.15s;
+  min-width: 0;
+}
+
+.mobile-nav-btn.active {
+  color: #ffffff;
+}
+
+.mobile-nav-btn svg {
+  flex-shrink: 0;
+}
+
+.mobile-nav-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
