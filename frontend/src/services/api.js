@@ -174,6 +174,22 @@ export const invoicesAPI = {
   submitKsef: (id) => api.post(`/billing/invoices/${id}/submit-ksef/`),
 };
 
+export const transcriptionAPI = {
+  // POST /api/transcriptions/ — multipart audio upload, appointmentId optional
+  // Returns completed result (200) when inline processing is on, or job (202) for async
+  transcribe: (audioBlob, filename, appointmentId = null) => {
+    const form = new FormData()
+    form.append("audio", audioBlob, filename || "recording.webm")
+    if (appointmentId) form.append("appointment_id", String(appointmentId))
+    return api.post("/transcriptions/", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 300000, // 5 min — model loading + transcription can be slow
+    })
+  },
+  // GET /api/transcriptions/{jobId}/ — poll for async result
+  pollJob: (jobId) => api.get(`/transcriptions/${jobId}/`),
+};
+
 export const schedulerAPI = {
   // Working hours (regular weekly schedule per vet)
   listWorkingHours: (params) => api.get("/schedule/working-hours/", { params }),

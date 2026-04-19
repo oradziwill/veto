@@ -429,3 +429,6 @@ VISIT_TRANSCRIPTION_INLINE_PROCESSING = (
     if DEBUG
     else os.getenv("VISIT_TRANSCRIPTION_INLINE_PROCESSING", "false").lower() == "true"
 )
+
+# Self-hosted Whisper transcription service
+WHISPER_SERVICE_URL = os.getenv("WHISPER_SERVICE_URL", "http://localhost:9000")

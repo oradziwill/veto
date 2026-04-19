@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from apps.medical.models import ClinicalExam
+from apps.medical.models import ClinicalExam, MedicalRecord, PatientHistoryEntry
 from apps.scheduling.models import VisitTranscriptionJob
 from django.db import transaction
 
@@ -40,6 +40,7 @@ def process_visit_transcription_job(job_id: int) -> None:
         VisitTranscriptionError,
         enforce_strict_summary,
         structure_transcript_with_claude,
+        summarize_visit_for_history,
         transcribe_audio_with_whisper,
     )
 
@@ -72,36 +73,61 @@ def process_visit_transcription_job(job_id: int) -> None:
         logger.exception("VisitTranscriptionJob %s unexpected error", job_id)
         return
 
-    appointment = job.appointment
-    exam, _created = ClinicalExam.objects.get_or_create(
-        clinic_id=job.clinic_id,
-        appointment=appointment,
-        defaults={"created_by": job.created_by},
-    )
-    exam.transcript = transcript
-    exam.ai_notes_raw = {
-        **structured,
-        "_strict_mode": True,
-        "_needs_review": needs_review,
-        "_unknown_fields": [k for k, v in structured.items() if v == SUMMARY_UNKNOWN],
-    }
-    exam.initial_notes = structured.get("anamnesis", "")
-    exam.clinical_examination = structured.get("clinical_findings", "")
-    exam.initial_diagnosis = structured.get("diagnosis", "")
-    exam.additional_notes = structured.get("treatment_plan", "")
-    exam.owner_instructions = structured.get("owner_instructions", "")
-    exam.save(
-        update_fields=[
-            "transcript",
-            "ai_notes_raw",
-            "initial_notes",
-            "clinical_examination",
-            "initial_diagnosis",
-            "additional_notes",
-            "owner_instructions",
-            "updated_at",
-        ]
-    )
+    # Update ClinicalExam only when an appointment is linked
+    if job.appointment_id:
+        appointment = job.appointment
+        exam, _created = ClinicalExam.objects.get_or_create(
+            clinic_id=job.clinic_id,
+            appointment=appointment,
+            defaults={"created_by": job.created_by},
+        )
+        exam.transcript = transcript
+        exam.ai_notes_raw = {
+            **structured,
+            "_strict_mode": True,
+            "_needs_review": needs_review,
+            "_unknown_fields": [k for k, v in structured.items() if v == SUMMARY_UNKNOWN],
+        }
+        exam.initial_notes = structured.get("anamnesis", "")
+        exam.clinical_examination = structured.get("clinical_findings", "")
+        exam.initial_diagnosis = structured.get("diagnosis", "")
+        exam.additional_notes = structured.get("treatment_plan", "")
+        exam.owner_instructions = structured.get("owner_instructions", "")
+        exam.save(
+            update_fields=[
+                "transcript",
+                "ai_notes_raw",
+                "initial_notes",
+                "clinical_examination",
+                "initial_diagnosis",
+                "additional_notes",
+                "owner_instructions",
+                "updated_at",
+            ]
+        )
+
+        try:
+            patient = appointment.patient
+            medical_record, _ = MedicalRecord.objects.get_or_create(
+                clinic_id=job.clinic_id,
+                patient=patient,
+                defaults={"created_by": job.created_by},
+            )
+            if not PatientHistoryEntry.objects.filter(
+                clinic_id=job.clinic_id,
+                appointment=appointment,
+            ).exists():
+                summary_note = summarize_visit_for_history(structured=structured)
+                if summary_note:
+                    PatientHistoryEntry.objects.create(
+                        clinic_id=job.clinic_id,
+                        record=medical_record,
+                        appointment=appointment,
+                        note=summary_note,
+                        created_by=job.created_by,
+                    )
+        except Exception:
+            logger.exception("Failed to save visit summary to patient history for job %s", job_id)
 
     unknown_fields = [k for k, v in structured.items() if v == SUMMARY_UNKNOWN]
     job.transcript = transcript

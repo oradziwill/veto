@@ -14,6 +14,8 @@ from .views_queue_availability import (
     WaitingQueueViewSet,
 )
 from .views_visit_recordings import (
+    TranscriptionJobDetailView,
+    TranscriptionView,
     VisitRecordingDetailView,
     VisitRecordingListView,
     VisitRecordingUploadView,
@@ -27,6 +29,8 @@ __all__ = [
     "AvailabilityView",
     "HospitalStayViewSet",
     "RoomViewSet",
+    "TranscriptionJobDetailView",
+    "TranscriptionView",
     "VisitRecordingDetailView",
     "VisitRecordingListView",
     "VisitRecordingUploadView",
