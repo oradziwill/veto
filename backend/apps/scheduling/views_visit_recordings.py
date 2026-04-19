@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import threading
 import uuid
 
 from django.conf import settings
 from django.core.files.base import ContentFile
-from django.db import transaction
+from django.db import connection, transaction
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -26,6 +27,14 @@ from apps.scheduling.services.visit_transcription_job import process_visit_trans
 from apps.tenancy.access import accessible_clinic_ids
 
 from . import views_recording_helpers as _recording_helpers
+
+
+def _process_job_async(job_id: int) -> None:
+    """Run transcription in a background thread; close the DB connection when done."""
+    try:
+        process_visit_transcription_job(job_id)
+    finally:
+        connection.close()
 
 
 def _visit_transcription_job_payload(job: VisitTranscriptionJob) -> dict:
@@ -82,7 +91,8 @@ class VisitTranscriptionView(APIView):
             )
         if upload.size > self.max_bytes:
             return Response({"detail": "Audio file exceeds 25MB limit."}, status=400)
-        if (upload.content_type or "").lower() not in self.allowed_audio_types:
+        base_content_type = (upload.content_type or "").lower().split(";")[0].strip()
+        if base_content_type not in self.allowed_audio_types:
             return Response(
                 {"detail": "Unsupported audio content type. Allowed: webm, ogg, wav, mp3."},
                 status=400,
@@ -276,3 +286,91 @@ class VisitRecordingDetailView(APIView):
         if not item:
             return Response({"detail": "Visit recording not found."}, status=404)
         return Response(VisitRecordingSerializer(item).data, status=200)
+
+
+class TranscriptionView(APIView):
+    """
+    POST /api/transcriptions/ — upload audio and transcribe, appointment is optional.
+    Accepts multipart: audio file + optional appointment_id field.
+    """
+
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+    throttle_classes = [ScopedRateThrottle, UserRateThrottle]
+    throttle_scope = "visit_transcribe"
+    allowed_audio_types = {
+        "audio/webm",
+        "audio/ogg",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/mpeg",
+    }
+    max_bytes = 25 * 1024 * 1024
+
+    def post(self, request):
+        upload = request.FILES.get("audio")
+        if upload is None:
+            return Response(
+                {"detail": "Missing audio file in multipart field 'audio'."}, status=400
+            )
+        if upload.size > self.max_bytes:
+            return Response({"detail": "Audio file exceeds 25MB limit."}, status=400)
+        base_content_type = (upload.content_type or "").lower().split(";")[0].strip()
+        if base_content_type not in self.allowed_audio_types:
+            return Response(
+                {"detail": "Unsupported audio content type. Allowed: webm, ogg, wav, mp3."},
+                status=400,
+            )
+
+        audio_bytes = upload.read()
+        if not audio_bytes:
+            return Response({"detail": "Uploaded audio file is empty."}, status=400)
+
+        # Optional appointment linkage
+        appointment = None
+        appointment_id_raw = request.data.get("appointment_id")
+        if appointment_id_raw:
+            try:
+                appt_id = int(appointment_id_raw)
+            except (TypeError, ValueError):
+                return Response({"detail": "appointment_id must be an integer."}, status=400)
+            appointment = Appointment.objects.filter(
+                id=appt_id,
+                clinic_id__in=accessible_clinic_ids(request.user),
+            ).first()
+            if not appointment:
+                return Response({"detail": "Appointment not found."}, status=404)
+
+        clinic_id = request.user.clinic_id
+        safe_name = _recording_helpers._safe_s3_filename(upload.name or "visit.webm")
+        job = VisitTranscriptionJob(
+            clinic_id=clinic_id,
+            appointment=appointment,
+            created_by=request.user,
+            status=VisitTranscriptionJob.Status.PENDING,
+            original_filename=upload.name or safe_name,
+            content_type=upload.content_type or "",
+            size_bytes=upload.size,
+        )
+        job.audio.save(safe_name, ContentFile(audio_bytes), save=False)
+        job.save()
+
+        threading.Thread(target=_process_job_async, args=(job.id,), daemon=True).start()
+
+        body = _visit_transcription_job_payload(job)
+        body["job_url"] = request.build_absolute_uri(f"/api/transcriptions/{job.id}/")
+        return Response(body, status=202)
+
+
+class TranscriptionJobDetailView(APIView):
+    """GET /api/transcriptions/{job_id}/ — poll for async result."""
+
+    permission_classes = [IsAuthenticated, HasClinic, IsDoctorOrAdmin]
+
+    def get(self, request, job_id: int):
+        job = VisitTranscriptionJob.objects.filter(
+            pk=job_id,
+            clinic_id__in=accessible_clinic_ids(request.user),
+        ).first()
+        if not job:
+            return Response({"detail": "Transcription job not found."}, status=404)
+        return Response(_visit_transcription_job_payload(job), status=200)

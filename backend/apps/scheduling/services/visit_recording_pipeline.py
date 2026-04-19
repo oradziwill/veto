@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from apps.medical.models import ClinicalExam
+import logging
+
+from apps.medical.models import ClinicalExam, MedicalRecord, PatientHistoryEntry
 from apps.scheduling.models import VisitRecording
 from apps.scheduling.services.visit_transcription import (
     SUMMARY_UNKNOWN,
     VisitTranscriptionError,
     enforce_strict_summary,
     structure_transcript_with_claude,
+    summarize_visit_for_history,
     transcribe_audio_with_whisper,
 )
 from django.conf import settings
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 
 
 def get_recordings_bucket() -> str:
@@ -90,6 +95,33 @@ def process_visit_recording(*, recording: VisitRecording, audio_bytes: bytes) ->
                 "updated_at",
             ]
         )
+
+        try:
+            appointment = recording.appointment
+            patient = appointment.patient
+            medical_record, _ = MedicalRecord.objects.get_or_create(
+                clinic_id=recording.clinic_id,
+                patient=patient,
+                defaults={"created_by_id": recording.uploaded_by_id},
+            )
+            if not PatientHistoryEntry.objects.filter(
+                clinic_id=recording.clinic_id,
+                appointment=appointment,
+            ).exists():
+                summary_note = summarize_visit_for_history(structured=structured)
+                if summary_note:
+                    PatientHistoryEntry.objects.create(
+                        clinic_id=recording.clinic_id,
+                        record=medical_record,
+                        appointment=appointment,
+                        note=summary_note,
+                        created_by_id=recording.uploaded_by_id,
+                    )
+        except Exception:
+            logger.exception(
+                "Failed to save visit summary to patient history for recording %s",
+                recording.pk,
+            )
 
 
 def safe_error_text(exc: Exception, *, max_len: int = 4000) -> str:

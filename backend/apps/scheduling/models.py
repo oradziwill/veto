@@ -588,6 +588,8 @@ class VisitTranscriptionJob(models.Model):
         Appointment,
         on_delete=models.CASCADE,
         related_name="visit_transcription_jobs",
+        null=True,
+        blank=True,
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

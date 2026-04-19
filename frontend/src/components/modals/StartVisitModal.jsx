@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   appointmentsAPI,
@@ -8,6 +8,7 @@ import {
   servicesAPI,
   invoicesAPI,
   inventoryAPI,
+  transcriptionAPI,
 } from '../../services/api'
 import AddClientModal from './AddClientModal'
 import './Modal.css'
@@ -152,6 +153,18 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
   const [error, setError] = useState(null)
   const [suggestedAppointment, setSuggestedAppointment] = useState(null)
 
+  // Recording state
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const timerRef = useRef(null)
+  const [recording, setRecording] = useState(false)
+  const [audioBlob, setAudioBlob] = useState(null)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [transcribing, setTranscribing] = useState(false)
+  const [transcriptionResult, setTranscriptionResult] = useState(null)
+  const [transcriptionError, setTranscriptionError] = useState(null)
+  const [meetingNotes, setMeetingNotes] = useState('')
+
   // Fetch services and medications when modal opens
   useEffect(() => {
     if (!isOpen) return
@@ -192,6 +205,24 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
 
     return () => { cancelled = true }
   }, [isOpen, servicesFetchKey])
+
+  // Reset recording state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      if (mediaRecorderRef.current) {
+        try { mediaRecorderRef.current.stop() } catch { /* ignore */ }
+        mediaRecorderRef.current = null
+      }
+      clearInterval(timerRef.current)
+      setRecording(false)
+      setAudioBlob(null)
+      setRecordingSeconds(0)
+      setTranscribing(false)
+      setTranscriptionResult(null)
+      setTranscriptionError(null)
+      setMeetingNotes('')
+    }
+  }, [isOpen])
 
   // On open: pre-fill from queue entry OR check for scheduled appointment
   useEffect(() => {
@@ -405,6 +436,127 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     setSelectedMedications(prev => prev.filter((_, i) => i !== index))
   }
 
+  const fmtRecordingTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioChunksRef.current = []
+      const recorder = new MediaRecorder(stream)
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        setAudioBlob(blob)
+        stream.getTracks().forEach(t => t.stop())
+      }
+      recorder.start(1000)
+      mediaRecorderRef.current = recorder
+      setRecording(true)
+      setRecordingSeconds(0)
+      timerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
+    } catch {
+      setTranscriptionError('Brak dostępu do mikrofonu.')
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current = null
+    }
+    clearInterval(timerRef.current)
+    setRecording(false)
+  }
+
+  const resetRecording = () => {
+    stopRecording()
+    setAudioBlob(null)
+    setRecordingSeconds(0)
+    setTranscriptionResult(null)
+    setTranscriptionError(null)
+    setMeetingNotes('')
+  }
+
+  const handleTranscribe = async () => {
+    if (!audioBlob) return
+    setTranscribing(true)
+    setTranscriptionError(null)
+    try {
+      const res = await transcriptionAPI.transcribe(audioBlob, 'visit.webm', suggestedAppointment?.id || null)
+      const data = res.data
+      if (data.status === 'completed') {
+        setTranscriptionResult(data)
+        applyTranscriptionToForm(data)
+        setTranscribing(false)
+      } else if (data.status === 'failed') {
+        setTranscriptionError(data.last_error || 'Transkrypcja nie powiodła się.')
+        setTranscribing(false)
+      } else if (data.id) {
+        // Async — poll
+        let attempts = 0
+        while (attempts < 60) {
+          attempts++
+          await new Promise(r => setTimeout(r, 3000))
+          const pollRes = await transcriptionAPI.pollJob(data.id)
+          const pd = pollRes.data
+          if (pd.status === 'completed') {
+            setTranscriptionResult(pd)
+            applyTranscriptionToForm(pd)
+            setTranscribing(false)
+            return
+          }
+          if (pd.status === 'failed') {
+            setTranscriptionError(pd.last_error || 'Transkrypcja nie powiodła się.')
+            setTranscribing(false)
+            return
+          }
+        }
+        setTranscriptionError('Przekroczono czas oczekiwania na transkrypcję.')
+        setTranscribing(false)
+      } else {
+        setTranscriptionError(data.detail || 'Nieoczekiwana odpowiedź serwera.')
+        setTranscribing(false)
+      }
+    } catch (err) {
+      setTranscriptionError(err.response?.data?.detail || 'Błąd połączenia z serwisem transkrypcji.')
+      setTranscribing(false)
+    }
+  }
+
+  const applyTranscriptionToForm = (result) => {
+    const s = result.structured || {}
+    const UNKNOWN = 'UNKNOWN'
+    const visitParts = [
+      s.anamnesis && s.anamnesis !== UNKNOWN ? `Wywiad: ${s.anamnesis}` : '',
+      s.clinical_findings && s.clinical_findings !== UNKNOWN ? `Badanie: ${s.clinical_findings}` : '',
+      s.diagnosis && s.diagnosis !== UNKNOWN ? `Rozpoznanie: ${s.diagnosis}` : '',
+    ].filter(Boolean)
+    const additionalParts = [
+      s.treatment_plan && s.treatment_plan !== UNKNOWN ? `Plan leczenia: ${s.treatment_plan}` : '',
+      s.owner_instructions && s.owner_instructions !== UNKNOWN ? `Zalecenia: ${s.owner_instructions}` : '',
+    ].filter(Boolean)
+    if (visitParts.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        visitNotes: prev.visitNotes
+          ? `${prev.visitNotes}\n\n${visitParts.join('\n')}`
+          : visitParts.join('\n'),
+      }))
+    }
+    if (additionalParts.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        additionalNotes: prev.additionalNotes
+          ? `${prev.additionalNotes}\n\n${additionalParts.join('\n')}`
+          : additionalParts.join('\n'),
+      }))
+    }
+    const allParts = [...visitParts, ...additionalParts]
+    if (allParts.length > 0) {
+      setMeetingNotes(allParts.join('\n'))
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -459,7 +611,10 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       if (formData.additionalNotes.trim()) {
         noteParts.push(`ADDITIONAL NOTES:\n${formData.additionalNotes.trim()}`)
       }
-      
+      if (meetingNotes.trim()) {
+        noteParts.push(`=== Notatki ze spotkania (AI) ===\n${meetingNotes.trim()}`)
+      }
+
       const combinedNote = noteParts.join('\n\n')
       
       // Validate that at least one note field is filled (API requires 'note' field)
@@ -954,6 +1109,139 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
               rows="3"
               placeholder={t('startVisit.additionalNotesPlaceholder')}
             />
+          </div>
+
+          {/* ── Recording / AI Transcription ── */}
+          <div
+            className="form-group"
+            style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}
+          >
+            <label style={{ marginBottom: '0.5rem', display: 'block' }}>
+              Nagranie wizyty (transkrypcja AI)
+            </label>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  {!recording && !audioBlob && !transcribing && !transcriptionResult && (
+                    <button
+                      type="button"
+                      onClick={startRecording}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        padding: '0.45rem 1rem', background: '#1e40af', color: 'white',
+                        border: 'none', borderRadius: '6px', fontSize: '0.875rem',
+                        fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      🎙️ Nagraj
+                    </button>
+                  )}
+
+                  {recording && (
+                    <>
+                      <span style={{ fontSize: '0.875rem', color: '#dc2626', fontWeight: 600 }}>
+                        ● Nagrywanie {fmtRecordingTime(recordingSeconds)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={stopRecording}
+                        style={{
+                          padding: '0.45rem 1rem', background: '#dc2626', color: 'white',
+                          border: 'none', borderRadius: '6px', fontSize: '0.875rem',
+                          fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        ■ Zatrzymaj
+                      </button>
+                    </>
+                  )}
+
+                  {audioBlob && !transcribing && !transcriptionResult && (
+                    <>
+                      <span style={{ fontSize: '0.875rem', color: '#475569' }}>
+                        🎵 Nagranie ({fmtRecordingTime(recordingSeconds)})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleTranscribe}
+                        style={{
+                          padding: '0.45rem 1rem', background: '#16a34a', color: 'white',
+                          border: 'none', borderRadius: '6px', fontSize: '0.875rem',
+                          fontWeight: 600, cursor: 'pointer',
+                        }}
+                      >
+                        Transkrybuj
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetRecording}
+                        style={{
+                          padding: '0.45rem 0.75rem', background: 'none',
+                          border: '1px solid #e2e8f0', borderRadius: '6px',
+                          fontSize: '0.875rem', cursor: 'pointer', color: '#64748b',
+                        }}
+                      >
+                        Usuń
+                      </button>
+                    </>
+                  )}
+
+                  {transcribing && (
+                    <span style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                      ⏳ Przetwarzanie... (może potrwać 1–2 min)
+                    </span>
+                  )}
+
+                  {transcriptionResult && (
+                    <span style={{ fontSize: '0.875rem', color: '#16a34a', fontWeight: 600 }}>
+                      ✓ Transkrypcja gotowa — pola wypełnione automatycznie
+                    </span>
+                  )}
+                </div>
+
+                {transcriptionError && (
+                  <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#dc2626' }}>
+                    {transcriptionError}
+                  </p>
+                )}
+
+                {transcriptionResult?.transcript && (
+                  <details style={{ marginTop: '0.75rem' }}>
+                    <summary style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>
+                      Pokaż transkrypt
+                    </summary>
+                    <p style={{
+                      marginTop: '0.5rem', padding: '0.75rem', background: '#f8fafc',
+                      border: '1px solid #e2e8f0', borderRadius: '6px',
+                      fontSize: '0.85rem', color: '#334155', whiteSpace: 'pre-wrap',
+                    }}>
+                      {transcriptionResult.transcript}
+                    </p>
+                  </details>
+                )}
+
+                {meetingNotes && (
+                  <div style={{ marginTop: '1rem' }}>
+                    <label style={{
+                      display: 'block', marginBottom: '0.375rem',
+                      fontSize: '0.85rem', fontWeight: 600, color: '#334155',
+                    }}>
+                      Notatki ze spotkania (AI)
+                    </label>
+                    <textarea
+                      value={meetingNotes}
+                      onChange={e => setMeetingNotes(e.target.value)}
+                      rows={6}
+                      style={{
+                        width: '100%', padding: '0.625rem 0.75rem',
+                        border: '1px solid #e2e8f0', borderRadius: '6px',
+                        fontSize: '0.85rem', color: '#334155',
+                        background: '#f8fafc', resize: 'vertical',
+                        fontFamily: 'inherit', lineHeight: 1.5,
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                )}
           </div>
 
           <div

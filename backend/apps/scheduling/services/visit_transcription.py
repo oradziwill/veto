@@ -52,10 +52,56 @@ def _build_multipart_form_data(
     return body, boundary
 
 
+def _transcribe_with_self_hosted_whisper(
+    *, audio_bytes: bytes, filename: str, content_type: str, base_url: str
+) -> str:
+    """Call the self-hosted faster-whisper Flask microservice."""
+    body, boundary = _build_multipart_form_data(
+        fields={},
+        file_field="audio",
+        filename=filename,
+        content_type=content_type or "application/octet-stream",
+        file_bytes=audio_bytes,
+    )
+    req = request.Request(
+        url=f"{base_url.rstrip('/')}/transcribe",
+        data=body,
+        method="POST",
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+        with request.urlopen(req, timeout=300) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise VisitTranscriptionError(f"Whisper service error: {detail}") from exc
+    except (error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise VisitTranscriptionError(
+            "Failed to reach self-hosted Whisper service. Is it running?"
+        ) from exc
+
+    if "error" in payload:
+        raise VisitTranscriptionError(f"Whisper service returned error: {payload['error']}")
+    transcript = str(payload.get("transcript", "")).strip()
+    if not transcript:
+        raise VisitTranscriptionError("Whisper returned empty transcript.")
+    return transcript
+
+
 def transcribe_audio_with_whisper(*, audio_bytes: bytes, filename: str, content_type: str) -> str:
+    whisper_url = str(getattr(settings, "WHISPER_SERVICE_URL", "")).strip()
+    if whisper_url:
+        return _transcribe_with_self_hosted_whisper(
+            audio_bytes=audio_bytes,
+            filename=filename,
+            content_type=content_type,
+            base_url=whisper_url,
+        )
+
+    # Fallback: OpenAI Whisper API
     api_key = str(getattr(settings, "OPENAI_API_KEY", "")).strip()
     if not api_key:
-        raise VisitTranscriptionError("OPENAI_API_KEY is not configured.")
+        raise VisitTranscriptionError("No WHISPER_SERVICE_URL and no OPENAI_API_KEY configured.")
 
     body, boundary = _build_multipart_form_data(
         fields={"model": "whisper-1"},
@@ -158,6 +204,76 @@ def enforce_strict_summary(
             strict[key] = ". ".join(kept_sentences).strip()
 
     return strict, needs_review
+
+
+def _format_structured_as_text(structured: dict[str, str]) -> str:
+    labels = {
+        "anamnesis": "Anamnesis",
+        "clinical_findings": "Clinical findings",
+        "diagnosis": "Diagnosis",
+        "treatment_plan": "Treatment plan",
+        "owner_instructions": "Owner instructions",
+    }
+    parts = []
+    for key, label in labels.items():
+        value = structured.get(key, "").strip()
+        if value and value != SUMMARY_UNKNOWN:
+            parts.append(f"{label}: {value}")
+    return "\n\n".join(parts)
+
+
+def summarize_visit_for_history(*, structured: dict[str, str]) -> str:
+    """Generate a concise AI narrative of the visit for patient history. Falls back to formatted text."""
+    api_key = str(getattr(settings, "OPENAI_API_KEY", "")).strip()
+    known = {k: v for k, v in structured.items() if v and v != SUMMARY_UNKNOWN}
+    if not known:
+        return ""
+
+    if not api_key:
+        return _format_structured_as_text(structured)
+
+    fields_text = "\n".join(f"- {k.replace('_', ' ').title()}: {v}" for k, v in known.items())
+    prompt = (
+        "You are a veterinary medical assistant. Write a concise, professional summary "
+        "of this veterinary visit for the patient's medical history. "
+        "Be factual and brief (2-4 sentences). Use the structured visit data below.\n\n"
+        f"Visit data:\n{fields_text}"
+    )
+    req_body = json.dumps(
+        {
+            "model": "gpt-4o-mini",
+            "max_tokens": 400,
+            "temperature": 0.3,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Write a concise veterinary visit summary. Be factual and brief.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+        }
+    ).encode("utf-8")
+    req = request.Request(
+        url="https://api.openai.com/v1/chat/completions",
+        data=req_body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "content-type": "application/json",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=60) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        choices = payload.get("choices") or []
+        if choices and isinstance(choices[0], dict):
+            content = str((choices[0].get("message") or {}).get("content", "")).strip()
+            if content:
+                return content
+    except Exception:
+        pass
+
+    return _format_structured_as_text(structured)
 
 
 def structure_transcript_with_claude(*, transcript: str) -> dict[str, str]:

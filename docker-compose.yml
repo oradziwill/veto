@@ -3,6 +3,17 @@
 # Backend: http://localhost:8000  Frontend: http://localhost:5174
 
 services:
+  whisper:
+    build:
+      context: ./services/whisper
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+    environment:
+      - WHISPER_MODEL=small
+    volumes:
+      - whisper_model_cache:/root/.cache/huggingface
+
   backend:
     build:
       context: ./backend
@@ -14,8 +25,11 @@ services:
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+      - WHISPER_SERVICE_URL=http://whisper:9000
     volumes:
       - ./backend:/app
+    depends_on:
+      - whisper
     command: sh -c "python manage.py seed_data; python manage.py runserver 0.0.0.0:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), timeout=2)"]
@@ -42,3 +56,4 @@ services:
 
 volumes:
   frontend_node_modules:
+  whisper_model_cache:

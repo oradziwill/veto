@@ -7,6 +7,8 @@ from .views import (
     AvailabilityView,
     HospitalStayViewSet,
     RoomViewSet,
+    TranscriptionJobDetailView,
+    TranscriptionView,
     VisitRecordingDetailView,
     VisitRecordingListView,
     VisitRecordingUploadView,
@@ -64,6 +66,12 @@ urlpatterns = [
         "visit-recordings/<int:recording_id>/",
         VisitRecordingDetailView.as_view(),
         name="visit-recording-detail",
+    ),
+    path("transcriptions/", TranscriptionView.as_view(), name="transcription"),
+    path(
+        "transcriptions/<int:job_id>/",
+        TranscriptionJobDetailView.as_view(),
+        name="transcription-job",
     ),
     path("availability/", AvailabilityView.as_view(), name="availability"),
     path(
