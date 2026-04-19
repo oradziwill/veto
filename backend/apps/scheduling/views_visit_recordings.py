@@ -341,9 +341,7 @@ class TranscriptionView(APIView):
                 return Response({"detail": "Appointment not found."}, status=404)
 
         clinic_id = request.user.clinic_id
-        safe_name = _recording_helpers._safe_s3_filename(
-            upload.name or "visit.webm"
-        )
+        safe_name = _recording_helpers._safe_s3_filename(upload.name or "visit.webm")
         job = VisitTranscriptionJob(
             clinic_id=clinic_id,
             appointment=appointment,
