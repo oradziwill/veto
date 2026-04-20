@@ -41,7 +41,7 @@ const REASON_OPTIONS = [
   { value: "Other", key: "reasonOther" },
 ];
 
-const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt }) => {
+const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt, initialOwner, initialPatient }) => {
   const { t } = useTranslation();
   const [formData, setFormData] = useState({
     patient: "",
@@ -74,7 +74,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt }) =>
 
     // Reset form when modal opens
     setFormData({
-      patient: "",
+      patient: initialPatient ? initialPatient.id.toString() : "",
       vet: "",
       room: "",
       starts_at: "",
@@ -82,12 +82,18 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt }) =>
       reason: "",
       reasonCustom: "",
       status: "scheduled",
+      internal_notes: "",
     });
-    setOwnerSearch("");
-    setSelectedOwner(null);
+    if (initialOwner) {
+      setOwnerSearch(`${initialOwner.first_name} ${initialOwner.last_name}`);
+      setSelectedOwner(initialOwner);
+    } else {
+      setOwnerSearch("");
+      setSelectedOwner(null);
+    }
     setOwnerSearchResults([]);
     setShowOwnerDropdown(false);
-    setPatients([]);
+    setPatients(initialPatient ? [initialPatient] : []);
 
     const loadData = async () => {
       try {
@@ -129,12 +135,18 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt }) =>
       starts_at: startTime,
       ends_at: add30Minutes(startTime),
     }));
-  }, [isOpen]);
+  }, [isOpen, initialOwner?.id, initialPatient?.id]);
 
   // Search for clients when ownerSearch changes
   useEffect(() => {
     const searchClients = async () => {
       if (ownerSearch.trim().length < 2) {
+        setOwnerSearchResults([]);
+        setShowOwnerDropdown(false);
+        return;
+      }
+      // Skip search if owner is already selected and search matches their name
+      if (selectedOwner && ownerSearch.trim() === `${selectedOwner.first_name} ${selectedOwner.last_name}`.trim()) {
         setOwnerSearchResults([]);
         setShowOwnerDropdown(false);
         return;
@@ -172,6 +184,9 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt }) =>
         const response = await patientsAPI.list({ owner: selectedOwner.id });
         const patientsData = response.data.results || response.data;
         setPatients(patientsData);
+        if (initialPatient?.id) {
+          setFormData((prev) => ({ ...prev, patient: initialPatient.id.toString() }));
+        }
       } catch (err) {
         console.error("Error loading patients:", err);
         setPatients([]);
@@ -710,6 +725,19 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt }) =>
                 {t("addAppointment.visitWillBeSavedAs")} <strong>{getFormattedReasonDisplay()}</strong>
               </div>
             )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="internal_notes">{t("addAppointment.internalNotes", { defaultValue: "Notatki" })}</label>
+            <textarea
+              id="internal_notes"
+              name="internal_notes"
+              value={formData.internal_notes}
+              onChange={handleChange}
+              rows={3}
+              placeholder={t("addAppointment.internalNotesPlaceholder", { defaultValue: "Dodatkowe informacje widoczne tylko dla personelu..." })}
+              style={{ resize: 'vertical' }}
+            />
           </div>
 
           <div className="form-group">
