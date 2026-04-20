@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { patientHistoryAPI, patientAISummaryAPI, prescriptionsAPI, vaccinationsAPI } from '../../services/api'
 import { translateSpecies } from '../../utils/species'
 import SpeciesIcon from '../SpeciesIcon'
+import AddAppointmentModal from './AddAppointmentModal'
 import './Modal.css'
 
 
@@ -39,6 +40,7 @@ function parseNote(note) {
 const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
   const { t, i18n } = useTranslation()
   const [activeTab, setActiveTab] = useState('overview')
+  const [showAddAppointment, setShowAddAppointment] = useState(false)
 
   // History
   const [history, setHistory] = useState([])
@@ -281,6 +283,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
   ]
 
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '960px', maxHeight: '92vh', overflowY: 'auto', padding: 0, borderRadius: '12px' }}>
 
@@ -321,7 +324,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
           </div>
 
           {/* Stat chips */}
-          <div style={{ display: 'flex', gap: '0.625rem', marginTop: '1.25rem' }}>
+          <div style={{ display: 'flex', gap: '0.625rem', marginTop: '1.25rem', alignItems: 'center' }}>
             {statCards.map(sc => (
               <button key={sc.key} onClick={() => setActiveTab(sc.key)}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', borderRadius: '999px', border: activeTab === sc.key ? `2px solid ${sc.color}` : '2px solid transparent', background: activeTab === sc.key ? sc.bg : 'rgba(255,255,255,0.08)', cursor: 'pointer', transition: 'all 0.15s' }}>
@@ -337,6 +340,9 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', borderRadius: '999px', border: activeTab === 'overview' ? '2px solid #e2e8f0' : '2px solid transparent', background: activeTab === 'overview' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)', cursor: 'pointer' }}>
               <span style={{ fontSize: '0.875rem' }}>📋</span>
               <span style={{ fontSize: '0.8rem', fontWeight: '600', color: activeTab === 'overview' ? '#e2e8f0' : '#718096' }}>{t('patientDetails.tabs.overview')}</span>
+            </button>
+            <button onClick={() => setShowAddAppointment(true)} style={{ marginLeft: 'auto', background: '#22c55e', border: 'none', color: 'white', padding: '0.45rem 1rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap', boxShadow: '0 2px 8px rgba(34,197,94,0.4)' }}>
+              📅 {t('patientDetails.scheduleAppointment', { defaultValue: 'Umów na wizytę' })}
             </button>
           </div>
         </div>
@@ -672,6 +678,15 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
         </div>
       </div>
     </div>
+
+    <AddAppointmentModal
+      isOpen={showAddAppointment}
+      onClose={() => setShowAddAppointment(false)}
+      onSuccess={() => setShowAddAppointment(false)}
+      initialOwner={patient?.owner}
+      initialPatient={patient}
+    />
+    </>
   )
 }
 
