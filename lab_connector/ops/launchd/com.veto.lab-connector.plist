@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.veto.lab-connector</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/veto/lab_connector/.venv/bin/python</string>
+        <string>-m</string>
+        <string>app.main</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/opt/veto/lab_connector</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/var/log/veto-lab-connector.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/veto-lab-connector.err.log</string>
+</dict>
+</plist>

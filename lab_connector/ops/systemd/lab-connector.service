@@ -1,0 +1,19 @@
+[Unit]
+Description=Veto LAB Connector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/veto/lab_connector
+EnvironmentFile=/opt/veto/lab_connector/.env
+ExecStart=/opt/veto/lab_connector/.venv/bin/python -m app.main
+Restart=always
+RestartSec=3
+User=veto
+Group=veto
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
