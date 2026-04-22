@@ -223,24 +223,21 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt, init
     setShowClientModal(false);
   };
 
-  // Fetch availability when vet and date are selected
+  // Fetch availability when date (and optionally vet) are selected
   useEffect(() => {
     const fetchAvailability = async () => {
-      if (!formData.vet || !formData.starts_at) {
+      if (!formData.starts_at) {
         setAvailability(null);
         return;
       }
 
       try {
         setLoadingAvailability(true);
-        const selectedDate = new Date(formData.starts_at);
-        const dateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-        
-        const response = await availabilityAPI.get({
-          date: dateStr,
-          vet: formData.vet,
-          slot_minutes: 30,
-        });
+        const dateStr = new Date(formData.starts_at).toISOString().split('T')[0];
+        const params = { date: dateStr, slot_minutes: 30 };
+        if (formData.vet) params.vet = formData.vet;
+
+        const response = await availabilityAPI.get(params);
         setAvailability(response.data);
       } catch (err) {
         console.error("Error fetching availability:", err);
@@ -251,7 +248,7 @@ const AddAppointmentModal = ({ isOpen, onClose, onSuccess, initialStartsAt, init
     };
 
     fetchAvailability();
-  }, [formData.vet, formData.starts_at ? formData.starts_at.split('T')[0] : null]); // Only refetch when date changes, not time
+  }, [formData.vet, formData.starts_at ? formData.starts_at.split('T')[0] : null]);
 
   const isTimeAvailable = (dateTimeString) => {
     if (!availability || !availability.free || availability.free.length === 0) {

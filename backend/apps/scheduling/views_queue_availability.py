@@ -11,8 +11,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.utils import timezone
+
 from apps.accounts.permissions import HasClinic, IsDoctorOrAdmin, IsStaffOrVet
-from apps.scheduling.models import Room, WaitingQueueEntry
+from apps.scheduling.models import Appointment, Room, WaitingQueueEntry
 from apps.scheduling.serializers import (
     RoomSerializer,
     WaitingQueueEntryReadSerializer,
@@ -210,6 +212,76 @@ class WaitingQueueViewSet(viewsets.ModelViewSet):
             or 0
         )
         serializer.save(clinic_id=clinic_id, position=max_pos + 1)
+
+    @action(detail=False, methods=["post"], url_path="register-incoming")
+    def register_incoming(self, request):
+        patient_id = request.data.get("patient")
+        chief_complaint = request.data.get("chief_complaint", "")
+        is_urgent = bool(request.data.get("is_urgent", False))
+        appointment_id = request.data.get("appointment_id")
+
+        if not patient_id:
+            return Response({"detail": "patient is required."}, status=400)
+
+        clinic_id = clinic_id_for_mutation(
+            request.user, request=request, instance_clinic_id=None
+        )
+
+        today = timezone.localdate()
+        if appointment_id:
+            appointment = Appointment.objects.filter(
+                id=appointment_id,
+                clinic_id=clinic_id,
+                patient_id=patient_id,
+                status__in=[Appointment.Status.SCHEDULED, Appointment.Status.CONFIRMED],
+            ).first()
+        else:
+            appointment = (
+                Appointment.objects.filter(
+                    clinic_id=clinic_id,
+                    patient_id=patient_id,
+                    starts_at__date=today,
+                    status__in=[Appointment.Status.SCHEDULED, Appointment.Status.CONFIRMED],
+                )
+                .order_by("starts_at")
+                .first()
+            )
+
+        max_pos = (
+            WaitingQueueEntry.objects.filter(
+                clinic_id=clinic_id,
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
+            ).aggregate(m=models.Max("position"))["m"]
+            or 0
+        )
+
+        entry_kwargs = dict(
+            clinic_id=clinic_id,
+            patient_id=patient_id,
+            chief_complaint=chief_complaint,
+            is_urgent=is_urgent,
+            position=max_pos + 1,
+        )
+        if appointment:
+            already_queued = WaitingQueueEntry.objects.filter(
+                appointment=appointment,
+                status__in=[
+                    WaitingQueueEntry.Status.WAITING,
+                    WaitingQueueEntry.Status.IN_PROGRESS,
+                ],
+            ).exists()
+            if not already_queued:
+                entry_kwargs["appointment"] = appointment
+                appointment.status = Appointment.Status.CHECKED_IN
+                appointment.save(update_fields=["status", "updated_at"])
+
+        entry = WaitingQueueEntry.objects.create(**entry_kwargs)
+        data = WaitingQueueEntryReadSerializer(entry).data
+        data["appointment_matched"] = appointment is not None and "appointment" in entry_kwargs
+        return Response(data, status=201)
 
     @action(detail=True, methods=["post"], url_path="move-up")
     def move_up(self, request, pk=None):

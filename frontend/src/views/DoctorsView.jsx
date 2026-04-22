@@ -18,6 +18,7 @@ import InvoicesTab from "../components/tabs/InvoicesTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
 import { authAPI, queueAPI, vetsAPI } from "../services/api";
+import { translateSpecies } from "../utils/species";
 import "../components/tabs/Tabs.css";
 import "./DoctorsView.css";
 
@@ -45,6 +46,8 @@ const DoctorsView = () => {
   const [headerVisitInitialPatient, setHeaderVisitInitialPatient] = useState(null);
   const [calledQueueEntry, setCalledQueueEntry] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [arrivedPatients, setArrivedPatients] = useState([]); // queue entries awaiting notification
+  const notifiedIds = useRef(new Set());
   const userMenuRef = useRef(null);
 
   const rawTab = searchParams.get("tab");
@@ -96,6 +99,38 @@ const DoctorsView = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!currentUserId || userRole !== 'doctor') return;
+    const poll = async () => {
+      try {
+        const res = await queueAPI.list();
+        const entries = res.data.results || res.data || [];
+        const mine = entries.filter(e =>
+          e.appointment_detail &&
+          e.status === 'waiting' &&
+          (e.appointment_detail.vet?.id === currentUserId || e.appointment_detail.vet === currentUserId) &&
+          !notifiedIds.current.has(e.id)
+        );
+        if (mine.length > 0) {
+          mine.forEach(e => notifiedIds.current.add(e.id));
+          setArrivedPatients(prev => [...prev, ...mine]);
+        }
+      } catch {}
+    };
+    poll();
+    const interval = setInterval(poll, 15000);
+    return () => clearInterval(interval);
+  }, [currentUserId, userRole]);
+
+  const handleStartFromNotification = async (entry) => {
+    setArrivedPatients(prev => prev.filter(e => e.id !== entry.id));
+    try {
+      const res = await queueAPI.call(entry.id);
+      setCalledQueueEntry(res.data);
+      setSearchParams({ tab: 'active-visit' });
+    } catch {}
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");
@@ -376,6 +411,71 @@ const DoctorsView = () => {
           );
         })}
       </nav>
+
+      {/* ── Patient arrival notifications ── */}
+      {arrivedPatients.length > 0 && (
+        <div style={{
+          position: 'fixed', bottom: '1.5rem', right: '1.5rem',
+          display: 'flex', flexDirection: 'column', gap: '0.75rem',
+          zIndex: 9999, maxWidth: '340px',
+        }}>
+          {arrivedPatients.map(entry => {
+            const appt = entry.appointment_detail;
+            const patient = entry.patient;
+            const timeStr = appt?.starts_at
+              ? new Date(appt.starts_at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', hour12: false })
+              : null;
+            return (
+              <div key={entry.id} style={{
+                background: 'white', borderRadius: '12px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                border: '1px solid #e2e8f0', borderLeft: '4px solid #16a34a',
+                padding: '1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: '700', color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>
+                      🐾 Pacjent przybył
+                    </div>
+                    <div style={{ fontWeight: '700', fontSize: '1rem', color: '#1a202c' }}>
+                      {patient?.name}
+                      {patient?.species && <span style={{ fontWeight: '400', color: '#718096', fontSize: '0.85rem', marginLeft: '0.35rem' }}>({translateSpecies(patient.species, t)})</span>}
+                    </div>
+                    {patient?.owner && (
+                      <div style={{ fontSize: '0.82rem', color: '#718096' }}>
+                        {patient.owner.first_name} {patient.owner.last_name}
+                      </div>
+                    )}
+                    {(timeStr || appt?.reason) && (
+                      <div style={{ fontSize: '0.82rem', color: '#4a5568', marginTop: '0.2rem' }}>
+                        {timeStr && `🕐 ${timeStr}`}{timeStr && appt?.reason && ' · '}{appt?.reason}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setArrivedPatients(prev => prev.filter(e => e.id !== entry.id))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a0aec0', fontSize: '1.1rem', lineHeight: 1, padding: '0 0 0 0.5rem' }}
+                  >×</button>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => handleStartFromNotification(entry)}
+                    style={{ flex: 1, padding: '0.45rem 0', border: 'none', borderRadius: '7px', background: '#16a34a', color: 'white', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer' }}
+                  >
+                    Rozpocznij wizytę
+                  </button>
+                  <button
+                    onClick={() => { setArrivedPatients(prev => prev.filter(e => e.id !== entry.id)); handleTabChange('waiting-room'); }}
+                    style={{ padding: '0.45rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '7px', background: 'white', color: '#4a5568', fontSize: '0.85rem', cursor: 'pointer' }}
+                  >
+                    Poczekalnia
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <LoginModal
         isOpen={showLoginModal}

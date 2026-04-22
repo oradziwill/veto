@@ -237,9 +237,18 @@ class HospitalDischargeSummaryWriteSerializer(serializers.ModelSerializer):
         ]
 
 
+class AppointmentMiniSerializer(serializers.ModelSerializer):
+    vet = VetMiniSerializer(read_only=True)
+
+    class Meta:
+        model = Appointment
+        fields = ["id", "starts_at", "ends_at", "reason", "status", "vet"]
+
+
 class WaitingQueueEntryReadSerializer(serializers.ModelSerializer):
     patient = PatientReadSerializer(read_only=True)
     called_by = VetMiniSerializer(read_only=True)
+    appointment_detail = AppointmentMiniSerializer(source="appointment", read_only=True)
 
     class Meta:
         model = WaitingQueueEntry

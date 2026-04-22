@@ -12,7 +12,7 @@ const DUTY_COLORS = [
 
 const getDutyColor = (vetId) => DUTY_COLORS[(vetId || 0) % DUTY_COLORS.length]
 
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 8) // 8–19
+const DEFAULT_HOURS = Array.from({ length: 12 }, (_, i) => i + 8) // 8–19 fallback
 
 const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVisit = null, currentUserId = null, userRole = null }) => {
   const { t, i18n } = useTranslation()
@@ -128,6 +128,17 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
 
   const monthLabel = currentDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
 
+  const gridHours = (() => {
+    const active = clinicHours.filter(h => h.is_active)
+    if (!active.length) return DEFAULT_HOURS
+    const minHour = Math.min(...active.map(h => parseInt(h.start_time.split(':')[0], 10)))
+    const maxHour = Math.max(...active.map(h => {
+      const [hh, mm] = h.end_time.split(':').map(Number)
+      return mm > 0 ? hh + 1 : hh
+    }))
+    return Array.from({ length: maxHour - minHour }, (_, i) => i + minHour)
+  })()
+
   const aptForCell = (date, hour) =>
     appointments.filter(apt => {
       const s = new Date(apt.starts_at)
@@ -219,7 +230,7 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
       {/* Week view — single unified grid so header and body columns always align */}
       {viewMode === 'week' && (
         <div className="cal-week">
-          <div className="cal-week-grid">
+          <div className="cal-week-grid" style={{ gridTemplateRows: `auto repeat(${gridHours.length}, 60px)` }}>
             {/* Row 1: sticky header */}
             <div className="cal-time-gutter" />
             {weekDates.map((date, i) => {
@@ -240,7 +251,7 @@ const CalendarTab = ({ vets = null, vetId = null, onVetChange = null, onStartVis
             })}
 
             {/* Rows 2–13: hour slots */}
-            {HOURS.map(hour => (
+            {gridHours.map(hour => (
               <Fragment key={hour}>
                 <div className="cal-hour-label">{hour}:00</div>
                 {weekDates.map((date, di) => {
