@@ -222,9 +222,7 @@ class WaitingQueueViewSet(viewsets.ModelViewSet):
         if not patient_id:
             return Response({"detail": "patient is required."}, status=400)
 
-        clinic_id = clinic_id_for_mutation(
-            request.user, request=request, instance_clinic_id=None
-        )
+        clinic_id = clinic_id_for_mutation(request.user, request=request, instance_clinic_id=None)
 
         today = timezone.localdate()
         if appointment_id:
