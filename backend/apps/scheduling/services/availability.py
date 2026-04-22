@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
 from apps.scheduling.models import Appointment
+from apps.scheduling.models_clinic_hours import ClinicWorkingHours
 from apps.scheduling.models_working_hours import VetWorkingHours
 from apps.tenancy.models import ClinicHoliday
 from django.conf import settings
@@ -112,9 +113,6 @@ def compute_availability(
     # Parse date
     day = datetime.fromisoformat(date_str).date()
 
-    # Slot length
-    slot_minutes_final = int(slot_minutes or getattr(settings, "DEFAULT_SLOT_MINUTES", 30))
-
     # Clinic closure check
     holiday = (
         ClinicHoliday.objects.filter(
@@ -133,20 +131,43 @@ def compute_availability(
             "busy_raw": [],
             "busy_merged": [],
             "free_slots": [],
-            "slot_minutes": slot_minutes_final,
+            "slot_minutes": int(slot_minutes or getattr(settings, "DEFAULT_SLOT_MINUTES", 30)),
             "closed_reason": holiday.reason or "Clinic closed",
         }
 
-    # Defaults from settings
-    default_open_t = _parse_hhmm(getattr(settings, "DEFAULT_CLINIC_OPEN_TIME", "09:00"))
-    default_close_t = _parse_hhmm(getattr(settings, "DEFAULT_CLINIC_CLOSE_TIME", "17:00"))
+    weekday = day.weekday()  # Monday=0 ... Sunday=6
 
-    open_t = default_open_t
-    close_t = default_close_t
+    # Clinic working hours (set by admin in planner)
+    clinic_wh = ClinicWorkingHours.objects.filter(
+        clinic_id=clinic_id, weekday=weekday, is_active=True
+    ).first()
+
+    if clinic_wh:
+        open_t = clinic_wh.start_time
+        close_t = clinic_wh.end_time
+    else:
+        has_any_clinic_hours = ClinicWorkingHours.objects.filter(
+            clinic_id=clinic_id, is_active=True
+        ).exists()
+        if has_any_clinic_hours:
+            return {
+                "timezone": str(tz),
+                "work_intervals": [],
+                "work_bounds": None,
+                "busy_raw": [],
+                "busy_merged": [],
+                "free_slots": [],
+                "slot_minutes": int(slot_minutes or getattr(settings, "DEFAULT_SLOT_MINUTES", 30)),
+                "closed_reason": "Clinic is closed on this day",
+            }
+        # No clinic hours configured at all — fall back to settings defaults
+        open_t = _parse_hhmm(getattr(settings, "DEFAULT_CLINIC_OPEN_TIME", "09:00"))
+        close_t = _parse_hhmm(getattr(settings, "DEFAULT_CLINIC_CLOSE_TIME", "17:00"))
+
+    slot_minutes_final = int(slot_minutes or getattr(settings, "DEFAULT_SLOT_MINUTES", 30))
 
     # Vet-specific hours override (MVP: take the first active interval for that weekday)
     if vet_id is not None:
-        weekday = day.weekday()  # Monday=0 ... Sunday=6
         wh = (
             VetWorkingHours.objects.filter(vet_id=vet_id, weekday=weekday, is_active=True)
             .order_by("start_time")

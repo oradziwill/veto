@@ -1,11 +1,11 @@
 import { useState, useEffect, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
-import { appointmentsAPI, vetsAPI } from '../../services/api'
+import { appointmentsAPI, vetsAPI, schedulerAPI } from '../../services/api'
 import AddAppointmentModal from '../modals/AddAppointmentModal'
 import VisitDetailsModal from '../modals/VisitDetailsModal'
 import './VisitsTab.css'
 
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 8) // 8–19
+const DEFAULT_HOURS = Array.from({ length: 12 }, (_, i) => i + 8) // 8–19 fallback
 
 const VET_COLORS = [
   '#16a34a', '#2563eb', '#d97706', '#8b5cf6',
@@ -29,8 +29,11 @@ const VisitsTab = ({ userRole = null, currentUserId = null }) => {
   const [loading, setLoading] = useState(true)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
+  const [clinicHours, setClinicHours] = useState([])
 
   const isAdmin = userRole === 'admin'
+  const isReceptionist = userRole === 'receptionist'
+  const seesAllVets = isAdmin || isReceptionist
 
   const dateLabel = selectedDate.toLocaleDateString(locale, {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
@@ -41,17 +44,17 @@ const VisitsTab = ({ userRole = null, currentUserId = null }) => {
     try {
       const dateStr = toDateStr(selectedDate)
       const params = { date: dateStr }
-      if (!isAdmin && currentUserId) params.vet = currentUserId
+      if (!seesAllVets && currentUserId) params.vet = currentUserId
 
       const [aptsRes, vetsRes] = await Promise.all([
         appointmentsAPI.list(params),
-        isAdmin ? vetsAPI.list() : Promise.resolve(null),
+        seesAllVets ? vetsAPI.list() : Promise.resolve(null),
       ])
 
       const apts = aptsRes.data.results || aptsRes.data || []
       setAppointments(apts)
 
-      if (isAdmin && vetsRes) {
+      if (seesAllVets && vetsRes) {
         setVets(vetsRes.data.results || vetsRes.data || [])
       }
     } catch {
@@ -62,6 +65,23 @@ const VisitsTab = ({ userRole = null, currentUserId = null }) => {
   }
 
   useEffect(() => { fetchData() }, [selectedDate, userRole, currentUserId])
+
+  useEffect(() => {
+    schedulerAPI.listClinicHours()
+      .then(res => setClinicHours(res.data.results || res.data || []))
+      .catch(() => setClinicHours([]))
+  }, [])
+
+  const gridHours = (() => {
+    const active = clinicHours.filter(h => h.is_active)
+    if (!active.length) return DEFAULT_HOURS
+    const minHour = Math.min(...active.map(h => parseInt(h.start_time.split(':')[0], 10)))
+    const maxHour = Math.max(...active.map(h => {
+      const [hh, mm] = h.end_time.split(':').map(Number)
+      return mm > 0 ? hh + 1 : hh
+    }))
+    return Array.from({ length: maxHour - minHour }, (_, i) => i + minHour)
+  })()
 
   const changeDate = (delta) => {
     const d = new Date(selectedDate)
@@ -94,11 +114,11 @@ const VisitsTab = ({ userRole = null, currentUserId = null }) => {
 
   // For doctor view: render a single timeline column
   const renderSingleColumn = () => (
-    <div className="visits-grid visits-grid--single">
+    <div className="visits-grid visits-grid--single" style={{ gridTemplateRows: `auto repeat(${gridHours.length}, 60px)` }}>
       <div className="vt-gutter" />
       <div className="vt-col-header vt-col-header--mine">{t('visits.myVisits')}</div>
 
-      {HOURS.map(hour => {
+      {gridHours.map(hour => {
         const apts = aptsForHour(hour)
         return (
           <Fragment key={hour}>
@@ -140,7 +160,10 @@ const VisitsTab = ({ userRole = null, currentUserId = null }) => {
     return (
       <div
         className="visits-grid"
-        style={{ gridTemplateColumns: `56px repeat(${displayVets.length}, minmax(160px, 1fr))` }}
+        style={{
+          gridTemplateColumns: `56px repeat(${displayVets.length}, minmax(160px, 1fr))`,
+          gridTemplateRows: `auto repeat(${gridHours.length}, 60px)`,
+        }}
       >
         {/* header row */}
         <div className="vt-gutter" />
@@ -159,7 +182,7 @@ const VisitsTab = ({ userRole = null, currentUserId = null }) => {
         ))}
 
         {/* hour rows */}
-        {HOURS.map(hour => (
+        {gridHours.map(hour => (
           <Fragment key={hour}>
             <div className="vt-hour-label">{hour}:00</div>
             {displayVets.map((vet, i) => {
@@ -212,7 +235,7 @@ const VisitsTab = ({ userRole = null, currentUserId = null }) => {
 
       {!loading && (
         <div className="vt-scroll">
-          {isAdmin ? renderAdminColumns() : renderSingleColumn()}
+          {seesAllVets ? renderAdminColumns() : renderSingleColumn()}
         </div>
       )}
 

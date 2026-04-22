@@ -128,6 +128,7 @@ export const queueAPI = {
   call: (id) => api.post(`/queue/${id}/call/`),
   requeue: (id) => api.post(`/queue/${id}/requeue/`),
   done: (id) => api.post(`/queue/${id}/done/`),
+  registerIncoming: (data) => api.post("/queue/register-incoming/", data),
 };
 
 export const remindersAPI = {

@@ -233,13 +233,11 @@
   background: white;
 }
 
-/* One unified grid — header row + 12 hour rows */
+/* One unified grid — header row + N hour rows (row count set via inline style) */
 .cal-week-grid {
   display: grid;
   grid-template-columns: 48px repeat(7, 1fr);
-  /* row 1 = header (auto height), rows 2-13 = hours (equal share) */
-  grid-template-rows: auto repeat(12, 1fr);
-  min-height: 100%;
+  /* grid-template-rows is set dynamically via inline style (60px per hour row) */
 }
 
 /* Header cells span row 1 and are sticky */
@@ -286,7 +284,6 @@
   gap: 2px;
   cursor: pointer;
   transition: background 0.1s;
-  min-height: 0;
   overflow: hidden;
 }
 

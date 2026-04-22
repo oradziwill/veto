@@ -105,9 +105,7 @@
 .visits-grid {
   display: grid;
   grid-template-columns: 56px 1fr;
-  grid-auto-rows: auto;
-  min-height: 100%;
-  grid-template-rows: auto repeat(12, minmax(72px, 1fr));
+  /* grid-template-rows set dynamically via inline style (60px per hour row) */
 }
 
 .visits-grid--single {
