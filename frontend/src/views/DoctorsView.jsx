@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   PawPrint, ClipboardList, CalendarDays, Users, Package,
-  Bot, BarChart2, Layers, CalendarCog, Stethoscope, Plus, Receipt,
+  Bot, BarChart2, Layers, CalendarCog, Stethoscope, Plus, Receipt, Inbox,
 } from "lucide-react";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
@@ -15,6 +15,7 @@ import ServiceCatalogTab from "../components/tabs/ServiceCatalogTab";
 import OwnerDashboardTab from "../components/tabs/OwnerDashboardTab";
 import SchedulerTab from "../components/tabs/SchedulerTab";
 import InvoicesTab from "../components/tabs/InvoicesTab";
+import InboxTab from "../components/tabs/InboxTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
 import { authAPI, queueAPI, vetsAPI } from "../services/api";
@@ -156,6 +157,7 @@ const DoctorsView = () => {
     { id: "visits", label: t("tabs.visits"), icon: ClipboardList },
     { id: "calendar", label: t("tabs.calendar"), icon: CalendarDays },
     { id: "waiting-room", label: t("tabs.waitingRoom"), icon: Users },
+    { id: "inbox", label: t("tabs.inbox"), icon: Inbox },
     { id: "inventory", label: t("tabs.inventory"), icon: Package },
     { id: "ai-assistant", label: t("tabs.aiAssistant"), icon: Bot },
   ];
@@ -208,6 +210,8 @@ const DoctorsView = () => {
             }}
           />
         );
+      case "inbox":
+        return <InboxTab userRole={userRole} currentUserId={currentUserId} />;
       case "inventory":
         return <InventoryTab />;
       case "ai-assistant":

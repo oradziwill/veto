@@ -105,6 +105,7 @@ INSTALLED_APPS = [
     "apps.reports.apps.ReportsConfig",
     "apps.portal.apps.PortalConfig",
     "apps.webhooks.apps.WebhooksConfig",
+    "apps.inbox.apps.InboxConfig",
     "behave_django",
 ]
 

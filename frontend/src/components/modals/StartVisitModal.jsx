@@ -129,6 +129,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
   const [formData, setFormData] = useState({
     patient: '',
     visitNotes: '',
+    recommendations: '',
     medicalReceipts: '',
     additionalNotes: '',
   })
@@ -152,6 +153,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [suggestedAppointment, setSuggestedAppointment] = useState(null)
+
+  const [referrals, setReferrals] = useState([])
 
   // Recording state
   const mediaRecorderRef = useRef(null)
@@ -221,6 +224,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       setTranscriptionResult(null)
       setTranscriptionError(null)
       setMeetingNotes('')
+      setReferrals([])
     }
   }, [isOpen])
 
@@ -246,6 +250,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       setFormData({
         patient: initialPatient.id.toString(),
         visitNotes: initialChiefComplaint || '',
+        recommendations: '',
         medicalReceipts: '',
         additionalNotes: '',
       })
@@ -256,6 +261,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     setFormData({
       patient: '',
       visitNotes: '',
+      recommendations: '',
       medicalReceipts: '',
       additionalNotes: '',
     })
@@ -407,6 +413,47 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     } else {
       setFormData(prev => ({ ...prev, [name]: value }))
     }
+  }
+
+  const REFERRAL_TYPES = ['RTG', 'USG', 'Morfologia', 'Badanie moczu', 'EKG', 'Histopatologia', 'Inne']
+  const REFERRAL_PRIORITIES = ['Planowy', 'Pilny', 'Cito']
+
+  const generateReferralPreview = (r) => {
+    const parts = [`Wskazane badanie: ${r.type || '—'}${r.area ? ` (${r.area})` : ''}.`]
+    if (r.notes?.trim()) parts.push(r.notes.trim() + '.')
+    if (r.priority) parts.push(`Priorytet: ${r.priority}.`)
+    if (r.location === 'external') {
+      parts.push(`Skierowanie zewnętrzne${r.externalUnit ? ` — ${r.externalUnit}` : ''}.`)
+    } else {
+      parts.push('Badanie do wykonania na miejscu.')
+    }
+    return parts.join(' ')
+  }
+
+  const addReferral = () => {
+    const newReferral = {
+      id: crypto.randomUUID(),
+      type: 'RTG',
+      area: '',
+      location: 'internal',
+      externalUnit: '',
+      priority: 'Planowy',
+      notes: '',
+      previewText: '',
+    }
+    newReferral.previewText = generateReferralPreview(newReferral)
+    setReferrals(prev => [...prev, newReferral])
+  }
+
+  const removeReferral = (id) => setReferrals(prev => prev.filter(r => r.id !== id))
+
+  const updateReferral = (id, field, value) => {
+    setReferrals(prev => prev.map(r => {
+      if (r.id !== id) return r
+      const updated = { ...r, [field]: value }
+      if (field !== 'previewText') updated.previewText = generateReferralPreview(updated)
+      return updated
+    }))
   }
 
   const addService = () => {
@@ -600,6 +647,9 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       if (formData.visitNotes.trim()) {
         noteParts.push(`Notatki:\n${formData.visitNotes.trim()}`)
       }
+      if (formData.recommendations.trim()) {
+        noteParts.push(`Zalecenia:\n${formData.recommendations.trim()}`)
+      }
       if (selectedServices.length > 0) {
         const svcLines = selectedServices.map(s => `- ${s.name} (${s.price} PLN)`)
         noteParts.push(`Usługi:\n${svcLines.join('\n')}`)
@@ -610,6 +660,10 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       }
       if (formData.additionalNotes.trim()) {
         noteParts.push(`ADDITIONAL NOTES:\n${formData.additionalNotes.trim()}`)
+      }
+      if (referrals.length > 0) {
+        const refLines = referrals.map((r, i) => `${i + 1}. ${r.previewText || generateReferralPreview(r)}`)
+        noteParts.push(`Skierowania:\n${refLines.join('\n')}`)
       }
       if (meetingNotes.trim()) {
         noteParts.push(`=== Notatki ze spotkania (AI) ===\n${meetingNotes.trim()}`)
@@ -712,6 +766,7 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       setFormData({
         patient: '',
         visitNotes: '',
+        recommendations: '',
         medicalReceipts: '',
         additionalNotes: '',
       })
@@ -1004,6 +1059,137 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
               rows="3"
               placeholder={t('startVisit.visitNotesPlaceholder')}
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="recommendations">Zalecenia ogólne</label>
+            <textarea
+              id="recommendations"
+              name="recommendations"
+              value={formData.recommendations}
+              onChange={handleChange}
+              rows="3"
+              placeholder="Zalecenia dla właściciela — dieta, tryb życia, termin kontroli..."
+            />
+          </div>
+
+          {/* ── Skierowania ── */}
+          <div className="form-group" style={{ marginTop: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <label style={{ marginBottom: 0 }}>Skierowania na badania dodatkowe</label>
+              <button
+                type="button"
+                onClick={addReferral}
+                style={{ padding: '0.3rem 0.75rem', border: '1px solid #16a34a', borderRadius: '6px', background: 'white', color: '#16a34a', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                + Dodaj skierowanie
+              </button>
+            </div>
+
+            {referrals.length === 0 && (
+              <div style={{ fontSize: '0.88rem', color: '#a0aec0', padding: '0.75rem', background: '#f7fafc', borderRadius: '8px', border: '1px dashed #e2e8f0', textAlign: 'center' }}>
+                Brak skierowań — kliknij „Dodaj skierowanie" aby dodać
+              </div>
+            )}
+
+            {referrals.map((ref, idx) => (
+              <div key={ref.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '1rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <span style={{ fontWeight: '600', fontSize: '0.88rem', color: '#4a5568' }}>Skierowanie {idx + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeReferral(ref.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', fontSize: '1.1rem', lineHeight: 1, padding: '0 0.25rem' }}
+                    title="Usuń skierowanie"
+                  >×</button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.6rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: '#718096', marginBottom: '0.2rem', display: 'block' }}>Typ badania</label>
+                    <select
+                      value={ref.type}
+                      onChange={e => updateReferral(ref.id, 'type', e.target.value)}
+                      style={{ width: '100%', padding: '0.4rem 0.5rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.9rem' }}
+                    >
+                      {REFERRAL_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.8rem', fontWeight: '600', color: '#718096', marginBottom: '0.2rem', display: 'block' }}>Priorytet</label>
+                    <select
+                      value={ref.priority}
+                      onChange={e => updateReferral(ref.id, 'priority', e.target.value)}
+                      style={{ width: '100%', padding: '0.4rem 0.5rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.9rem' }}
+                    >
+                      {REFERRAL_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '0.6rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: '600', color: '#718096', marginBottom: '0.2rem', display: 'block' }}>Obszar / odcinek</label>
+                  <input
+                    type="text"
+                    value={ref.area}
+                    onChange={e => updateReferral(ref.id, 'area', e.target.value)}
+                    placeholder="np. kręgosłup lędźwiowy L3–L5"
+                    style={{ width: '100%', padding: '0.4rem 0.5rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '0.6rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: '600', color: '#718096', marginBottom: '0.4rem', display: 'block' }}>Miejsce wykonania</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {[['internal', 'Na miejscu'], ['external', 'Zewnętrzne']].map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => updateReferral(ref.id, 'location', val)}
+                        style={{
+                          padding: '0.35rem 0.875rem', border: `1px solid ${ref.location === val ? '#16a34a' : '#e2e8f0'}`,
+                          borderRadius: '6px', background: ref.location === val ? '#f0fff4' : 'white',
+                          color: ref.location === val ? '#16a34a' : '#718096',
+                          fontWeight: ref.location === val ? '600' : '400', fontSize: '0.875rem', cursor: 'pointer',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {ref.location === 'external' && (
+                    <input
+                      type="text"
+                      value={ref.externalUnit}
+                      onChange={e => updateReferral(ref.id, 'externalUnit', e.target.value)}
+                      placeholder="Nazwa jednostki zewnętrznej"
+                      style={{ marginTop: '0.4rem', width: '100%', padding: '0.4rem 0.5rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                  )}
+                </div>
+
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: '600', color: '#718096', marginBottom: '0.2rem', display: 'block' }}>Wskazania / uwagi</label>
+                  <textarea
+                    value={ref.notes}
+                    onChange={e => updateReferral(ref.id, 'notes', e.target.value)}
+                    rows="2"
+                    placeholder="Dodatkowe informacje dla wykonującego badanie..."
+                    style={{ width: '100%', padding: '0.4rem 0.5rem', border: '1px solid #ddd', borderRadius: '6px', fontSize: '0.9rem', resize: 'vertical', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.8rem', fontWeight: '600', color: '#718096', marginBottom: '0.2rem', display: 'block' }}>Podgląd treści skierowania</label>
+                  <textarea
+                    value={ref.previewText}
+                    onChange={e => updateReferral(ref.id, 'previewText', e.target.value)}
+                    rows="2"
+                    style={{ width: '100%', padding: '0.4rem 0.5rem', border: '1px solid #805ad5', borderRadius: '6px', fontSize: '0.875rem', background: '#faf5ff', color: '#44337a', resize: 'vertical', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
 
           <div className="form-group">
