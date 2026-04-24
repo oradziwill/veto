@@ -191,6 +191,14 @@ export const transcriptionAPI = {
   pollJob: (jobId) => api.get(`/transcriptions/${jobId}/`),
 };
 
+export const inboxAPI = {
+  list: (params) => api.get("/inbox/", { params }),
+  create: (data) => api.post("/inbox/", data),
+  setStatus: (id, status, closeComment = "") =>
+    api.patch(`/inbox/${id}/set-status/`, { status, close_comment: closeComment }),
+  delete: (id) => api.delete(`/inbox/${id}/`),
+};
+
 export const schedulerAPI = {
   // Working hours (regular weekly schedule per vet)
   listWorkingHours: (params) => api.get("/schedule/working-hours/", { params }),
