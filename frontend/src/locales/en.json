@@ -36,7 +36,8 @@
     "newVisit": "New Visit",
     "serviceCatalog": "Services",
     "ownerDashboard": "Dashboard",
-    "scheduler": "Scheduler"
+    "scheduler": "Scheduler",
+    "assistant": "Assistant"
   },
   "patients": {
     "title": "Patients",
