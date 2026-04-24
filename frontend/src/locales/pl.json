@@ -36,7 +36,8 @@
     "newVisit": "Nowa wizyta",
     "serviceCatalog": "Usługi",
     "ownerDashboard": "Dashboard",
-    "scheduler": "Harmonogram"
+    "scheduler": "Harmonogram",
+    "assistant": "Asystent"
   },
   "patients": {
     "title": "Pacjenci",

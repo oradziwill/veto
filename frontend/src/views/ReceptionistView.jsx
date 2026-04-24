@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  CalendarDays, Users, PawPrint, ClipboardList, Receipt, Inbox,
+  CalendarDays, Users, PawPrint, ClipboardList, Receipt, Inbox, Bot,
 } from "lucide-react";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
@@ -10,6 +10,7 @@ import CalendarTab from "../components/tabs/CalendarTab";
 import WaitingRoomTab from "../components/tabs/WaitingRoomTab";
 import BillingTab from "../components/tabs/BillingTab";
 import InboxTab from "../components/tabs/InboxTab";
+import AssistantTab from "../components/tabs/AssistantTab";
 import LoginModal from "../components/LoginModal";
 import { authAPI, vetsAPI } from "../services/api";
 import "../components/tabs/Tabs.css";
@@ -103,6 +104,7 @@ const ReceptionistView = () => {
     { id: "patients",     label: t("tabs.patients"),     icon: PawPrint },
     { id: "visits",       label: t("tabs.visits"),       icon: ClipboardList },
     { id: "billing",      label: t("tabs.billing"),      icon: Receipt },
+    { id: "assistant",    label: t("tabs.assistant"),    icon: Bot },
   ];
 
   const renderTabContent = () => {
@@ -126,6 +128,8 @@ const ReceptionistView = () => {
         return <VisitsTab />;
       case "billing":
         return <BillingTab />;
+      case "assistant":
+        return <AssistantTab />;
       default:
         return (
           <CalendarTab
