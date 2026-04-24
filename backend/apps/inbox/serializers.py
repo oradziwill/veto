@@ -45,10 +45,16 @@ class InboxTaskSerializer(serializers.ModelSerializer):
 
     def get_created_by_name(self, obj):
         if obj.created_by:
-            return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip() or obj.created_by.username
+            return (
+                f"{obj.created_by.first_name} {obj.created_by.last_name}".strip()
+                or obj.created_by.username
+            )
         return None
 
     def get_closed_by_name(self, obj):
         if obj.closed_by:
-            return f"{obj.closed_by.first_name} {obj.closed_by.last_name}".strip() or obj.closed_by.username
+            return (
+                f"{obj.closed_by.first_name} {obj.closed_by.last_name}".strip()
+                or obj.closed_by.username
+            )
         return None

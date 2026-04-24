@@ -47,7 +47,11 @@ class InboxTaskViewSet(viewsets.ModelViewSet):
     def set_status(self, request, pk=None):
         task = self.get_object()
         new_status = request.data.get("status")
-        if new_status not in (InboxTask.Status.OPEN, InboxTask.Status.IN_PROGRESS, InboxTask.Status.CLOSED):
+        if new_status not in (
+            InboxTask.Status.OPEN,
+            InboxTask.Status.IN_PROGRESS,
+            InboxTask.Status.CLOSED,
+        ):
             return Response({"detail": "Invalid status."}, status=400)
 
         task.status = new_status
