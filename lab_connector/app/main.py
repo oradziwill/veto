@@ -16,6 +16,7 @@ if str(_ROOT) not in sys.path:
 load_dotenv(_ROOT / ".env")
 
 from app.config import Settings  # noqa: E402
+from app.device_agent import run_device_agent  # noqa: E402
 from app.health import start_health_server  # noqa: E402
 from app.metrics import ConnectorMetrics  # noqa: E402
 from app.outbox import Outbox  # noqa: E402
@@ -55,12 +56,19 @@ async def _run() -> None:
 
     async with srv:
         worker = asyncio.create_task(outbox_loop(settings, outbox, stop, metrics), name="outbox")
+        device_agent = None
+        if settings.agent_enabled:
+            device_agent = asyncio.create_task(run_device_agent(settings, stop, metrics), name="device-agent")
         try:
             await stop.wait()
         finally:
             worker.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await worker
+            if device_agent is not None:
+                device_agent.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await device_agent
 
 
 def main() -> None:

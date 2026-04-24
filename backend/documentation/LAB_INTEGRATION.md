@@ -122,6 +122,10 @@ Ta sama aplikacja działa wszędzie; różnią się **tylko zmienne środowiskow
 **Checklist przed pierwszym ruchem na środowisku:**
 `migrate` → ustaw `.env` / secrets (według [`.env.example`](../../.env.example)) → `manage.py check` → jeden test ingest na staging → dopiero prod.
 
+## Lokalny connector (Mindray BC-60R → ten sam JSON ingestu)
+
+Spec MVP (MLLP, mapowanie OBR/OBX → body `POST /api/lab-devices/<id>/ingest/`, checklista z kliniki): [LAB_CONNECTOR_BC60R_MVP.md](LAB_CONNECTOR_BC60R_MVP.md).
+
 ## Powiązane pliki
 
 - Modele: `apps/labs/models.py`
