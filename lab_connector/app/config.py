@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     retry_backoff_sec: list[int] = [60, 300, 900, 3600]
     max_delivery_attempts: int = 15
 
+    agent_enabled: bool = False
+    dm_base_url: str = ""
+    dm_bearer_token: str = ""
+    dm_node_id: str = "lab-connector-node"
+    dm_node_name: str = "Lab Connector Node"
+    dm_inventory_poll_sec: float = 60.0
+    dm_command_poll_sec: float = 5.0
+    dm_clinic_id: int | None = None
+
     @field_validator("outbox_db_path", mode="before")
     @classmethod
     def resolve_db_path(cls, v: str | Path) -> Path:
@@ -53,3 +62,8 @@ class Settings(BaseSettings):
 
     def ingest_url(self) -> str:
         return f"{self.veto_base_url}/api/lab-devices/{self.veto_device_id}/ingest/"
+
+    @field_validator("dm_base_url")
+    @classmethod
+    def strip_dm_slash(cls, v: str) -> str:
+        return v.rstrip("/")

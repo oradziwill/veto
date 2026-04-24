@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   PawPrint, ClipboardList, CalendarDays, Users, Package,
-  Bot, BarChart2, Layers, CalendarCog, Stethoscope, Plus, Receipt, Inbox,
+  Bot, BarChart2, Layers, CalendarCog, Stethoscope, Plus, Receipt, Inbox, Router,
 } from "lucide-react";
 import PatientsTab from "../components/tabs/PatientsTab";
 import VisitsTab from "../components/tabs/VisitsTab";
@@ -16,6 +16,7 @@ import OwnerDashboardTab from "../components/tabs/OwnerDashboardTab";
 import SchedulerTab from "../components/tabs/SchedulerTab";
 import InvoicesTab from "../components/tabs/InvoicesTab";
 import InboxTab from "../components/tabs/InboxTab";
+import IntegratedDevicesTab from "../components/tabs/IntegratedDevicesTab";
 import LoginModal from "../components/LoginModal";
 import StartVisitModal from "../components/modals/StartVisitModal";
 import { authAPI, queueAPI, vetsAPI } from "../services/api";
@@ -167,6 +168,7 @@ const DoctorsView = () => {
     { id: "billing", label: t("tabs.billing"), icon: Receipt },
     { id: "service-catalog", label: t("tabs.serviceCatalog"), icon: Layers },
     { id: "scheduler", label: t("tabs.scheduler"), icon: CalendarCog },
+    { id: "integrated-devices", label: "Integrated Devices", icon: Router },
   ] : [];
 
   const dynamicTabs = [
@@ -224,6 +226,8 @@ const DoctorsView = () => {
         return <OwnerDashboardTab />;
       case "scheduler":
         return <SchedulerTab />;
+      case "integrated-devices":
+        return <IntegratedDevicesTab />;
       default:
         return <PatientsTab />;
     }

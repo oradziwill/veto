@@ -234,4 +234,12 @@ export const schedulerAPI = {
   generate: (data) => api.post("/schedule/generate/", data),
 };
 
+export const deviceManagementAPI = {
+  listDevices: (params) => api.get("/device-management/devices/", { params }),
+  listEvents: (params) => api.get("/device-management/device-events/", { params }),
+  listCommands: (params) => api.get("/device-management/commands/", { params }),
+  listFiscalReceipts: (params) => api.get("/fiscal/receipts/", { params }),
+  retryFiscalReceipt: (id) => api.post(`/fiscal/receipts/${id}/retry/`),
+};
+
 export default api;
