@@ -130,6 +130,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     patient: '',
     visitNotes: '',
     recommendations: '',
+    diagnoza: '',
+    rokowanie: '',
     medicalReceipts: '',
     additionalNotes: '',
   })
@@ -251,6 +253,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         patient: initialPatient.id.toString(),
         visitNotes: initialChiefComplaint || '',
         recommendations: '',
+        diagnoza: '',
+        rokowanie: '',
         medicalReceipts: '',
         additionalNotes: '',
       })
@@ -262,6 +266,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       patient: '',
       visitNotes: '',
       recommendations: '',
+      diagnoza: '',
+      rokowanie: '',
       medicalReceipts: '',
       additionalNotes: '',
     })
@@ -647,6 +653,12 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
       if (formData.visitNotes.trim()) {
         noteParts.push(`Notatki:\n${formData.visitNotes.trim()}`)
       }
+      if (formData.diagnoza.trim()) {
+        noteParts.push(`Diagnoza:\n${formData.diagnoza.trim()}`)
+      }
+      if (formData.rokowanie) {
+        noteParts.push(`Rokowanie:\n${formData.rokowanie}`)
+      }
       if (formData.recommendations.trim()) {
         noteParts.push(`Zalecenia:\n${formData.recommendations.trim()}`)
       }
@@ -824,8 +836,81 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
         onClick={standalone ? undefined : (e) => e.stopPropagation()}
         style={standalone ? undefined : { maxWidth: '700px' }}
       >
-        <div className="modal-header">
-          <h2>{t('startVisit.title')}</h2>
+        <div className="modal-header" style={{ alignItems: 'center', gap: '0.75rem' }}>
+          <h2 style={{ flex: 1 }}>{t('startVisit.title')}</h2>
+
+          {/* ── Recording widget ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+            {!recording && !audioBlob && !transcribing && !transcriptionResult && (
+              <button
+                type="button"
+                onClick={startRecording}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.35rem',
+                  padding: '0.35rem 0.8rem', background: '#1e40af', color: 'white',
+                  border: 'none', borderRadius: '6px', fontSize: '0.8rem',
+                  fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                }}
+              >
+                🎙️ Nagraj wizytę
+              </button>
+            )}
+            {recording && (
+              <>
+                <span style={{ fontSize: '0.8rem', color: '#dc2626', fontWeight: 700 }}>
+                  ● {fmtRecordingTime(recordingSeconds)}
+                </span>
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  style={{
+                    padding: '0.35rem 0.8rem', background: '#dc2626', color: 'white',
+                    border: 'none', borderRadius: '6px', fontSize: '0.8rem',
+                    fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  ■ Zatrzymaj
+                </button>
+              </>
+            )}
+            {audioBlob && !transcribing && !transcriptionResult && (
+              <>
+                <span style={{ fontSize: '0.8rem', color: '#475569' }}>🎵 {fmtRecordingTime(recordingSeconds)}</span>
+                <button
+                  type="button"
+                  onClick={handleTranscribe}
+                  style={{
+                    padding: '0.35rem 0.8rem', background: '#16a34a', color: 'white',
+                    border: 'none', borderRadius: '6px', fontSize: '0.8rem',
+                    fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Transkrybuj
+                </button>
+                <button
+                  type="button"
+                  onClick={resetRecording}
+                  style={{
+                    padding: '0.35rem 0.6rem', background: 'none',
+                    border: '1px solid #e2e8f0', borderRadius: '6px',
+                    fontSize: '0.8rem', cursor: 'pointer', color: '#64748b',
+                  }}
+                >
+                  Usuń
+                </button>
+              </>
+            )}
+            {transcribing && (
+              <span style={{ fontSize: '0.8rem', color: '#64748b' }}>⏳ Przetwarzanie...</span>
+            )}
+            {transcriptionResult && (
+              <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>✓ Transkrypcja gotowa</span>
+            )}
+            {transcriptionError && (
+              <span style={{ fontSize: '0.78rem', color: '#dc2626', maxWidth: '160px' }}>{transcriptionError}</span>
+            )}
+          </div>
+
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -1049,17 +1134,6 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
             </div>
           )}
 
-          <div className="form-group">
-            <label htmlFor="visitNotes">{t('startVisit.visitNotes')}</label>
-            <textarea
-              id="visitNotes"
-              name="visitNotes"
-              value={formData.visitNotes}
-              onChange={handleChange}
-              rows="3"
-              placeholder={t('startVisit.visitNotesPlaceholder')}
-            />
-          </div>
 
           <div className="form-group">
             <label htmlFor="recommendations">Zalecenia ogólne</label>
@@ -1071,6 +1145,55 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
               rows="3"
               placeholder="Zalecenia dla właściciela — dieta, tryb życia, termin kontroli..."
             />
+          </div>
+
+          <div className="form-group" style={{ paddingTop: '1rem', borderTop: '2px solid #e2e8f0' }}>
+            <label htmlFor="diagnoza" style={{ fontWeight: '700', color: '#1a202c', fontSize: '0.95rem' }}>Diagnoza</label>
+            <textarea
+              id="diagnoza"
+              name="diagnoza"
+              value={formData.diagnoza}
+              onChange={handleChange}
+              rows="4"
+              placeholder="Rozpoznanie końcowe..."
+              style={{ borderColor: '#3182ce', background: '#ebf8ff' }}
+            />
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontWeight: '700', color: '#1a202c', fontSize: '0.95rem' }}>Rokowanie</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.25rem' }}>
+              {[
+                { value: 'pomyślne',    color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
+                { value: 'niepewne',    color: '#b45309', bg: '#fffbeb', border: '#fcd34d' },
+                { value: 'ostrożne',    color: '#c2410c', bg: '#fff7ed', border: '#fdba74' },
+                { value: 'wątpliwe',    color: '#b91c1c', bg: '#fef2f2', border: '#fca5a5' },
+                { value: 'niepomyślne', color: '#991b1b', bg: '#fef2f2', border: '#ef4444' },
+                { value: 'złe',         color: '#7f1d1d', bg: '#fff1f2', border: '#e11d48' },
+              ].map(({ value, color, bg, border }) => {
+                const active = formData.rokowanie === value
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, rokowanie: active ? '' : value }))}
+                    style={{
+                      padding: '0.4rem 1rem',
+                      borderRadius: '999px',
+                      border: `1.5px solid ${active ? border : '#e5e7eb'}`,
+                      background: active ? bg : '#fff',
+                      color: active ? color : '#6b7280',
+                      fontWeight: active ? 700 : 500,
+                      fontSize: '0.875rem',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {value}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* ── Skierowania ── */}
@@ -1270,6 +1393,76 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
           </div>
 
           <div className="form-group">
+            <label>{t('startVisit.services')}</label>
+            <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.75rem' }}>
+              {t('startVisit.servicesHint')}
+            </p>
+            {loadingServices ? (
+              <div className="loading-text">{t('startVisit.loadingServices')}</div>
+            ) : servicesError ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '0.9rem', color: '#c53030' }}>{t('startVisit.servicesLoadError')}</span>
+                <button
+                  type="button"
+                  onClick={() => setServicesFetchKey(k => k + 1)}
+                  style={{ padding: '0.3rem 0.75rem', fontSize: '0.85rem', background: '#fff', border: '1px solid #c53030', borderRadius: '4px', color: '#c53030', cursor: 'pointer' }}
+                >
+                  {t('common.retry')}
+                </button>
+              </div>
+            ) : services.length === 0 ? (
+              <div style={{ fontSize: '0.9rem', color: '#718096' }}>
+                {t('startVisit.noServicesAvailable')}
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                  <select
+                    value={serviceToAdd}
+                    onChange={(e) => setServiceToAdd(e.target.value)}
+                    style={{ flex: 1, padding: '0.5rem', fontSize: '1rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                  >
+                    <option value="">{t('startVisit.chooseService')}</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name} – {service.price} PLN
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={addService}
+                    disabled={!serviceToAdd}
+                    style={{ padding: '0.5rem 1rem' }}
+                  >
+                    {t('common.add')}
+                  </button>
+                </div>
+                {selectedServices.length > 0 && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', marginBottom: '0.75rem' }}>
+                      {selectedServices.map((s, index) => (
+                        <div
+                          key={`${s.id}-${index}`}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', backgroundColor: '#e6fffa', borderRadius: '4px', fontSize: '0.95rem' }}
+                        >
+                          <span>{s.name} – {s.price} PLN</span>
+                          <button type="button" onClick={() => removeService(index)} style={{ background: 'none', border: 'none', color: '#c53030', cursor: 'pointer', padding: '0.25rem', fontSize: '1.1rem', lineHeight: 1 }} title="Remove">×</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ padding: '0.75rem 1rem', backgroundColor: '#f7fafc', borderRadius: '4px', borderTop: '2px solid #2f855a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: '600', fontSize: '1.1rem' }}>
+                      <span>{t('startVisit.visitBalance')}</span>
+                      <span>{selectedServices.reduce((sum, s) => sum + parseFloat(s.price) || 0, 0).toFixed(2)} PLN</span>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="form-group">
             <label htmlFor="medicalReceipts">{t('startVisit.medicalReceipts')}</label>
             <input
               type="text"
@@ -1297,269 +1490,43 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
             />
           </div>
 
-          {/* ── Recording / AI Transcription ── */}
-          <div
-            className="form-group"
-            style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}
-          >
-            <label style={{ marginBottom: '0.5rem', display: 'block' }}>
-              Nagranie wizyty (transkrypcja AI)
-            </label>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  {!recording && !audioBlob && !transcribing && !transcriptionResult && (
-                    <button
-                      type="button"
-                      onClick={startRecording}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '0.4rem',
-                        padding: '0.45rem 1rem', background: '#1e40af', color: 'white',
-                        border: 'none', borderRadius: '6px', fontSize: '0.875rem',
-                        fontWeight: 600, cursor: 'pointer',
-                      }}
-                    >
-                      🎙️ Nagraj
-                    </button>
-                  )}
-
-                  {recording && (
-                    <>
-                      <span style={{ fontSize: '0.875rem', color: '#dc2626', fontWeight: 600 }}>
-                        ● Nagrywanie {fmtRecordingTime(recordingSeconds)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={stopRecording}
-                        style={{
-                          padding: '0.45rem 1rem', background: '#dc2626', color: 'white',
-                          border: 'none', borderRadius: '6px', fontSize: '0.875rem',
-                          fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        ■ Zatrzymaj
-                      </button>
-                    </>
-                  )}
-
-                  {audioBlob && !transcribing && !transcriptionResult && (
-                    <>
-                      <span style={{ fontSize: '0.875rem', color: '#475569' }}>
-                        🎵 Nagranie ({fmtRecordingTime(recordingSeconds)})
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleTranscribe}
-                        style={{
-                          padding: '0.45rem 1rem', background: '#16a34a', color: 'white',
-                          border: 'none', borderRadius: '6px', fontSize: '0.875rem',
-                          fontWeight: 600, cursor: 'pointer',
-                        }}
-                      >
-                        Transkrybuj
-                      </button>
-                      <button
-                        type="button"
-                        onClick={resetRecording}
-                        style={{
-                          padding: '0.45rem 0.75rem', background: 'none',
-                          border: '1px solid #e2e8f0', borderRadius: '6px',
-                          fontSize: '0.875rem', cursor: 'pointer', color: '#64748b',
-                        }}
-                      >
-                        Usuń
-                      </button>
-                    </>
-                  )}
-
-                  {transcribing && (
-                    <span style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                      ⏳ Przetwarzanie... (może potrwać 1–2 min)
-                    </span>
-                  )}
-
-                  {transcriptionResult && (
-                    <span style={{ fontSize: '0.875rem', color: '#16a34a', fontWeight: 600 }}>
-                      ✓ Transkrypcja gotowa — pola wypełnione automatycznie
-                    </span>
-                  )}
-                </div>
-
-                {transcriptionError && (
-                  <p style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#dc2626' }}>
-                    {transcriptionError}
+          {(transcriptionResult?.transcript || meetingNotes) && (
+            <div className="form-group" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0' }}>
+              {transcriptionResult?.transcript && (
+                <details style={{ marginBottom: '0.75rem' }}>
+                  <summary style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>
+                    Pokaż transkrypt
+                  </summary>
+                  <p style={{
+                    marginTop: '0.5rem', padding: '0.75rem', background: '#f8fafc',
+                    border: '1px solid #e2e8f0', borderRadius: '6px',
+                    fontSize: '0.85rem', color: '#334155', whiteSpace: 'pre-wrap',
+                  }}>
+                    {transcriptionResult.transcript}
                   </p>
-                )}
-
-                {transcriptionResult?.transcript && (
-                  <details style={{ marginTop: '0.75rem' }}>
-                    <summary style={{ fontSize: '0.85rem', color: '#64748b', cursor: 'pointer' }}>
-                      Pokaż transkrypt
-                    </summary>
-                    <p style={{
-                      marginTop: '0.5rem', padding: '0.75rem', background: '#f8fafc',
-                      border: '1px solid #e2e8f0', borderRadius: '6px',
-                      fontSize: '0.85rem', color: '#334155', whiteSpace: 'pre-wrap',
-                    }}>
-                      {transcriptionResult.transcript}
-                    </p>
-                  </details>
-                )}
-
-                {meetingNotes && (
-                  <div style={{ marginTop: '1rem' }}>
-                    <label style={{
-                      display: 'block', marginBottom: '0.375rem',
-                      fontSize: '0.85rem', fontWeight: 600, color: '#334155',
-                    }}>
-                      Notatki ze spotkania (AI)
-                    </label>
-                    <textarea
-                      value={meetingNotes}
-                      onChange={e => setMeetingNotes(e.target.value)}
-                      rows={6}
-                      style={{
-                        width: '100%', padding: '0.625rem 0.75rem',
-                        border: '1px solid #e2e8f0', borderRadius: '6px',
-                        fontSize: '0.85rem', color: '#334155',
-                        background: '#f8fafc', resize: 'vertical',
-                        fontFamily: 'inherit', lineHeight: 1.5,
-                        boxSizing: 'border-box',
-                      }}
-                    />
-                  </div>
-                )}
-          </div>
-
-          <div
-            className="form-group"
-            style={{
-              marginTop: '1.5rem',
-              paddingTop: '1.5rem',
-              borderTop: '1px solid #e2e8f0',
-            }}
-          >
-            <label>{t('startVisit.services')}</label>
-            <p style={{ fontSize: '0.85rem', color: '#718096', marginBottom: '0.75rem' }}>
-              {t('startVisit.servicesHint')}
-            </p>
-            {loadingServices ? (
-              <div className="loading-text">{t('startVisit.loadingServices')}</div>
-            ) : servicesError ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '0.9rem', color: '#c53030' }}>{t('startVisit.servicesLoadError')}</span>
-                <button
-                  type="button"
-                  onClick={() => setServicesFetchKey(k => k + 1)}
-                  style={{
-                    padding: '0.3rem 0.75rem',
-                    fontSize: '0.85rem',
-                    background: '#fff',
-                    border: '1px solid #c53030',
-                    borderRadius: '4px',
-                    color: '#c53030',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {t('common.retry')}
-                </button>
-              </div>
-            ) : services.length === 0 ? (
-              <div style={{ fontSize: '0.9rem', color: '#718096' }}>
-                {t('startVisit.noServicesAvailable')}
-              </div>
-            ) : (
-              <>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                  <select
-                    value={serviceToAdd}
-                    onChange={(e) => setServiceToAdd(e.target.value)}
+                </details>
+              )}
+              {meetingNotes && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.375rem', fontSize: '0.85rem', fontWeight: 600, color: '#334155' }}>
+                    Notatki ze spotkania (AI)
+                  </label>
+                  <textarea
+                    value={meetingNotes}
+                    onChange={e => setMeetingNotes(e.target.value)}
+                    rows={5}
                     style={{
-                      flex: 1,
-                      padding: '0.5rem',
-                      fontSize: '1rem',
-                      border: '1px solid #ddd',
-                      borderRadius: '4px',
+                      width: '100%', padding: '0.625rem 0.75rem',
+                      border: '1px solid #e2e8f0', borderRadius: '6px',
+                      fontSize: '0.85rem', color: '#334155',
+                      background: '#f8fafc', resize: 'vertical',
+                      fontFamily: 'inherit', lineHeight: 1.5, boxSizing: 'border-box',
                     }}
-                  >
-                    <option value="">{t('startVisit.chooseService')}</option>
-                    {services.map((service) => (
-                      <option key={service.id} value={service.id}>
-                        {service.name} – {service.price} PLN
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={addService}
-                    disabled={!serviceToAdd}
-                    style={{ padding: '0.5rem 1rem' }}
-                  >
-                    {t('common.add')}
-                  </button>
+                  />
                 </div>
-                {selectedServices.length > 0 && (
-                  <>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', marginBottom: '0.75rem' }}>
-                      {selectedServices.map((s, index) => (
-                        <div
-                          key={`${s.id}-${index}`}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '0.5rem 0.75rem',
-                            backgroundColor: '#e6fffa',
-                            borderRadius: '4px',
-                            fontSize: '0.95rem',
-                          }}
-                        >
-                          <span>{s.name} – {s.price} PLN</span>
-                          <button
-                            type="button"
-                            onClick={() => removeService(index)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#c53030',
-                              cursor: 'pointer',
-                              padding: '0.25rem',
-                              fontSize: '1.1rem',
-                              lineHeight: 1,
-                            }}
-                            title="Remove"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <div
-                      style={{
-                        padding: '0.75rem 1rem',
-                        backgroundColor: '#f7fafc',
-                        borderRadius: '4px',
-                        borderTop: '2px solid #2f855a',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontWeight: '600',
-                        fontSize: '1.1rem',
-                      }}
-                    >
-                      <span>{t('startVisit.visitBalance')}</span>
-                      <span>
-                        {selectedServices
-                          .reduce((sum, s) => sum + parseFloat(s.price) || 0, 0)
-                          .toFixed(2)}{' '}
-                        PLN
-                      </span>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>

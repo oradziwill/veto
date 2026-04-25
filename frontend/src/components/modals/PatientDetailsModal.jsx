@@ -14,12 +14,23 @@ import './Modal.css'
  *   "Leki:\n- Med xQty unit\n..."
  * Everything else is returned as cleanNote.
  */
+const ROKOWANIE_STYLE = {
+  'pomyślne':    { color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
+  'niepewne':    { color: '#b45309', bg: '#fffbeb', border: '#fcd34d' },
+  'ostrożne':    { color: '#c2410c', bg: '#fff7ed', border: '#fdba74' },
+  'wątpliwe':    { color: '#b91c1c', bg: '#fef2f2', border: '#fca5a5' },
+  'niepomyślne': { color: '#991b1b', bg: '#fef2f2', border: '#ef4444' },
+  'złe':         { color: '#7f1d1d', bg: '#fff1f2', border: '#e11d48' },
+}
+
 function parseNote(note) {
-  if (!note) return { services: [], medications: [], cleanNote: '' }
+  if (!note) return { services: [], medications: [], diagnoza: '', rokowanie: '', cleanNote: '' }
 
   const paragraphs = note.split(/\n\n+/)
   const services = []
   const medications = []
+  let diagnoza = ''
+  let rokowanie = ''
   const rest = []
 
   for (const para of paragraphs) {
@@ -29,12 +40,16 @@ function parseNote(note) {
       lines.slice(1).forEach(l => { if (l.trim()) services.push(l.replace(/^- /, '').trim()) })
     } else if (header === 'Leki:') {
       lines.slice(1).forEach(l => { if (l.trim()) medications.push(l.replace(/^- /, '').trim()) })
+    } else if (header === 'Diagnoza:') {
+      diagnoza = lines.slice(1).join('\n').trim()
+    } else if (header === 'Rokowanie:') {
+      rokowanie = lines.slice(1).join('\n').trim()
     } else {
       rest.push(para)
     }
   }
 
-  return { services, medications, cleanNote: rest.join('\n\n') }
+  return { services, medications, diagnoza, rokowanie, cleanNote: rest.join('\n\n') }
 }
 
 const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
@@ -454,7 +469,7 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
               {!loadingHistory && history.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
                   {history.map((entry, idx) => {
-                    const { services, medications, cleanNote } = parseNote(entry.note)
+                    const { services, medications, diagnoza, rokowanie, cleanNote } = parseNote(entry.note)
                     return (
                       <div key={entry.id} style={{ display: 'flex', gap: '1rem' }}>
                         {/* Timeline spine */}
@@ -470,12 +485,33 @@ const PatientDetailsModal = ({ isOpen, onClose, patient, userRole = null }) => {
                                 <div style={{ fontWeight: '600', color: '#1a202c', fontSize: '0.9rem' }}>{formatDate(entry.visit_date || entry.created_at)}</div>
                                 {entry.created_by_name && <div style={{ fontSize: '0.8rem', color: '#a0aec0', marginTop: '0.125rem' }}>Dr {entry.created_by_name}</div>}
                               </div>
-                              {entry.appointment && (
-                                <span style={{ fontSize: '0.75rem', color: '#718096', padding: '0.2rem 0.6rem', background: '#f7fafc', borderRadius: '999px', border: '1px solid #e2e8f0' }}>
-                                  #{typeof entry.appointment === 'object' ? entry.appointment.id : entry.appointment}
-                                </span>
-                              )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                {rokowanie && (() => {
+                                  const s = ROKOWANIE_STYLE[rokowanie] || { color: '#6b7280', bg: '#f3f4f6', border: '#e5e7eb' }
+                                  return (
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '0.2rem 0.7rem', background: s.bg, color: s.color, border: `1.5px solid ${s.border}`, borderRadius: '999px' }}>
+                                      {rokowanie}
+                                    </span>
+                                  )
+                                })()}
+                                {entry.appointment && (
+                                  <span style={{ fontSize: '0.75rem', color: '#718096', padding: '0.2rem 0.6rem', background: '#f7fafc', borderRadius: '999px', border: '1px solid #e2e8f0' }}>
+                                    #{typeof entry.appointment === 'object' ? entry.appointment.id : entry.appointment}
+                                  </span>
+                                )}
+                              </div>
                             </div>
+
+                            {diagnoza && (
+                              <div style={{ marginBottom: '0.75rem', padding: '0.625rem 0.875rem', background: '#ebf8ff', borderRadius: '8px', borderLeft: '4px solid #3182ce' }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: '700', color: '#2b6cb0', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>
+                                  Diagnoza
+                                </div>
+                                <div style={{ fontSize: '0.875rem', color: '#1a365d', fontWeight: '500', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                                  {diagnoza}
+                                </div>
+                              </div>
+                            )}
 
                             {services.length > 0 && (
                               <div style={{ marginBottom: '0.625rem' }}>
