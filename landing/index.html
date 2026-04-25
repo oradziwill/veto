@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Veto — System zarządzania kliniką weterynaryjną</title>
+  <meta name="description" content="Veto to nowoczesny system dla klinik weterynaryjnych — kalendarz, poczekalnia, faktury, transkrypcja AI i więcej. Wszystko w jednym miejscu." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green: #22c55e;
+      --green-dim: #16a34a;
+      --green-bg: #f0fdf4;
+      --dark: #0a0e17;
+      --dark-2: #111827;
+      --dark-3: #1f2937;
+      --gray: #6b7280;
+      --gray-light: #f3f4f6;
+      --border: #e5e7eb;
+      --white: #ffffff;
+      --radius: 14px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #111827;
+      background: #fff;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .nav-logo-mark {
+      width: 36px;
+      height: 36px;
+      background: var(--green);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .nav-logo-text {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--dark);
+      letter-spacing: -0.03em;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray);
+      transition: color 0.15s;
+    }
+
+    .nav-links a:hover { color: var(--dark); }
+
+    .nav-cta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-outline {
+      border: 1.5px solid var(--border);
+      background: transparent;
+      color: var(--dark);
+    }
+
+    .btn-outline:hover { border-color: #9ca3af; background: var(--gray-light); }
+
+    .btn-primary {
+      background: var(--green);
+      color: white;
+    }
+
+    .btn-primary:hover { background: var(--green-dim); }
+
+    .btn-lg {
+      padding: 14px 28px;
+      font-size: 15px;
+      border-radius: 12px;
+    }
+
+    .btn-dark {
+      background: var(--dark);
+      color: white;
+    }
+
+    .btn-dark:hover { background: var(--dark-3); }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 140px 24px 100px;
+      text-align: center;
+      background: linear-gradient(180deg, #f8fffe 0%, #fff 60%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -120px; left: 50%;
+      transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--green-bg);
+      border: 1px solid #bbf7d0;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #15803d;
+      margin-bottom: 28px;
+    }
+
+    .hero-badge-dot {
+      width: 7px; height: 7px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    h1 {
+      font-size: clamp(38px, 6vw, 68px);
+      font-weight: 900;
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+      color: var(--dark);
+      max-width: 820px;
+      margin: 0 auto 24px;
+    }
+
+    h1 .accent { color: var(--green); }
+
+    .hero-sub {
+      font-size: clamp(16px, 2vw, 19px);
+      color: var(--gray);
+      max-width: 560px;
+      margin: 0 auto 40px;
+      line-height: 1.65;
+    }
+
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 64px;
+    }
+
+    /* ── STATS ── */
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+      padding: 32px 24px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-num {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--dark);
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--gray);
+      margin-top: 4px;
+    }
+
+    /* ── SECTIONS ── */
+    section { padding: 96px 24px; }
+
+    .container {
+      max-width: 1140px;
+      margin: 0 auto;
+    }
+
+    .section-tag {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      color: var(--dark);
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      font-size: 17px;
+      color: var(--gray);
+      max-width: 540px;
+      line-height: 1.65;
+    }
+
+    .section-head {
+      margin-bottom: 56px;
+    }
+
+    .section-head.centered {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── FEATURES GRID ── */
+    .features-section { background: var(--gray-light); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .feature-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+    .feature-card:hover {
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      transform: translateY(-2px);
+    }
+
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      margin-bottom: 16px;
+    }
+
+    .feature-icon.green  { background: #dcfce7; }
+    .feature-icon.blue   { background: #dbeafe; }
+    .feature-icon.purple { background: #ede9fe; }
+    .feature-icon.orange { background: #ffedd5; }
+    .feature-icon.pink   { background: #fce7f3; }
+    .feature-icon.teal   { background: #ccfbf1; }
+
+    .feature-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--gray);
+      line-height: 1.65;
+    }
+
+    /* ── AI SECTION ── */
+    .ai-section { background: var(--dark); color: white; }
+    .ai-section h2 { color: white; }
+    .ai-section .section-tag { color: #4ade80; }
+    .ai-section .section-sub { color: rgba(255,255,255,0.55); }
+
+    .ai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .ai-features {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      margin-top: 40px;
+    }
+
+    .ai-feature {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .ai-feature-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: rgba(34,197,94,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .ai-feature-text h4 {
+      font-size: 15px;
+      font-weight: 600;
+      color: white;
+      margin-bottom: 4px;
+    }
+
+    .ai-feature-text p {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      line-height: 1.6;
+    }
+
+    .ai-visual {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 28px;
+      font-size: 13px;
+    }
+
+    .ai-visual-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .ai-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .ai-dot.red { background: #ef4444; }
+    .ai-dot.yellow { background: #eab308; }
+    .ai-dot.green { background: var(--green); }
+
+    .ai-visual-title {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      margin-left: auto;
+    }
+
+    .ai-line {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: flex-start;
+    }
+
+    .ai-line-label {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .ai-line-label.mic { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .ai-line-label.ai  { background: rgba(99,102,241,0.2); color: #a5b4fc; }
+
+    .ai-line-text {
+      color: rgba(255,255,255,0.75);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .ai-typing {
+      display: inline-block;
+      width: 2px; height: 14px;
+      background: var(--green);
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ── ROLES ── */
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .role-card {
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .role-card:hover {
+      border-color: var(--green);
+      box-shadow: 0 0 0 4px rgba(34,197,94,0.08);
+    }
+
+    .role-emoji { font-size: 32px; margin-bottom: 12px; }
+
+    .role-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .role-card > p {
+      font-size: 13px;
+      color: var(--gray);
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    .role-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .role-list li {
+      font-size: 13px;
+      color: #374151;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .role-list li::before {
+      content: '✓';
+      color: var(--green);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-section { background: var(--gray-light); }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 28px; left: calc(16.66% + 16px); right: calc(16.66% + 16px);
+      height: 2px;
+      background: linear-gradient(90deg, var(--green) 0%, var(--green) 100%);
+      background: repeating-linear-gradient(90deg, var(--green) 0, var(--green) 8px, transparent 8px, transparent 16px);
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+    }
+
+    .step-num {
+      width: 56px; height: 56px;
+      background: var(--green);
+      color: white;
+      border-radius: 50%;
+      font-size: 20px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 0 0 8px #f0fdf4;
+    }
+
+    .step h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .step p {
+      font-size: 14px;
+      color: var(--gray);
+      line-height: 1.65;
+    }
+
+    /* ── CTA ── */
+    .cta-section {
+      background: var(--dark);
+      text-align: center;
+      color: white;
+    }
+
+    .cta-section h2 {
+      color: white;
+      max-width: 600px;
+      margin: 0 auto 16px;
+    }
+
+    .cta-section p {
+      color: rgba(255,255,255,0.55);
+      font-size: 17px;
+      margin-bottom: 40px;
+    }
+
+    .cta-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-white {
+      background: white;
+      color: var(--dark);
+    }
+
+    .btn-white:hover { background: #f3f4f6; }
+
+    .btn-ghost {
+      border: 1.5px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.8);
+      background: transparent;
+    }
+
+    .btn-ghost:hover { background: rgba(255,255,255,0.08); }
+
+    /* ── FOOTER ── */
+    footer {
+      background: #0a0e17;
+      color: rgba(255,255,255,0.4);
+      padding: 40px 24px;
+      text-align: center;
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      max-width: 1140px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: rgba(255,255,255,0.6);
+      font-weight: 700;
+      font-size: 15px;
+    }
+
+    .footer-logo-mark {
+      width: 28px; height: 28px;
+      background: var(--green);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.15s;
+    }
+
+    .footer-links a:hover { color: rgba(255,255,255,0.7); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .ai-grid { grid-template-columns: 1fr; }
+      .roles-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr; }
+      .steps::before { display: none; }
+      .footer-inner { flex-direction: column; text-align: center; }
+      .stats-bar { gap: 28px; }
+    }
+
+    /* ── SCREENSHOT MOCKUP ── */
+    .mockup-section { background: #fff; padding-bottom: 0; }
+
+    .mockup-wrapper {
+      background: var(--dark-2);
+      border-radius: 20px 20px 0 0;
+      padding: 24px 24px 0;
+      margin-top: 48px;
+      overflow: hidden;
+      box-shadow: 0 -8px 60px rgba(0,0,0,0.15);
+    }
+
+    .mockup-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .mockup-dot {
+      width: 11px; height: 11px;
+      border-radius: 50%;
+    }
+
+    .mockup-dot.r { background: #ef4444; }
+    .mockup-dot.y { background: #eab308; }
+    .mockup-dot.g { background: #22c55e; }
+
+    .mockup-url {
+      flex: 1;
+      background: rgba(255,255,255,0.07);
+      border-radius: 6px;
+      height: 24px;
+      margin-left: 8px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      max-width: 260px;
+    }
+
+    .mockup-ui {
+      background: var(--dark-3);
+      border-radius: 8px 8px 0 0;
+      padding: 0;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      min-height: 380px;
+    }
+
+    .mockup-sidebar {
+      background: #0f172a;
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .mockup-nav-item {
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mockup-nav-item.active {
+      background: rgba(34,197,94,0.15);
+      color: #4ade80;
+    }
+
+    .mockup-nav-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .mockup-main {
+      background: #f8f9fb;
+      padding: 20px;
+    }
+
+    .mockup-topbar {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 16px;
+    }
+
+    .mockup-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .mockup-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .mockup-card-label {
+      font-size: 10px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+
+    .mockup-card-val {
+      font-size: 20px;
+      font-weight: 800;
+      color: #111827;
+    }
+
+    .mockup-table {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .mockup-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 11px;
+      color: #374151;
+    }
+
+    .mockup-row:last-child { border-bottom: none; }
+
+    .mockup-badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .mockup-badge.green { background: #dcfce7; color: #16a34a; }
+    .mockup-badge.blue  { background: #dbeafe; color: #1d4ed8; }
+    .mockup-badge.gray  { background: #f3f4f6; color: #6b7280; }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <div class="nav-logo-mark">🐾</div>
+      <span class="nav-logo-text">Veto</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#funkcje">Funkcje</a></li>
+      <li><a href="#ai">Sztuczna inteligencja</a></li>
+      <li><a href="#role">Dla kogo</a></li>
+      <li><a href="#jak-dziala">Jak to działa</a></li>
+      <li><a href="#kontakt">Kontakt</a></li>
+    </ul>
+    <div class="nav-cta">
+      <a href="#kontakt" class="btn btn-outline">Zaloguj się</a>
+      <a href="#kontakt" class="btn btn-primary">Umów demo →</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="hero-badge-dot"></span>
+    Teraz dostępne dla klinik weterynaryjnych
+  </div>
+  <h1>Zarządzaj kliniką<br/>w <span class="accent">jednym miejscu</span></h1>
+  <p class="hero-sub">
+    Veto to kompleksowy system dla klinik weterynaryjnych — od kalendarza i poczekalni po faktury, transkrypcję AI i asystenta recepcji.
+  </p>
+  <div class="hero-actions">
+    <a href="#kontakt" class="btn btn-primary btn-lg">Umów bezpłatne demo →</a>
+    <a href="#funkcje" class="btn btn-outline btn-lg">Zobacz funkcje</a>
+  </div>
+
+  <!-- Mockup -->
+  <div class="mockup-wrapper">
+    <div class="mockup-bar">
+      <span class="mockup-dot r"></span>
+      <span class="mockup-dot y"></span>
+      <span class="mockup-dot g"></span>
+      <div class="mockup-url">app.veto.pl/reception</div>
+    </div>
+    <div class="mockup-ui">
+      <div class="mockup-sidebar">
+        <div style="font-size:11px;color:rgba(255,255,255,0.2);padding:4px 12px 10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Nawigacja</div>
+        <div class="mockup-nav-item active"><span class="mockup-nav-dot"></span> Kalendarz</div>
+        <div class="mockup-nav-item"><span class="mockup-nav-dot"></span> Poczekalnia</div>
+        <div class="mockup-nav-item"><span class="mockup-nav-dot"></span> Skrzynka</div>
+        <div class="mockup-nav-item"><span class="mockup-nav-dot"></span> Pacjenci</div>
+        <div class="mockup-nav-item"><span class="mockup-nav-dot"></span> Wizyty</div>
+        <div class="mockup-nav-item"><span class="mockup-nav-dot"></span> Faktury</div>
+        <div class="mockup-nav-item"><span class="mockup-nav-dot"></span> Asystent</div>
+      </div>
+      <div class="mockup-main">
+        <div class="mockup-topbar">Dzisiejszy plan</div>
+        <div class="mockup-cards">
+          <div class="mockup-card">
+            <div class="mockup-card-label">Wizyty dziś</div>
+            <div class="mockup-card-val">14</div>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-card-label">W poczekalni</div>
+            <div class="mockup-card-val">3</div>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-card-label">Otwarte zadania</div>
+            <div class="mockup-card-val">7</div>
+          </div>
+        </div>
+        <div class="mockup-table">
+          <div class="mockup-row" style="background:#f9fafb;font-weight:700;color:#6b7280;font-size:10px;">
+            <span style="flex:2">Pacjent</span><span style="flex:1">Godzina</span><span style="flex:1">Lekarz</span><span style="flex:1">Status</span>
+          </div>
+          <div class="mockup-row">
+            <span style="flex:2">🐕 Burek / Kowalski</span>
+            <span style="flex:1">09:00</span>
+            <span style="flex:1">dr Nowak</span>
+            <span style="flex:1"><span class="mockup-badge green">W gabinecie</span></span>
+          </div>
+          <div class="mockup-row">
+            <span style="flex:2">🐈 Mruczek / Wiśniewska</span>
+            <span style="flex:1">09:30</span>
+            <span style="flex:1">dr Kowal</span>
+            <span style="flex:1"><span class="mockup-badge blue">Oczekuje</span></span>
+          </div>
+          <div class="mockup-row">
+            <span style="flex:2">🐕 Luna / Zielińska</span>
+            <span style="flex:1">10:00</span>
+            <span style="flex:1">dr Nowak</span>
+            <span style="flex:1"><span class="mockup-badge gray">Zaplanowana</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── STATS ── -->
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-num">100%</div>
+    <div class="stat-label">w chmurze, bez instalacji</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">3 role</div>
+    <div class="stat-label">recepcja · lekarz · admin</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">AI</div>
+    <div class="stat-label">transkrypcja i asystent</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">KSeF</div>
+    <div class="stat-label">integracja z e-fakturami</div>
+  </div>
+</div>
+
+<!-- ── FEATURES ── -->
+<section class="features-section" id="funkcje">
+  <div class="container">
+    <div class="section-head">
+      <span class="section-tag">Funkcjonalności</span>
+      <h2>Wszystko czego potrzebuje<br/>nowoczesna klinika</h2>
+      <p class="section-sub">Jeden system zamiast wielu arkuszy, aplikacji i notatek.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon green">📅</div>
+        <h3>Kalendarz i grafik</h3>
+        <p>Tygodniowy widok wizyt z podziałem na lekarzy. Godziny dopasowane do rzeczywistych godzin pracy kliniki. Możliwość zarządzania wyjątkami i urlopami.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">🪑</div>
+        <h3>Poczekalnia w czasie rzeczywistym</h3>
+        <p>Rejestracja pacjenta z powiązaniem do konkretnej wizyty. Lekarz dostaje powiadomienie gdy pacjent czeka. Kontrola kolejki przez recepcję i lekarzy.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple">📋</div>
+        <h3>Karta wizyty</h3>
+        <p>Wywiad, diagnoza, leczenie, zalecenia, skierowania. Historia wizyt, szczepień i recept. Transkrypcja głosowa bezpośrednio w karcie wizyty.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon orange">🧾</div>
+        <h3>Fakturowanie i KSeF</h3>
+        <p>Katalog usług z cenami, tworzenie faktur powiązanych z wizytą. Wysyłka faktur elektronicznych do KSeF — zgodność z polskim prawem.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon pink">📬</div>
+        <h3>Skrzynka zadań (Inbox)</h3>
+        <p>Wewnętrzny system komunikacji między recepcją a lekarzami. Zadania: oddzwonienie, podpisanie dokumentu, sprawdzenie wyniku. Statusy i powiadomienia.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon teal">🤖</div>
+        <h3>Asystent recepcji</h3>
+        <p>Interaktywny przewodnik krok po kroku przez proces zapisu. Automatyczny triaż neurologiczny z macierzą objawów. Checklists i procedury dla recepcji.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── AI ── -->
+<section class="ai-section" id="ai">
+  <div class="container">
+    <div class="ai-grid">
+      <div>
+        <span class="section-tag">Sztuczna inteligencja</span>
+        <h2>AI, które realnie<br/>oszczędza czas</h2>
+        <p class="section-sub">Veto integruje modele AI bezpośrednio w przepływ pracy — bez dodatkowych narzędzi.</p>
+        <div class="ai-features">
+          <div class="ai-feature">
+            <div class="ai-feature-icon">🎙️</div>
+            <div class="ai-feature-text">
+              <h4>Transkrypcja wizyty</h4>
+              <p>Nagraj rozmowę z klientem. Whisper automatycznie zamieni ją na tekst — lekarz może skupić się na pacjencie, nie na pisaniu.</p>
+            </div>
+          </div>
+          <div class="ai-feature">
+            <div class="ai-feature-icon">📝</div>
+            <div class="ai-feature-text">
+              <h4>Podsumowanie historii pacjenta</h4>
+              <p>Jeden klik — AI generuje zwięzłe podsumowanie całej historii leczenia pacjenta przed wizytą.</p>
+            </div>
+          </div>
+          <div class="ai-feature">
+            <div class="ai-feature-icon">🧭</div>
+            <div class="ai-feature-text">
+              <h4>Asystent proceduralny</h4>
+              <p>Drzewo decyzyjne prowadzi recepcję przez procedury zapisu, triażu i checklist — zero pominiętych kroków.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ai-visual">
+        <div class="ai-visual-header">
+          <span class="ai-dot red"></span>
+          <span class="ai-dot yellow"></span>
+          <span class="ai-dot green"></span>
+          <span class="ai-visual-title">Transkrypcja wizyty — na żywo</span>
+        </div>
+        <div class="ai-line">
+          <span class="ai-line-label mic">🎙 Audio</span>
+          <span class="ai-line-text">„Burek przestał chodzić od wczoraj wieczoru, tylne łapy są wiotkie..."</span>
+        </div>
+        <div class="ai-line">
+          <span class="ai-line-label ai">✦ AI</span>
+          <span class="ai-line-text">Objawy: niedowład tylnych kończyn, nagły początek (ok. 18h). Podejrzenie: dyskopatia kręgosłupa lędźwiowego. Zalecane: MRI kręgosłupa + konsultacja neurologiczna CITO.</span>
+        </div>
+        <div class="ai-line" style="margin-top:16px;">
+          <span class="ai-line-label" style="background:rgba(251,191,36,0.15);color:#fbbf24;">⚡ Triaż</span>
+          <span class="ai-line-text" style="color:#fbbf24;font-weight:600;">CITO — wizyta tego samego dnia<span class="ai-typing"></span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ROLES ── -->
+<section id="role">
+  <div class="container">
+    <div class="section-head centered">
+      <span class="section-tag">Dla kogo</span>
+      <h2>Zaprojektowany dla każdej roli</h2>
+      <p class="section-sub">Jeden system, trzy spersonalizowane widoki — każdy użytkownik widzi to, czego potrzebuje.</p>
+    </div>
+    <div class="roles-grid">
+      <div class="role-card">
+        <div class="role-emoji">🧑‍💼</div>
+        <h3>Recepcja</h3>
+        <p>Centrum operacyjne kliniki — zarządza zapisami, poczekalnią i komunikacją.</p>
+        <ul class="role-list">
+          <li>Kalendarz z widokiem wszystkich lekarzy</li>
+          <li>Rejestracja pacjenta z powiązaniem wizyty</li>
+          <li>Zarządzanie kolejką w poczekalni</li>
+          <li>Tworzenie zadań dla lekarzy (Skrzynka)</li>
+          <li>Asystent krok po kroku (triaż, procedury)</li>
+          <li>Wystawianie faktur i wysyłka do KSeF</li>
+        </ul>
+      </div>
+      <div class="role-card">
+        <div class="role-emoji">👨‍⚕️</div>
+        <h3>Lekarz</h3>
+        <p>Skupia się na pacjencie — system eliminuje papierologię i szukanie informacji.</p>
+        <ul class="role-list">
+          <li>Powiadomienie gdy pacjent czeka</li>
+          <li>Karta wizyty z transkrypcją audio</li>
+          <li>Historia pacjenta i podsumowanie AI</li>
+          <li>Zalecenia, skierowania, recepty</li>
+          <li>Zarządzanie własnymi zadaniami (Skrzynka)</li>
+          <li>Dostęp do harmonogramu dyżurów</li>
+        </ul>
+      </div>
+      <div class="role-card">
+        <div class="role-emoji">⚙️</div>
+        <h3>Administrator</h3>
+        <p>Pełna kontrola nad kliniką — harmonogramy, magazyn, raporty.</p>
+        <ul class="role-list">
+          <li>Widok wszystkich wizyt i kolejek</li>
+          <li>Harmonogram pracy lekarzy i dyżury</li>
+          <li>Godziny otwarcia kliniki per dzień</li>
+          <li>Zarządzanie magazynem i lekami</li>
+          <li>Katalog usług i cennik</li>
+          <li>Pełen dostęp do Skrzynki i zadań</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section class="how-section" id="jak-dziala">
+  <div class="container">
+    <div class="section-head centered">
+      <span class="section-tag">Jak to działa</span>
+      <h2>Wdrożenie w 3 krokach</h2>
+      <p class="section-sub">Bez długich szkoleń, bez migracji danych — klinika zaczyna działać w ciągu jednego dnia.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Demo i konfiguracja</h3>
+        <p>Pokazujemy system na żywo, konfigurujemy lekarzy, godziny pracy i cennik zgodnie z Waszymi potrzebami.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Uruchomienie</h3>
+        <p>Klinika dostaje dostęp do systemu w chmurze. Recepcja i lekarze logują się z przeglądarki — bez instalacji.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Wsparcie i rozwój</h3>
+        <p>Jesteśmy dostępni na każdym etapie. Regularnie dodajemy nowe funkcje na podstawie feedbacku klinik.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="cta-section" id="kontakt">
+  <div class="container">
+    <span class="section-tag" style="color:#4ade80;">Zacznij teraz</span>
+    <h2>Gotowy na nowoczesną klinikę?</h2>
+    <p>Umów bezpłatne demo — pokażemy Ci system dostosowany do Waszej kliniki. Bez zobowiązań.</p>
+    <div class="cta-actions">
+      <a href="mailto:kontakt@getvetoapp.com" class="btn btn-white btn-lg">✉️ Napisz do nas</a>
+      <a href="tel:+48000000000" class="btn btn-ghost btn-lg">📞 Zadzwoń</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-inner">
+    <a href="#" class="footer-logo">
+      <div class="footer-logo-mark">🐾</div>
+      Veto
+    </a>
+    <div>© 2025 Veto. Wszelkie prawa zastrzeżone.</div>
+    <div class="footer-links">
+      <a href="#">Polityka prywatności</a>
+      <a href="#">Regulamin</a>
+      <a href="#kontakt">Kontakt</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
