@@ -106,6 +106,7 @@ INSTALLED_APPS = [
     "apps.portal.apps.PortalConfig",
     "apps.webhooks.apps.WebhooksConfig",
     "apps.inbox.apps.InboxConfig",
+    "apps.procedures.apps.ProceduresConfig",
     "behave_django",
 ]
 

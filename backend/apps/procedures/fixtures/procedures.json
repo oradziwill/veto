@@ -1,0 +1,977 @@
+[
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000001",
+    "fields": {
+      "slug": "pruritus",
+      "name": "Świąd (Pruritus)",
+      "name_en": "Pruritus",
+      "category": "dermatology",
+      "species": ["dog", "cat"],
+      "entry_node_id": "P1",
+      "tags": ["świąd", "skóra", "alergia", "demodex", "dermatologia"],
+      "source": "WSAVA Dermatology Guidelines; WAVD Demodicosis Guidelines 2020; ISCAID 2014",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "P1": {
+          "id": "P1",
+          "type": "question",
+          "label": "Charakter świądu",
+          "text": "Jaki jest charakter świądu?",
+          "hint": "Zapytaj właściciela czy świąd pojawia się o określonej porze roku.",
+          "options": [
+            {"label": "Sezonowy", "nextId": "P2", "data": {"itch_type": "seasonal"}},
+            {"label": "Całoroczny", "nextId": "P3", "data": {"itch_type": "perennial"}}
+          ]
+        },
+        "P2": {
+          "id": "P2",
+          "type": "question",
+          "label": "Rozkład zmian",
+          "text": "Gdzie zlokalizowane są zmiany skórne?",
+          "options": [
+            {"label": "Cały tułów / dogrzbietowy", "nextId": "DDX_ATOPIA", "data": {"location": "dorsal"}},
+            {"label": "Okolica uszu, pyska, łap", "nextId": "DDX_ATOPIA_INFECT", "data": {"location": "face_ears_paws"}}
+          ]
+        },
+        "P3": {
+          "id": "P3",
+          "type": "question",
+          "label": "Wiek wystąpienia",
+          "text": "W jakim wieku pojawiły się pierwsze objawy?",
+          "options": [
+            {"label": "Poniżej 6 miesięcy", "nextId": "P4", "data": {"onset_age": "young"}},
+            {"label": "Powyżej 6 miesięcy", "nextId": "P5", "data": {"onset_age": "adult"}}
+          ]
+        },
+        "P4": {
+          "id": "P4",
+          "type": "question",
+          "label": "Zeskrobiny skóry",
+          "text": "Czy wykonano zeskrobiny skóry? Jaki wynik?",
+          "options": [
+            {"label": "Demodex (+)", "nextId": "ACT_DEMODEX", "data": {"demodex": "positive"}, "variant": "urgent"},
+            {"label": "Demodex (-)", "nextId": "DDX_YOUNG_ITCH", "data": {"demodex": "negative"}}
+          ]
+        },
+        "P5": {
+          "id": "P5",
+          "type": "question",
+          "label": "Lokalizacja zmian",
+          "text": "Gdzie zlokalizowane są zmiany?",
+          "options": [
+            {"label": "Brzuch / pachwiny / pachy", "nextId": "DDX_FOOD_MALASS", "data": {"location": "ventral"}},
+            {"label": "Uszy + łapy + pysk", "nextId": "DDX_ATOPIA_MALASS", "data": {"location": "face_ears_paws"}}
+          ]
+        },
+        "DDX_ATOPIA": {
+          "id": "DDX_ATOPIA",
+          "type": "ddx",
+          "label": "DDx: Atopia",
+          "clinicalSign": "Świąd sezonowy — cały tułów",
+          "species": ["dog", "cat"],
+          "source": "WSAVA Dermatology Guidelines",
+          "differentials": [
+            {"rank": 1, "name": "Atopia (alergia środowiskowa)", "likelihood": "common", "keyFeatures": ["sezonowość", "brak zmian pierwotnych", "wywiad rodzinny"]},
+            {"rank": 2, "name": "Pyodermia powierzchowna wtórna", "likelihood": "common", "keyFeatures": ["cytologia: neutrofile + bakterie", "wtórna do atopii"]},
+            {"rank": 3, "name": "Alergia kontaktowa", "likelihood": "uncommon", "keyFeatures": ["ekspozycja na substancję", "zmiany w miejscu kontaktu"]}
+          ]
+        },
+        "DDX_ATOPIA_INFECT": {
+          "id": "DDX_ATOPIA_INFECT",
+          "type": "ddx",
+          "label": "DDx: Atopia + infekcja",
+          "clinicalSign": "Świąd sezonowy — uszy, pysk, łapy",
+          "species": ["dog", "cat"],
+          "source": "WSAVA Dermatology Guidelines",
+          "differentials": [
+            {"rank": 1, "name": "Atopia + wtórna infekcja", "likelihood": "common", "keyFeatures": ["sezonowość", "uszy + łapy", "cytologia drożdże/bakterie"]},
+            {"rank": 2, "name": "Malassezia dermatitis", "likelihood": "common", "keyFeatures": ["cytologia: drożdże", "tłusty zapach", "przebarwienia"]},
+            {"rank": 3, "name": "Zapalenie ucha zewnętrznego", "likelihood": "common", "keyFeatures": ["otoskopia", "wydzielina"]}
+          ]
+        },
+        "DDX_YOUNG_ITCH": {
+          "id": "DDX_YOUNG_ITCH",
+          "type": "ddx",
+          "label": "DDx: Młody pacjent, Demodex (−)",
+          "clinicalSign": "Świąd całoroczny, poniżej 6 m.ż., Demodex ujemny",
+          "species": ["dog", "cat"],
+          "source": "WSAVA Dermatology Guidelines",
+          "differentials": [
+            {"rank": 1, "name": "Dermatofitoza", "likelihood": "uncommon", "keyFeatures": ["DTM (+)", "okrągłe ogniska łysienia"]},
+            {"rank": 2, "name": "Alergia pokarmowa", "likelihood": "common", "keyFeatures": ["całoroczna", "brak sezonowości", "możliwa biegunka"]},
+            {"rank": 3, "name": "Świerzb (Sarcoptes)", "likelihood": "uncommon", "keyFeatures": ["intensywny świąd", "małżowiny uszne", "zaraźliwy"]}
+          ]
+        },
+        "DDX_FOOD_MALASS": {
+          "id": "DDX_FOOD_MALASS",
+          "type": "ddx",
+          "label": "DDx: Alergia pokarmowa / Malassezia",
+          "clinicalSign": "Świąd całoroczny — brzuch, pachwiny",
+          "species": ["dog", "cat"],
+          "source": "WSAVA Dermatology Guidelines",
+          "differentials": [
+            {"rank": 1, "name": "Alergia pokarmowa", "likelihood": "common", "keyFeatures": ["całoroczna", "bez sezonowości", "dieta eliminacyjna"]},
+            {"rank": 2, "name": "Malassezia dermatitis", "likelihood": "common", "keyFeatures": ["cytologia: drożdże", "tłusta skóra", "przebarwienia"]},
+            {"rank": 3, "name": "Atopia", "likelihood": "common", "keyFeatures": ["sezonowość", "inne lokalizacje"]}
+          ]
+        },
+        "DDX_ATOPIA_MALASS": {
+          "id": "DDX_ATOPIA_MALASS",
+          "type": "ddx",
+          "label": "DDx: Atopia / Malassezia / Pyodermia",
+          "clinicalSign": "Świąd całoroczny — uszy, łapy, pysk",
+          "species": ["dog", "cat"],
+          "source": "WSAVA Dermatology Guidelines",
+          "differentials": [
+            {"rank": 1, "name": "Atopia", "likelihood": "common", "keyFeatures": ["charakterystyczna lokalizacja", "sezonowość możliwa"]},
+            {"rank": 2, "name": "Malassezia dermatitis", "likelihood": "common", "keyFeatures": ["cytologia: drożdże", "tłusta skóra"]},
+            {"rank": 3, "name": "Pyodermia powierzchowna", "likelihood": "common", "keyFeatures": ["cytologia: bakterie + neutrofile"]}
+          ]
+        },
+        "ACT_DEMODEX": {
+          "id": "ACT_DEMODEX",
+          "type": "action",
+          "label": "Protokół demodektozy",
+          "title": "Protokół leczenia demodektozy uogólnionej (WAVD 2020)",
+          "urgency": "urgent",
+          "body": "Demodekoza uogólniona wymaga leczenia systemowego. Monitoruj zeskrobiny co 4 tygodnie.",
+          "checklist": [
+            {"id": "d1", "text": "Potwierdź diagnozę — zeskrobiny głębokie", "required": true},
+            {"id": "d2", "text": "Zlecenie: izoxazolina (fluralaner/sarolaner/afoxolaner/lotilaner)", "required": true},
+            {"id": "d3", "text": "Alternatywa: iwermektyna (sprawdź MDR1/ABCB1 u wrażliwych ras)", "required": false},
+            {"id": "d4", "text": "Zaplanuj kontrolę za 4 tygodnie z zeskrobinami", "required": true},
+            {"id": "d5", "text": "Leczenie min. do 2 ujemnych wyników zeskrobin", "required": true}
+          ],
+          "labTests": [
+            {"name": "Zeskrobiny skóry kontrolne", "type": "other", "priority": "first_line", "notes": "co 4 tygodnie"},
+            {"name": "Test MDR1/ABCB1 (rasy wrażliwe)", "type": "other", "priority": "optional"}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000002",
+    "fields": {
+      "slug": "acute-vomiting",
+      "name": "Wymioty ostre",
+      "name_en": "Acute Vomiting",
+      "category": "gastroenterology",
+      "species": ["dog", "cat"],
+      "entry_node_id": "T1",
+      "tags": ["wymioty", "gastro", "brzuch", "GDV", "nagły"],
+      "source": "WSAVA Gastrointestinal Standardization Group; ACVIM Consensus Statements",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "T1": {
+          "id": "T1",
+          "type": "question",
+          "label": "Stabilność pacjenta",
+          "text": "Ocena stabilności pacjenta",
+          "hint": "Sprawdź: wstrząs, ból brzucha, rozdęcie",
+          "options": [
+            {"label": "NIESTABILNY — wstrząs / ból / rozdęcie brzucha", "nextId": "ACT_CITO_GDV", "data": {"stability": "unstable"}, "variant": "cito"},
+            {"label": "STABILNY", "nextId": "T2", "data": {"stability": "stable"}}
+          ]
+        },
+        "T2": {
+          "id": "T2",
+          "type": "question",
+          "label": "Czas trwania",
+          "text": "Jak długo trwają wymioty?",
+          "options": [
+            {"label": "Ostre — poniżej 5 dni", "nextId": "T3", "data": {"duration": "acute"}},
+            {"label": "Przewlekłe — powyżej 5 dni", "nextId": "ACT_CHRONIC_VOMIT", "data": {"duration": "chronic"}}
+          ]
+        },
+        "T3": {
+          "id": "T3",
+          "type": "question",
+          "label": "Zawartość wymiocin",
+          "text": "Jaka jest zawartość wymiocin?",
+          "options": [
+            {"label": "Krew (hematemeza)", "nextId": "ACT_HEMATEMESIS", "data": {"content": "blood"}, "variant": "urgent"},
+            {"label": "Treść żołądkowa / niestrawiony pokarm", "nextId": "T4", "data": {"content": "food"}}
+          ]
+        },
+        "T4": {
+          "id": "T4",
+          "type": "question",
+          "label": "Liczba epizodów",
+          "text": "Ile epizodów wymiotów na dobę?",
+          "options": [
+            {"label": "Mniej niż 3", "nextId": "ACT_OUTPATIENT", "data": {"episodes": "few"}},
+            {"label": "3 lub więcej / nasilające się", "nextId": "ACT_WORKUP", "data": {"episodes": "many"}, "variant": "urgent"}
+          ]
+        },
+        "ACT_CITO_GDV": {
+          "id": "ACT_CITO_GDV",
+          "type": "action",
+          "label": "CITO — podejrzenie GDV",
+          "title": "CITO: Podejrzenie GDV / niedrożności / wgłobienia",
+          "urgency": "cito",
+          "body": "Pacjent niestabilny. Działaj natychmiast.",
+          "checklist": [
+            {"id": "g1", "text": "RTG brzucha — 2 projekcje NATYCHMIAST", "required": true},
+            {"id": "g2", "text": "Linia dożylna + płynoterapia", "required": true},
+            {"id": "g3", "text": "Morfologia + biochemia + elektrolity STAT", "required": true},
+            {"id": "g4", "text": "Przygotowanie do zabiegu chirurgicznego", "required": false}
+          ],
+          "labTests": [
+            {"name": "RTG brzucha (2 proj.)", "type": "imaging", "priority": "first_line"},
+            {"name": "Morfologia STAT", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Biochemia + elektrolity STAT", "type": "bloodwork", "priority": "first_line"}
+          ]
+        },
+        "ACT_HEMATEMESIS": {
+          "id": "ACT_HEMATEMESIS",
+          "type": "action",
+          "label": "Hematemeza — pilne",
+          "title": "Wymioty z krwią — wymagane pilne badania",
+          "urgency": "urgent",
+          "body": "Sprawdź wywiad NLPZ/NSAID. Podejrzenie wrzodu lub ciała obcego.",
+          "checklist": [
+            {"id": "h1", "text": "Wywiad: NSAID / kortykosteroidy w ostatnich 7 dniach?", "required": true},
+            {"id": "h2", "text": "RTG brzucha — ciało obce / perforacja", "required": true},
+            {"id": "h3", "text": "Morfologia + biochemia", "required": true},
+            {"id": "h4", "text": "Rozważyć gastroskopię", "required": false}
+          ],
+          "labTests": [
+            {"name": "RTG brzucha", "type": "imaging", "priority": "first_line"},
+            {"name": "Morfologia", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Biochemia pełna", "type": "bloodwork", "priority": "first_line"},
+            {"name": "USG jamy brzusznej", "type": "imaging", "priority": "second_line"}
+          ]
+        },
+        "ACT_OUTPATIENT": {
+          "id": "ACT_OUTPATIENT",
+          "type": "action",
+          "label": "Leczenie ambulatoryjne",
+          "title": "Leczenie objawowe ambulatoryjne",
+          "urgency": "routine",
+          "body": "Mało nasilone wymioty — możliwe leczenie domowe z zaleceniami.",
+          "checklist": [
+            {"id": "o1", "text": "Dieta lekkostrawna / głodówka 12-24h", "required": true},
+            {"id": "o2", "text": "Nawodnienie doustne lub s.c.", "required": false},
+            {"id": "o3", "text": "Kontrola jeśli objawy nie ustąpią w 24-48h", "required": true}
+          ]
+        },
+        "ACT_WORKUP": {
+          "id": "ACT_WORKUP",
+          "type": "action",
+          "label": "Diagnostyka",
+          "title": "Wymioty nasilone — wymagana diagnostyka",
+          "urgency": "urgent",
+          "body": "Nasilone lub postępujące wymioty wymagają badań dodatkowych.",
+          "checklist": [
+            {"id": "w1", "text": "RTG brzucha — 2 projekcje", "required": true},
+            {"id": "w2", "text": "Morfologia + biochemia pełna + elektrolity", "required": true},
+            {"id": "w3", "text": "USG jamy brzusznej", "required": false},
+            {"id": "w4", "text": "spec cPL (podejrzenie pankreatitis)", "required": false},
+            {"id": "w5", "text": "Test Parvo Ag (nieszczepienny szczeniak)", "required": false}
+          ],
+          "labTests": [
+            {"name": "RTG brzucha (2 proj.)", "type": "imaging", "priority": "first_line"},
+            {"name": "Morfologia", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Biochemia pełna", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Elektrolity", "type": "bloodwork", "priority": "first_line"},
+            {"name": "USG jamy brzusznej", "type": "imaging", "priority": "second_line"},
+            {"name": "spec cPL", "type": "bloodwork", "priority": "second_line"},
+            {"name": "Parvo Ag test", "type": "other", "priority": "optional"}
+          ]
+        },
+        "ACT_CHRONIC_VOMIT": {
+          "id": "ACT_CHRONIC_VOMIT",
+          "type": "action",
+          "label": "Protokół przewlekłych wymiotów",
+          "title": "Wymioty przewlekłe — protokół diagnostyczny",
+          "urgency": "routine",
+          "body": "Przewlekłe wymioty wymagają szerszej diagnostyki różnicowej.",
+          "checklist": [
+            {"id": "cv1", "text": "Morfologia + biochemia pełna", "required": true},
+            {"id": "cv2", "text": "USG jamy brzusznej", "required": true},
+            {"id": "cv3", "text": "Badanie kału (pasożyty)", "required": true},
+            {"id": "cv4", "text": "Cobalamin + folate (podejrzenie IBD)", "required": false},
+            {"id": "cv5", "text": "Rozważyć endoskopię / biopsję", "required": false}
+          ],
+          "labTests": [
+            {"name": "Morfologia", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Biochemia pełna", "type": "bloodwork", "priority": "first_line"},
+            {"name": "USG jamy brzusznej", "type": "imaging", "priority": "first_line"},
+            {"name": "Badanie kału", "type": "other", "priority": "first_line"},
+            {"name": "Cobalamin + folate", "type": "bloodwork", "priority": "second_line"}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000003",
+    "fields": {
+      "slug": "pupd",
+      "name": "Poliuria / Polidypsja (PU/PD)",
+      "name_en": "Polyuria / Polydipsia",
+      "category": "internal_medicine",
+      "species": ["dog", "cat"],
+      "entry_node_id": "PP1",
+      "tags": ["PU/PD", "poliuria", "polidypsja", "Cushing", "cukrzyca", "CKD", "tarczyca"],
+      "source": "ACVIM; ISFM Hypertension Guidelines 2017; ACVIM Cardiomyopathy in Cats 2020",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "PP1": {
+          "id": "PP1",
+          "type": "question",
+          "label": "Gatunek",
+          "text": "Gatunek pacjenta?",
+          "options": [
+            {"label": "Kot", "nextId": "K1", "data": {"species": "cat"}},
+            {"label": "Pies", "nextId": "PP2", "data": {"species": "dog"}}
+          ]
+        },
+        "K1": {
+          "id": "K1",
+          "type": "question",
+          "label": "Wiek kota",
+          "text": "Wiek kota?",
+          "options": [
+            {"label": "Powyżej 7 lat", "nextId": "DDX_CAT_SENIOR", "data": {"age_group": "senior"}},
+            {"label": "Poniżej 7 lat", "nextId": "DDX_CAT_YOUNG", "data": {"age_group": "young"}}
+          ]
+        },
+        "PP2": {
+          "id": "PP2",
+          "type": "question",
+          "label": "Płeć / status",
+          "text": "Płeć i status reprodukcyjny psa?",
+          "options": [
+            {"label": "Niekastrowana suka", "nextId": "PP3", "data": {"sex": "female_intact"}},
+            {"label": "Samiec lub wykastrowana suka", "nextId": "ACT_PUPD_PANEL", "data": {"sex": "other"}}
+          ]
+        },
+        "PP3": {
+          "id": "PP3",
+          "type": "question",
+          "label": "Faza cyklu",
+          "text": "Wydzielina z sromu lub objawy rui w ostatnich 2 miesiącach?",
+          "hint": "Pyometra może wystąpić 4-8 tygodni po rui.",
+          "options": [
+            {"label": "Tak — wydzielina / ostatnia ruja < 2 m-ce", "nextId": "ACT_PYOMETRA", "data": {"pyometra_risk": "high"}, "variant": "cito"},
+            {"label": "Nie", "nextId": "ACT_PUPD_PANEL", "data": {"pyometra_risk": "low"}}
+          ]
+        },
+        "DDX_CAT_SENIOR": {
+          "id": "DDX_CAT_SENIOR",
+          "type": "ddx",
+          "label": "DDx: Kot senior PU/PD",
+          "clinicalSign": "PU/PD u kota > 7 lat",
+          "species": ["cat"],
+          "source": "ISFM; ACVIM",
+          "differentials": [
+            {"rank": 1, "name": "Nadczynność tarczycy", "likelihood": "common", "keyFeatures": ["T4 ↑", "chudnięcie", "tachykardia", "dobry apetyt"]},
+            {"rank": 2, "name": "CKD (przewlekła choroba nerek)", "likelihood": "common", "keyFeatures": ["kreatynina ↑", "SDMA ↑", "ciężar właściwy moczu ↓"]},
+            {"rank": 3, "name": "Cukrzyca", "likelihood": "common", "keyFeatures": ["glukoza ↑", "glukozuria", "fruktozoamina ↑"]},
+            {"rank": 4, "name": "Nadciśnienie tętnicze", "likelihood": "common", "keyFeatures": ["ciśnienie > 160 mmHg", "zmiany dna oka"]}
+          ]
+        },
+        "DDX_CAT_YOUNG": {
+          "id": "DDX_CAT_YOUNG",
+          "type": "ddx",
+          "label": "DDx: Młody kot PU/PD",
+          "clinicalSign": "PU/PD u kota < 7 lat",
+          "species": ["cat"],
+          "source": "ACVIM",
+          "differentials": [
+            {"rank": 1, "name": "Cukrzyca", "likelihood": "common", "keyFeatures": ["glukoza ↑", "fruktozoamina ↑"]},
+            {"rank": 2, "name": "CKD wczesna", "likelihood": "uncommon", "keyFeatures": ["SDMA ↑", "ciężar właściwy ↓"]},
+            {"rank": 3, "name": "Akromegalia", "likelihood": "rare", "keyFeatures": ["duże rozmiary, IGF-1 ↑", "oporność na insulinę"]}
+          ]
+        },
+        "ACT_PYOMETRA": {
+          "id": "ACT_PYOMETRA",
+          "type": "action",
+          "label": "CITO — podejrzenie pyometry",
+          "title": "Podejrzenie pyometry — działanie pilne",
+          "urgency": "cito",
+          "body": "Pyometra u niekastrowanej suki to stan zagrożenia życia.",
+          "checklist": [
+            {"id": "py1", "text": "USG macicy NATYCHMIAST", "required": true},
+            {"id": "py2", "text": "Morfologia + biochemia", "required": true},
+            {"id": "py3", "text": "Konsultacja chirurgiczna — owariohisterektomia", "required": true}
+          ],
+          "labTests": [
+            {"name": "USG macicy", "type": "imaging", "priority": "first_line"},
+            {"name": "Morfologia", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Biochemia pełna", "type": "bloodwork", "priority": "first_line"}
+          ]
+        },
+        "ACT_PUPD_PANEL": {
+          "id": "ACT_PUPD_PANEL",
+          "type": "action",
+          "label": "Panel PU/PD",
+          "title": "Panel diagnostyczny PU/PD — etap 1",
+          "urgency": "routine",
+          "body": "Badania podstawowe — zawsze jako pierwszy krok diagnostyki PU/PD.",
+          "checklist": [
+            {"id": "pp1", "text": "Morfologia", "required": true},
+            {"id": "pp2", "text": "Biochemia pełna (kreatynina, BUN, ALT, ALP, glukoza, białko)", "required": true},
+            {"id": "pp3", "text": "Elektrolity (Na, K, Ca)", "required": true},
+            {"id": "pp4", "text": "Badanie moczu + UPC + sedyment", "required": true},
+            {"id": "pp5", "text": "Ciężar właściwy moczu (przed pobraniem IV)", "required": true},
+            {"id": "pp6", "text": "T4 u kota > 7 lat", "required": false},
+            {"id": "pp7", "text": "Kortyzol bazalny / LDDS jeśli ALP ↑↑ (pies)", "required": false}
+          ],
+          "labTests": [
+            {"name": "Morfologia", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Biochemia pełna", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Elektrolity (Na, K, Ca)", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Badanie moczu + UPC + sedyment", "type": "urinalysis", "priority": "first_line"},
+            {"name": "T4 (kot > 7 lat)", "type": "bloodwork", "priority": "second_line"},
+            {"name": "LDDS test (pies, ALP ↑↑)", "type": "bloodwork", "priority": "second_line"}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000004",
+    "fields": {
+      "slug": "dyspnoea-cough",
+      "name": "Duszność / Kaszel",
+      "name_en": "Dyspnoea / Cough",
+      "category": "cardiology",
+      "species": ["dog", "cat"],
+      "entry_node_id": "DC_TRIAGE",
+      "tags": ["duszność", "kaszel", "serce", "płuca", "HCM", "MVD", "oddech"],
+      "source": "ACVIM Consensus Statement Cardiomyopathies in Cats 2020; ACVIM MVD Guidelines 2019",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "DC_TRIAGE": {
+          "id": "DC_TRIAGE",
+          "type": "question",
+          "label": "Ocena krytyczna",
+          "text": "Ocena krytyczna (30 sekund) — czy pacjent jest w stanie zagrożenia?",
+          "hint": "Sinica, oddychanie z otwartymi ustami u kota, ortopnoe = CITO",
+          "options": [
+            {"label": "CITO — sinica / ortopnoe / otwarte usta u kota", "nextId": "ACT_CITO_DYSPNOE", "data": {"severity": "critical"}, "variant": "cito"},
+            {"label": "Stabilny oddech", "nextId": "DC1", "data": {"severity": "stable"}}
+          ]
+        },
+        "DC1": {
+          "id": "DC1",
+          "type": "question",
+          "label": "Charakter kaszlu",
+          "text": "Jaki charakter kaszlu / objawów?",
+          "options": [
+            {"label": "Produktywny / mokry", "nextId": "DDX_PRODUCTIVE", "data": {"cough_type": "productive"}},
+            {"label": "Suchy / napadowy", "nextId": "DDX_DRY", "data": {"cough_type": "dry"}},
+            {"label": "Nocny / po wysiłku", "nextId": "DDX_CHF", "data": {"cough_type": "exertional"}}
+          ]
+        },
+        "ACT_CITO_DYSPNOE": {
+          "id": "ACT_CITO_DYSPNOE",
+          "type": "action",
+          "label": "CITO — duszność krytyczna",
+          "title": "CITO: Duszność krytyczna — minimum stresu",
+          "urgency": "cito",
+          "body": "Nie badaj kota w duszności dopóki nie jest stabilny. Stres może spowodować zatrzymanie oddechu.",
+          "checklist": [
+            {"id": "dy1", "text": "Tlen natychmiast — klatka tlenowa lub maska", "required": true},
+            {"id": "dy2", "text": "Minimum manipulacji — nie badaj do stabilizacji", "required": true},
+            {"id": "dy3", "text": "RTG klatki piersiowej w pozycji stojącej (po stabilizacji)", "required": true},
+            {"id": "dy4", "text": "Furosemid i.v. jeśli podejrzenie obrzęku płuc", "required": false}
+          ],
+          "labTests": [
+            {"name": "RTG klatki piersiowej", "type": "imaging", "priority": "first_line"},
+            {"name": "ECHO serca (po stabilizacji)", "type": "imaging", "priority": "second_line"}
+          ]
+        },
+        "DDX_PRODUCTIVE": {
+          "id": "DDX_PRODUCTIVE",
+          "type": "ddx",
+          "label": "DDx: Kaszel produktywny",
+          "clinicalSign": "Kaszel produktywny / mokry",
+          "species": ["dog", "cat"],
+          "source": "ACVIM",
+          "differentials": [
+            {"rank": 1, "name": "Zapalenie płuc (pneumonia)", "likelihood": "common", "keyFeatures": ["gorączka", "RTG: zacienienie", "morfologia: leukocytoza"]},
+            {"rank": 2, "name": "Wysięk opłucnowy", "likelihood": "common", "keyFeatures": ["matowość przy osłuchiwaniu", "RTG: płyn"]},
+            {"rank": 3, "name": "Obrzęk płuc (CHF)", "likelihood": "common", "keyFeatures": ["szmer sercowy", "RTG: wzorzec pęcherzykowy"]}
+          ]
+        },
+        "DDX_DRY": {
+          "id": "DDX_DRY",
+          "type": "ddx",
+          "label": "DDx: Kaszel suchy",
+          "clinicalSign": "Kaszel suchy / napadowy",
+          "species": ["dog"],
+          "source": "ACVIM MVD Guidelines 2019",
+          "differentials": [
+            {"rank": 1, "name": "MVD (Myxomatous Mitral Valve Disease)", "likelihood": "common", "keyFeatures": ["szmer sercowy", "małe rasy", "starszy wiek", "RTG + ECHO"]},
+            {"rank": 2, "name": "Kennelkaszel (Bordetella)", "likelihood": "common", "keyFeatures": ["suchy napadowy", "kontakt z innymi psami", "kliniczny"]},
+            {"rank": 3, "name": "Kolaps tchawicy", "likelihood": "common", "keyFeatures": ["gęsie pohukiwanie", "małe rasy", "fluoroskopia"]}
+          ]
+        },
+        "DDX_CHF": {
+          "id": "DDX_CHF",
+          "type": "ddx",
+          "label": "DDx: Kaszel nocny / wysiłkowy",
+          "clinicalSign": "Kaszel nocny / po wysiłku",
+          "species": ["dog", "cat"],
+          "source": "ACVIM",
+          "differentials": [
+            {"rank": 1, "name": "CHF (zastoinowa niewydolność serca)", "likelihood": "common", "keyFeatures": ["szmer sercowy", "RTG: kardiomegalia", "ECHO potwierdzenie"]},
+            {"rank": 2, "name": "HCM (kot)", "likelihood": "common", "keyFeatures": ["rytm cwałowy", "ECHO — złoty standard"]},
+            {"rank": 3, "name": "Astma / zapalenie oskrzeli (kot)", "likelihood": "common", "keyFeatures": ["kaszel z wydechem", "RTG: pułapka powietrzna"]}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000005",
+    "fields": {
+      "slug": "lameness",
+      "name": "Kulawizna",
+      "name_en": "Lameness",
+      "category": "orthopedics",
+      "species": ["dog", "cat"],
+      "entry_node_id": "O1",
+      "tags": ["kulawizna", "ortopedia", "LCA", "biodro", "złamanie", "ból"],
+      "source": "WSAVA Pain Management Guidelines 2022; ACVIM",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "O1": {
+          "id": "O1",
+          "type": "question",
+          "label": "Typ kulawizny",
+          "text": "Jaki typ kulawizny?",
+          "options": [
+            {"label": "Nagła — poniżej 24h / uraz", "nextId": "O2", "data": {"onset": "acute"}},
+            {"label": "Przewlekła / postępująca", "nextId": "O3", "data": {"onset": "chronic"}}
+          ]
+        },
+        "O2": {
+          "id": "O2",
+          "type": "question",
+          "label": "Ocena bólu",
+          "text": "Ocena bólu — czy pacjent opiera kończynę?",
+          "hint": "Skala Glasgow CMPS-SF: próg interwencji bólowej ≥ 6 pkt",
+          "options": [
+            {"label": "Silny ból — niemożność oparcia kończyny", "nextId": "ACT_RTG_URGENT", "data": {"pain": "severe"}, "variant": "urgent"},
+            {"label": "Kulawizna bez oparcia — ból umiarkowany", "nextId": "ACT_ORTHO_EXAM", "data": {"pain": "moderate"}}
+          ]
+        },
+        "O3": {
+          "id": "O3",
+          "type": "question",
+          "label": "Wiek pacjenta",
+          "text": "Wiek pacjenta?",
+          "options": [
+            {"label": "Poniżej 18 miesięcy", "nextId": "DDX_YOUNG_LAME", "data": {"age_group": "young"}},
+            {"label": "Powyżej 5 lat", "nextId": "DDX_SENIOR_LAME", "data": {"age_group": "senior"}}
+          ]
+        },
+        "ACT_RTG_URGENT": {
+          "id": "ACT_RTG_URGENT",
+          "type": "action",
+          "label": "RTG pilne",
+          "title": "Kulawizna z silnym bólem — RTG pilne",
+          "urgency": "urgent",
+          "body": "Podejrzenie złamania — RTG przed pełnym badaniem ortopedycznym.",
+          "checklist": [
+            {"id": "r1", "text": "RTG kończyny w 2 projekcjach", "required": true},
+            {"id": "r2", "text": "Analgezja przed badaniem (opioid / NLPZ)", "required": true},
+            {"id": "r3", "text": "Ocena stabilności złamania", "required": false}
+          ],
+          "labTests": [
+            {"name": "RTG kończyny (2 proj.)", "type": "imaging", "priority": "first_line"}
+          ]
+        },
+        "ACT_ORTHO_EXAM": {
+          "id": "ACT_ORTHO_EXAM",
+          "type": "action",
+          "label": "Badanie ortopedyczne",
+          "title": "Badanie ortopedyczne + RTG",
+          "urgency": "routine",
+          "body": "Systematyczne badanie ortopedyczne. Lokalizacja bólu przed RTG.",
+          "checklist": [
+            {"id": "oe1", "text": "Test szuflady / kompresji piszczeli (pies — LCA)", "required": false},
+            {"id": "oe2", "text": "Ocena biodra (Ortolani, zakres ruchu) — podejrzenie HD", "required": false},
+            {"id": "oe3", "text": "RTG podejrzanej okolicy", "required": true},
+            {"id": "oe4", "text": "Analgezja jeśli CMPS-SF ≥ 6 pkt", "required": false}
+          ],
+          "labTests": [
+            {"name": "RTG kończyny", "type": "imaging", "priority": "first_line"}
+          ]
+        },
+        "DDX_YOUNG_LAME": {
+          "id": "DDX_YOUNG_LAME",
+          "type": "ddx",
+          "label": "DDx: Kulawizna u młodego",
+          "clinicalSign": "Kulawizna u psa < 18 m.ż.",
+          "species": ["dog"],
+          "source": "WSAVA 2022",
+          "differentials": [
+            {"rank": 1, "name": "Dysplazja biodra (HD)", "likelihood": "common", "keyFeatures": ["duże rasy", "kończyna miedniczna", "RTG PennHIP/OFA"]},
+            {"rank": 2, "name": "Panostitis", "likelihood": "common", "keyFeatures": ["5-18 m.ż.", "duże rasy", "RTG: zamazanie jamy szpikowej"]},
+            {"rank": 3, "name": "OCD (osteochondroza)", "likelihood": "uncommon", "keyFeatures": ["6-18 m.ż.", "duże rasy", "RTG, artroskopia"]}
+          ]
+        },
+        "DDX_SENIOR_LAME": {
+          "id": "DDX_SENIOR_LAME",
+          "type": "ddx",
+          "label": "DDx: Kulawizna u starszego",
+          "clinicalSign": "Kulawizna u psa > 5 lat",
+          "species": ["dog"],
+          "source": "WSAVA 2022",
+          "differentials": [
+            {"rank": 1, "name": "Pęknięcie LCA", "likelihood": "common", "keyFeatures": ["3-8 lat", "test szuflady (+)", "TPLO/TTA"]},
+            {"rank": 2, "name": "DJD / Artroza", "likelihood": "common", "keyFeatures": ["postępująca", "RTG: osteofity", "sztywność po odpoczynku"]},
+            {"rank": 3, "name": "Osteosarcoma", "likelihood": "uncommon", "keyFeatures": ["> 7 lat", "duże rasy", "RTG: agresywna zmiana"]}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000006",
+    "fields": {
+      "slug": "vaccination",
+      "name": "Szczepienia (Wizyta profilaktyczna)",
+      "name_en": "Vaccination (Preventive visit)",
+      "category": "preventive_care",
+      "species": ["dog", "cat"],
+      "entry_node_id": "VAC1",
+      "tags": ["szczepienia", "profilaktyka", "WSAVA", "core", "booster"],
+      "source": "WSAVA Vaccination Guidelines 2024",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "VAC1": {
+          "id": "VAC1",
+          "type": "question",
+          "label": "Historia szczepień",
+          "text": "Status szczepień pacjenta?",
+          "hint": "Sprawdź historię szczepień w karcie pacjenta",
+          "options": [
+            {"label": "Brak szczepień / szczenię / kocię", "nextId": "ACT_VAC_FULL", "data": {"vac_status": "none"}},
+            {"label": "Szczepienia aktualne", "nextId": "ACT_VAC_OK", "data": {"vac_status": "current"}},
+            {"label": "Przeterminowane — mniej niż 3 miesiące", "nextId": "ACT_VAC_BOOSTER", "data": {"vac_status": "late_minor"}},
+            {"label": "Przeterminowane — ponad 3 miesiące", "nextId": "ACT_VAC_RESTART", "data": {"vac_status": "late_major"}}
+          ]
+        },
+        "ACT_VAC_FULL": {
+          "id": "ACT_VAC_FULL",
+          "type": "action",
+          "label": "Pełny schemat szczepień",
+          "title": "Zaplanuj pełny schemat szczepień (WSAVA 2024)",
+          "urgency": "routine",
+          "body": "Szczenięta/kocięta: seria core vaccines od 6-8 tyg. co 2-4 tyg. do 16 tyg. Dawka w 26+ tyg. eliminuje okno immunologiczne.",
+          "checklist": [
+            {"id": "v1", "text": "Pies: DHPPiL od 6-8 tyg., co 2-4 tyg. do 16 tyg., dawka w 26 tyg.", "required": true},
+            {"id": "v2", "text": "Kot: FHVCPi schemat analogiczny", "required": true},
+            {"id": "v3", "text": "Wścieklizna: od 12 tyg., wg przepisów krajowych", "required": true},
+            {"id": "v4", "text": "BCS (Body Condition Score 1-9)", "required": true},
+            {"id": "v5", "text": "Odpchlenie / odrobaczenie — aktualne?", "required": true}
+          ]
+        },
+        "ACT_VAC_OK": {
+          "id": "ACT_VAC_OK",
+          "type": "action",
+          "label": "Szczepienia aktualne",
+          "title": "Szczepienia aktualne — checklist profilaktyczny",
+          "urgency": "routine",
+          "body": "Brak szczepień do wykonania. Wykonaj pełną ocenę profilaktyczną.",
+          "checklist": [
+            {"id": "vo1", "text": "Odpchlenie / odrobaczenie — aktualne?", "required": true},
+            {"id": "vo2", "text": "BCS (Body Condition Score 1-9)", "required": true},
+            {"id": "vo3", "text": "Ocena uzębienia (dental score 0-4)", "required": true},
+            {"id": "vo4", "text": "Morfologia + badania — zalecane u > 7 lat", "required": false},
+            {"id": "vo5", "text": "Pomiar ciśnienia — zalecany u kotów > 7 lat", "required": false}
+          ]
+        },
+        "ACT_VAC_BOOSTER": {
+          "id": "ACT_VAC_BOOSTER",
+          "type": "action",
+          "label": "Pojedynczy booster",
+          "title": "Szczepienia przeterminowane < 3 m-ce — pojedynczy booster",
+          "urgency": "routine",
+          "body": "Odpowiedź immunologiczna powinna być zachowana. Wystarczy pojedyncza dawka przypominająca.",
+          "checklist": [
+            {"id": "vb1", "text": "Podaj pojedynczy booster core vaccines", "required": true},
+            {"id": "vb2", "text": "Zaplanuj kolejne szczepienie za 3 lata (core)", "required": true},
+            {"id": "vb3", "text": "BCS + badanie ogólne", "required": true}
+          ]
+        },
+        "ACT_VAC_RESTART": {
+          "id": "ACT_VAC_RESTART",
+          "type": "action",
+          "label": "Restart schematu",
+          "title": "Szczepienia przeterminowane > 3 m-ce — restart jak szczenię",
+          "urgency": "routine",
+          "body": "Przeterminowanie > 3 miesiące — traktuj jak nieszczepionego. Wznów pełny schemat.",
+          "checklist": [
+            {"id": "vr1", "text": "Restart schematu: seria 2 dawek co 3-4 tygodnie", "required": true},
+            {"id": "vr2", "text": "Dawka 1: dziś", "required": true},
+            {"id": "vr3", "text": "Dawka 2: zaplanuj za 3-4 tygodnie", "required": true}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000007",
+    "fields": {
+      "slug": "urethral-obstruction-cat",
+      "name": "Zatrzymanie moczu u kota (Blokada cewki)",
+      "name_en": "Urethral Obstruction (Blocked Cat)",
+      "category": "urology",
+      "species": ["cat"],
+      "entry_node_id": "UO1",
+      "tags": ["FLUTD", "blokada cewki", "kot", "mocz", "hiperkaliemia", "cito"],
+      "source": "Standards of Care — Blocked Cat Protocol; ISFM",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "UO1": {
+          "id": "UO1",
+          "type": "question",
+          "label": "Ocena pęcherza",
+          "text": "Pęcherz powiększony i bolesny przy palpacji?",
+          "hint": "Zablokowany kot = nagły przypadek. Śmierć może nastąpić w 24-48h z powodu hiperkaliemii.",
+          "options": [
+            {"label": "TAK — pęcherz powiększony i bolesny", "nextId": "ACT_BLOCKED_CAT", "data": {"obstruction": "yes"}, "variant": "cito"},
+            {"label": "NIE — brak obstrukcji / FLUTD bez blokady", "nextId": "DDX_FLUTD", "data": {"obstruction": "no"}}
+          ]
+        },
+        "ACT_BLOCKED_CAT": {
+          "id": "ACT_BLOCKED_CAT",
+          "type": "action",
+          "label": "CITO — blokada cewki",
+          "title": "CITO: Zablokowany kot — protokół stabilizacji",
+          "urgency": "cito",
+          "body": "Zablokowany kot = nagły przypadek. Działaj według kolejności poniżej.",
+          "checklist": [
+            {"id": "uo1", "text": "EKG — ocena hiperkaliemii (piki T, szerokie QRS)", "required": true},
+            {"id": "uo2", "text": "Linia dożylna → NaCl 0.9% (NIE PWE — zawiera K)", "required": true},
+            {"id": "uo3", "text": "Elektrolity (K+, Na+) + kreatynina + BUN STAT", "required": true},
+            {"id": "uo4", "text": "Jeśli K > 6.5: glukonian wapnia IV + insulina/glukoza", "required": false},
+            {"id": "uo5", "text": "Odblokowanie cewnikiem po stabilizacji", "required": true},
+            {"id": "uo6", "text": "Hospitalizacja — monitoring diurezy", "required": true}
+          ],
+          "labTests": [
+            {"name": "Elektrolity STAT (K, Na)", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Kreatynina + BUN STAT", "type": "bloodwork", "priority": "first_line"},
+            {"name": "EKG", "type": "other", "priority": "first_line"},
+            {"name": "Badanie moczu + posiew", "type": "urinalysis", "priority": "second_line"}
+          ]
+        },
+        "DDX_FLUTD": {
+          "id": "DDX_FLUTD",
+          "type": "ddx",
+          "label": "DDx: FLUTD bez blokady",
+          "clinicalSign": "FLUTD bez obstrukcji",
+          "species": ["cat"],
+          "source": "ISFM",
+          "differentials": [
+            {"rank": 1, "name": "Idiopatyczne FIC (Feline Idiopathic Cystitis)", "likelihood": "common", "keyFeatures": ["55-65% przypadków FLUTD", "stres", "samoistnie mija w 3-7 dni"]},
+            {"rank": 2, "name": "Urolithiasis (struwyty)", "likelihood": "uncommon", "keyFeatures": ["widoczne w RTG", "15-20%"]},
+            {"rank": 3, "name": "Urolithiasis (szczawian wapnia)", "likelihood": "uncommon", "keyFeatures": ["RTG + USG", "10%"]},
+            {"rank": 4, "name": "Infekcja bakteryjna UTI", "likelihood": "rare", "keyFeatures": ["< 5% u kotów", "posiew moczu (+)"]}
+          ]
+        }
+      }
+    }
+  },
+  {
+    "model": "procedures.clinicalprocedure",
+    "pk": "00000000-0000-0000-0000-000000000008",
+    "fields": {
+      "slug": "lethargy",
+      "name": "Letarg / Osłabienie ogólne",
+      "name_en": "Lethargy / Weakness",
+      "category": "internal_medicine",
+      "species": ["dog", "cat"],
+      "entry_node_id": "L1",
+      "tags": ["letarg", "osłabienie", "interna", "anemia", "żółtaczka", "gorączka"],
+      "source": "WSAVA; ACVIM; ISFM",
+      "last_reviewed": "2026-04-01",
+      "reviewed_by": "",
+      "is_active": true,
+      "nodes": {
+        "L1": {
+          "id": "L1",
+          "type": "question",
+          "label": "Charakter objawów",
+          "text": "Charakter objawów letargu?",
+          "hint": "Letarg to jeden z najtrudniejszych objawów — bardzo szeroka lista DDx.",
+          "options": [
+            {"label": "Nagłe — poniżej 24h", "nextId": "L_ACUTE", "data": {"onset": "acute"}, "variant": "urgent"},
+            {"label": "Postępujące — dni do tygodni", "nextId": "L2", "data": {"onset": "progressive"}}
+          ]
+        },
+        "L_ACUTE": {
+          "id": "L_ACUTE",
+          "type": "question",
+          "label": "Objawy towarzyszące (nagłe)",
+          "text": "Objawy towarzyszące nagłemu letargowi?",
+          "options": [
+            {"label": "Bladość błon śluzowych", "nextId": "DDX_ACUTE_ANEMIA", "data": {"sign": "pale_mm"}, "variant": "cito"},
+            {"label": "Żółtaczka", "nextId": "DDX_JAUNDICE", "data": {"sign": "jaundice"}, "variant": "urgent"},
+            {"label": "Gorączka > 39.5°C", "nextId": "DDX_FEVER", "data": {"sign": "fever"}, "variant": "urgent"}
+          ]
+        },
+        "L2": {
+          "id": "L2",
+          "type": "question",
+          "label": "Wiek pacjenta",
+          "text": "Wiek pacjenta?",
+          "options": [
+            {"label": "Młody — poniżej 3 lat", "nextId": "DDX_YOUNG_LETHARGY", "data": {"age_group": "young"}},
+            {"label": "Starszy — powyżej 7 lat", "nextId": "L3", "data": {"age_group": "senior"}}
+          ]
+        },
+        "L3": {
+          "id": "L3",
+          "type": "question",
+          "label": "Dodatkowe objawy (starszy)",
+          "text": "Dodatkowe objawy u starszego pacjenta?",
+          "options": [
+            {"label": "Utrata masy ciała", "nextId": "DDX_WEIGHT_LOSS", "data": {"sign": "weight_loss"}},
+            {"label": "PU/PD (dużo pije i sika)", "nextId": "REF_PUPD", "data": {"sign": "pupd"}},
+            {"label": "Brak apetytu", "nextId": "DDX_ANOREXIA", "data": {"sign": "anorexia"}}
+          ]
+        },
+        "DDX_ACUTE_ANEMIA": {
+          "id": "DDX_ACUTE_ANEMIA",
+          "type": "ddx",
+          "label": "DDx: Nagła anemia / krwawienie",
+          "clinicalSign": "Nagły letarg + bladość błon śluzowych",
+          "species": ["dog", "cat"],
+          "source": "ACVIM",
+          "differentials": [
+            {"rank": 1, "name": "Krwawienie wewnętrzne (śledziona, masa)", "likelihood": "common", "keyFeatures": ["bladość", "tachykardia", "USG brzucha PILNE"]},
+            {"rank": 2, "name": "IMHA (immunologiczna hemoliza)", "likelihood": "common", "keyFeatures": ["żółtaczka możliwa", "retikulocytoza", "Coombs (+)"]},
+            {"rank": 3, "name": "Ostra utrata krwi (uraz)", "likelihood": "common", "keyFeatures": ["wywiad urazowy", "obrzęk tkanek"]}
+          ]
+        },
+        "DDX_JAUNDICE": {
+          "id": "DDX_JAUNDICE",
+          "type": "ddx",
+          "label": "DDx: Żółtaczka",
+          "clinicalSign": "Letarg + żółtaczka",
+          "species": ["dog", "cat"],
+          "source": "ACVIM",
+          "differentials": [
+            {"rank": 1, "name": "Hemoliza (IMHA)", "likelihood": "common", "keyFeatures": ["anemia", "bilirubina pośrednia ↑", "Coombs"]},
+            {"rank": 2, "name": "Choroba wątroby", "likelihood": "common", "keyFeatures": ["ALT ↑ ALP ↑", "USG wątroby"]},
+            {"rank": 3, "name": "Żółtaczka pozawątrobowa (obstrukcja)", "likelihood": "uncommon", "keyFeatures": ["bilirubina bezpośrednia ↑", "USG dróg żółciowych"]}
+          ]
+        },
+        "DDX_FEVER": {
+          "id": "DDX_FEVER",
+          "type": "ddx",
+          "label": "DDx: Gorączka",
+          "clinicalSign": "Letarg + gorączka > 39.5°C",
+          "species": ["dog", "cat"],
+          "source": "WSAVA",
+          "differentials": [
+            {"rank": 1, "name": "Infekcja bakteryjna (sepsa, pyometra)", "likelihood": "common", "keyFeatures": ["leukocytoza", "posiewy"]},
+            {"rank": 2, "name": "Choroby odkleszczowe (Ehrlichia, Borrelia)", "likelihood": "uncommon", "keyFeatures": ["wywiad ekspozycji", "serologia"]},
+            {"rank": 3, "name": "Nowotwór z gorączką", "likelihood": "uncommon", "keyFeatures": ["FUO", "limfadenopatia", "RTG/USG"]}
+          ]
+        },
+        "DDX_YOUNG_LETHARGY": {
+          "id": "DDX_YOUNG_LETHARGY",
+          "type": "ddx",
+          "label": "DDx: Letarg u młodego",
+          "clinicalSign": "Postępujący letarg u pacjenta < 3 lat",
+          "species": ["dog", "cat"],
+          "source": "WSAVA",
+          "differentials": [
+            {"rank": 1, "name": "Choroby zakaźne (Parvo, Distemper)", "likelihood": "common", "keyFeatures": ["nieszczepiony", "gorączka", "biegunka"]},
+            {"rank": 2, "name": "Wady wrodzone (portosystemic shunt)", "likelihood": "uncommon", "keyFeatures": ["encefalopatia po posiłku", "mały wzrost"]},
+            {"rank": 3, "name": "Alergie / choroby immunologiczne", "likelihood": "uncommon", "keyFeatures": ["skóra", "GI", "zmiany nawrotowe"]}
+          ]
+        },
+        "DDX_WEIGHT_LOSS": {
+          "id": "DDX_WEIGHT_LOSS",
+          "type": "ddx",
+          "label": "DDx: Utrata masy ciała",
+          "clinicalSign": "Postępujący letarg + utrata masy ciała u starszego",
+          "species": ["dog", "cat"],
+          "source": "WSAVA; ACVIM",
+          "differentials": [
+            {"rank": 1, "name": "Nowotwór złośliwy", "likelihood": "common", "keyFeatures": ["starszy wiek", "RTG/USG/badania", "limfadenopatia"]},
+            {"rank": 2, "name": "IBD / choroby jelit", "likelihood": "common", "keyFeatures": ["biegunka", "cobalamin ↓", "endoskopia"]},
+            {"rank": 3, "name": "Nadczynność tarczycy (kot)", "likelihood": "common", "keyFeatures": ["T4 ↑", "tachykardia", "dobry apetyt mimo chudnięcia"]}
+          ]
+        },
+        "DDX_ANOREXIA": {
+          "id": "DDX_ANOREXIA",
+          "type": "ddx",
+          "label": "DDx: Brak apetytu",
+          "clinicalSign": "Letarg + anoreksja u starszego",
+          "species": ["dog", "cat"],
+          "source": "WSAVA",
+          "differentials": [
+            {"rank": 1, "name": "Ból (dentystyczny, ortopedyczny, brzuszny)", "likelihood": "common", "keyFeatures": ["badanie ogólne", "ocena bólu"]},
+            {"rank": 2, "name": "Przewlekła choroba nerek (CKD)", "likelihood": "common", "keyFeatures": ["kreatynina ↑", "nudności", "anemia"]},
+            {"rank": 3, "name": "Hepatopatia", "likelihood": "common", "keyFeatures": ["ALT ↑", "żółtaczka", "USG wątroby"]}
+          ]
+        },
+        "REF_PUPD": {
+          "id": "REF_PUPD",
+          "type": "referral",
+          "label": "Odesłanie do procedury PU/PD",
+          "specialty": "Procedura PU/PD",
+          "reason": "Pacjent wykazuje objawy poliurii/polidypsji — kontynuuj diagnostykę wg procedury PU/PD.",
+          "urgency": "routine",
+          "notes": "Uruchom procedurę: Poliuria / Polidypsja (PU/PD)"
+        },
+        "ACT_LETHARGY_PANEL": {
+          "id": "ACT_LETHARGY_PANEL",
+          "type": "action",
+          "label": "Panel diagnostyczny letargu",
+          "title": "Minimalne badania przy letargu niewyjaśnionym",
+          "urgency": "routine",
+          "body": "Pierwsza linia diagnostyki — zawsze wykonaj przy letargu bez jasnej przyczyny.",
+          "checklist": [
+            {"id": "le1", "text": "Morfologia z rozmazem", "required": true},
+            {"id": "le2", "text": "Biochemia pełna (panel narządowy)", "required": true},
+            {"id": "le3", "text": "Elektrolity", "required": true},
+            {"id": "le4", "text": "Badanie moczu", "required": true},
+            {"id": "le5", "text": "Pomiar temperatury ciała", "required": true},
+            {"id": "le6", "text": "T4 (kot > 7 lat)", "required": false}
+          ],
+          "labTests": [
+            {"name": "Morfologia z rozmazem", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Biochemia pełna", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Elektrolity", "type": "bloodwork", "priority": "first_line"},
+            {"name": "Badanie moczu", "type": "urinalysis", "priority": "first_line"},
+            {"name": "T4 (kot > 7 lat)", "type": "bloodwork", "priority": "second_line"}
+          ]
+        }
+      }
+    }
+  }
+]
