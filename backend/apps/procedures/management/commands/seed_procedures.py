@@ -17,9 +17,7 @@ class Command(BaseCommand):
     help = "Load 8 clinical procedure fixtures"
 
     def handle(self, *args, **options):
-        fixture_path = os.path.join(
-            os.path.dirname(__file__), "../../fixtures/procedures.json"
-        )
+        fixture_path = os.path.join(os.path.dirname(__file__), "../../fixtures/procedures.json")
         fixture_path = os.path.abspath(fixture_path)
 
         with open(fixture_path) as f:
@@ -46,6 +44,4 @@ class Command(BaseCommand):
                 created += 1
 
         total = ClinicalProcedure.objects.count()
-        self.stdout.write(
-            self.style.SUCCESS(f"✓ {created} new procedures created. Total: {total}")
-        )
+        self.stdout.write(self.style.SUCCESS(f"✓ {created} new procedures created. Total: {total}"))

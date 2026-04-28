@@ -17,9 +17,7 @@ urlpatterns = [
     ),
     path(
         "appointments/<uuid:appointment_pk>/procedure-sessions/<uuid:pk>/",
-        VisitProcedureSessionViewSet.as_view(
-            {"patch": "partial_update", "put": "update"}
-        ),
+        VisitProcedureSessionViewSet.as_view({"patch": "partial_update", "put": "update"}),
         name="appointment-procedure-session-detail",
     ),
 ]
