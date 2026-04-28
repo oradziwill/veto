@@ -11,6 +11,7 @@ import {
   transcriptionAPI,
 } from '../../services/api'
 import AddClientModal from './AddClientModal'
+import ProcedureWizard from '../visit/ProcedureWizard'
 import './Modal.css'
 
 import { translateSpecies } from '../../utils/species'
@@ -155,6 +156,8 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [suggestedAppointment, setSuggestedAppointment] = useState(null)
+  const [showProcedureWizard, setShowProcedureWizard] = useState(false)
+  const [procedureUrgency, setProcedureUrgency] = useState(null)
 
   const [referrals, setReferrals] = useState([])
 
@@ -607,6 +610,33 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
     const allParts = [...visitParts, ...additionalParts]
     if (allParts.length > 0) {
       setMeetingNotes(allParts.join('\n'))
+    }
+  }
+
+  const handleProcedureComplete = (result) => {
+    setShowProcedureWizard(false)
+    if (result.ddxSuggestions && result.ddxSuggestions.length > 0) {
+      const ddxText = result.ddxSuggestions.map((d, i) => `${i + 1}. ${d}`).join('\n')
+      setFormData(prev => ({
+        ...prev,
+        diagnoza: prev.diagnoza ? `${prev.diagnoza}\n\nDDx (${result.procedureName}):\n${ddxText}` : `DDx (${result.procedureName}):\n${ddxText}`,
+      }))
+    }
+    if (result.labTestsSuggested && result.labTestsSuggested.length > 0) {
+      const labText = `Badania zlecone (${result.procedureName}): ${result.labTestsSuggested.join(', ')}`
+      setFormData(prev => ({
+        ...prev,
+        recommendations: prev.recommendations ? `${prev.recommendations}\n${labText}` : labText,
+      }))
+    }
+    if (result.urgency) {
+      setProcedureUrgency(result.urgency)
+    }
+    if (result.notes) {
+      setFormData(prev => ({
+        ...prev,
+        additionalNotes: prev.additionalNotes ? `${prev.additionalNotes}\n\nProcedura: ${result.notes}` : `Procedura: ${result.notes}`,
+      }))
     }
   }
 
@@ -1148,7 +1178,40 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
           </div>
 
           <div className="form-group" style={{ paddingTop: '1rem', borderTop: '2px solid #e2e8f0' }}>
-            <label htmlFor="diagnoza" style={{ fontWeight: '700', color: '#1a202c', fontSize: '0.95rem' }}>Diagnoza</label>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+              <label htmlFor="diagnoza" style={{ fontWeight: '700', color: '#1a202c', fontSize: '0.95rem', marginBottom: 0 }}>Diagnoza</label>
+              <button
+                type="button"
+                onClick={() => setShowProcedureWizard(true)}
+                style={{
+                  padding: '0.3rem 0.75rem',
+                  background: '#1e40af',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                🔬 Uruchom procedurę
+              </button>
+            </div>
+            {procedureUrgency && procedureUrgency !== 'routine' && (
+              <div style={{
+                padding: '0.5rem 0.75rem',
+                marginBottom: '0.5rem',
+                background: procedureUrgency === 'cito' ? '#fef2f2' : '#fffbeb',
+                borderLeft: `4px solid ${procedureUrgency === 'cito' ? '#dc2626' : '#d97706'}`,
+                borderRadius: '0 6px 6px 0',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                color: procedureUrgency === 'cito' ? '#7f1d1d' : '#78350f',
+              }}>
+                {procedureUrgency === 'cito' ? '🚨 CITO — przypadek pilny' : '⚠️ PILNE — wymaga szybkiej interwencji'}
+              </div>
+            )}
             <textarea
               id="diagnoza"
               name="diagnoza"
@@ -1546,6 +1609,14 @@ const StartVisitModal = ({ isOpen, onClose, onSuccess, initialPatient = null, in
           handleNewClientCreated(newClient)
         }}
       />
+
+      {showProcedureWizard && (
+        <ProcedureWizard
+          species={patientSpecies}
+          onComplete={handleProcedureComplete}
+          onClose={() => setShowProcedureWizard(false)}
+        />
+      )}
     </div>
   )
 }
